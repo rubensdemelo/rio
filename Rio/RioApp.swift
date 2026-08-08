@@ -4,23 +4,16 @@ import SwiftUI
 @main
 struct RioApp: App {
     @StateObject private var sessionController: LiveSessionController
-    @StateObject private var resourceFolderController: LocalResourceFolderController
 
     init() {
         _sessionController = StateObject(
             wrappedValue: RioCompositionRoot.makeLiveController()
         )
-        _resourceFolderController = StateObject(
-            wrappedValue: LocalResourceFolderController()
-        )
     }
 
     var body: some Scene {
         Window("Rio", id: "main") {
-            RioView(
-                controller: sessionController,
-                resourceFolderController: resourceFolderController
-            )
+            RioView(controller: sessionController)
         }
         .defaultSize(width: 560, height: 620)
 

@@ -214,16 +214,13 @@ final class FakeSessionController: SessionShellControlling {
 
 struct RioView<Controller: SessionShellControlling>: View {
     @ObservedObject private var controller: Controller
-    @ObservedObject private var resourceFolderController: LocalResourceFolderController
     @StateObject private var noticePresenter: AppleIntelligenceDisabledNoticePresenter
 
     init(
         controller: Controller,
-        resourceFolderController: LocalResourceFolderController,
         noticeDefaults: UserDefaults = .standard
     ) {
         self.controller = controller
-        self.resourceFolderController = resourceFolderController
         _noticePresenter = StateObject(
             wrappedValue: AppleIntelligenceDisabledNoticePresenter(
                 defaults: noticeDefaults
@@ -238,9 +235,6 @@ struct RioView<Controller: SessionShellControlling>: View {
                 .padding(.vertical, 16)
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            LocalResourceFolderSection(controller: resourceFolderController)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 16)
             Divider()
             sessionControls
                 .padding(24)
@@ -490,98 +484,6 @@ private struct AppleIntelligenceDisabledNoticeView: View {
         .accessibilityLabel(
             "\(AppleIntelligenceDisabledNoticePresentation.title). \(AppleIntelligenceDisabledNoticePresentation.detail)"
         )
-    }
-}
-
-private struct LocalResourceFolderSection: View {
-    @ObservedObject var controller: LocalResourceFolderController
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Label("Local resources", systemImage: "folder")
-                    .font(.headline)
-
-                Spacer()
-
-                Button(actionTitle, action: chooseFolder)
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .accessibilityHint("Choose a local folder for manuals and support resources.")
-            }
-
-            Text("Optional folder for manuals and support resources. Rio only keeps access to the folder location; it does not read, search, or upload files yet. Use Docling later to convert manuals to Markdown.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            stateContent
-        }
-        .frame(maxWidth: 560, alignment: .leading)
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Local resources")
-    }
-
-    @ViewBuilder
-    private var stateContent: some View {
-        switch controller.state {
-        case .empty:
-            Label(
-                "No resource folder selected.",
-                systemImage: "folder.badge.plus"
-            )
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-        case .selected(let selection):
-            VStack(alignment: .leading, spacing: 6) {
-                Label("Folder ready", systemImage: "checkmark.circle.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.accentColor)
-
-                Text(selection.path)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
-
-                Button("Remove Folder", action: controller.clearSelection)
-                    .buttonStyle(.link)
-                    .font(.caption)
-                    .accessibilityHint("Remove the saved local resource folder permission.")
-            }
-        case .error(let error):
-            VStack(alignment: .leading, spacing: 6) {
-                Label(error.title, systemImage: "exclamationmark.triangle.fill")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.red)
-
-                Text(error.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text(error.path)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .truncationMode(.middle)
-                    .textSelection(.enabled)
-            }
-        }
-    }
-
-    private var actionTitle: String {
-        controller.state.folderSelection == nil ? "Choose Folder" : "Change Folder"
-    }
-
-    private func chooseFolder() {
-        controller.chooseFolder()
     }
 }
 
@@ -1135,17 +1037,11 @@ private extension InsightCard {
 }
 
 #Preview("Stopped") {
-    RioView(
-        controller: FakeSessionController(),
-        resourceFolderController: LocalResourceFolderController()
-    )
+    RioView(controller: FakeSessionController())
 }
 
 #Preview("Listening — empty") {
-    RioView(
-        controller: FakeSessionController(status: .listening),
-        resourceFolderController: LocalResourceFolderController()
-    )
+    RioView(controller: FakeSessionController(status: .listening))
 }
 
 #Preview("Insight cards") {
@@ -1175,8 +1071,7 @@ private extension InsightCard {
                     state: .resolved
                 ),
             ]
-        ),
-        resourceFolderController: LocalResourceFolderController()
+        )
     )
 }
 
@@ -1186,8 +1081,7 @@ private extension InsightCard {
             status: .unavailable,
             unavailableReason: .appleIntelligenceDisabled,
             startOutcome: .unavailable(.appleIntelligenceDisabled)
-        ),
-        resourceFolderController: LocalResourceFolderController()
+        )
     )
 }
 
@@ -1197,7 +1091,6 @@ private extension InsightCard {
             status: .interrupted,
             failure: .stage(.audioCapture, .interrupted),
             startOutcome: .interrupted
-        ),
-        resourceFolderController: LocalResourceFolderController()
+        )
     )
 }
