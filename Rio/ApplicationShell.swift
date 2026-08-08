@@ -233,8 +233,6 @@ struct RioView<Controller: SessionShellControlling>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider()
             sessionStatus
                 .padding(.horizontal, 24)
                 .padding(.vertical, 16)
@@ -256,21 +254,6 @@ struct RioView<Controller: SessionShellControlling>: View {
         .onChange(of: controller.readiness) { _, readiness in
             noticePresenter.update(for: readiness)
         }
-    }
-
-    private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Rio")
-                    .font(.title2.weight(.semibold))
-                    .accessibilityAddTraits(.isHeader)
-                Text("Live meeting insights")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-        }
-        .padding(24)
     }
 
     private var sessionStatus: some View {
@@ -329,16 +312,18 @@ struct RioView<Controller: SessionShellControlling>: View {
         if controller.cards.isEmpty {
             ScrollView {
                 VStack(spacing: 18) {
-                    SessionEmptyView(
-                        presentation: EmptyStatePresentation(
-                            status: controller.status,
-                            statusDetail: SessionStatusPresentation(
+                    if controller.status != .stopped {
+                        SessionEmptyView(
+                            presentation: EmptyStatePresentation(
                                 status: controller.status,
-                                unavailableReason: controller.unavailableReason,
-                                failure: controller.failure
-                            ).detail
+                                statusDetail: SessionStatusPresentation(
+                                    status: controller.status,
+                                    unavailableReason: controller.unavailableReason,
+                                    failure: controller.failure
+                                ).detail
+                            )
                         )
-                    )
+                    }
 
                     if let readiness = controller.readiness, !readiness.isReady {
                         PrerequisiteChecklistView(report: readiness)

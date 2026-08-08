@@ -49,6 +49,22 @@ final class LocalResourceFolderTests: XCTestCase {
     }
 
     @MainActor
+    func testChoosingAFolderInvokesTheInjectedPicker() {
+        let picker = TestLocalResourceFolderPicker()
+        let controller = LocalResourceFolderController(
+            bookmarkStore: LocalResourceFolderBookmarkStore(
+                defaults: makeDefaults(),
+                key: "test.bookmark"
+            ),
+            picker: picker
+        )
+
+        controller.chooseFolder()
+
+        XCTAssertEqual(picker.chooseCount, 1)
+    }
+
+    @MainActor
     func testControllerReportsAnInvalidPersistedBookmarkAsAnAccessError() {
         let defaults = makeDefaults()
         defaults.set(Data("not a bookmark".utf8), forKey: "test.bookmark")
@@ -87,5 +103,14 @@ final class LocalResourceFolderTests: XCTestCase {
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
         return defaults
+    }
+}
+
+@MainActor
+private final class TestLocalResourceFolderPicker: LocalResourceFolderPicking {
+    private(set) var chooseCount = 0
+
+    func chooseFolder(completion: @escaping @MainActor (URL?) -> Void) {
+        chooseCount += 1
     }
 }

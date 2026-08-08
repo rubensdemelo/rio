@@ -72,23 +72,13 @@ struct LocalResourceFolderValidator {
 }
 
 @MainActor
-final class LocalResourceFolderController: ObservableObject {
-    @Published private(set) var state: LocalResourceFolderState = .empty
+protocol LocalResourceFolderPicking {
+    func chooseFolder(completion: @escaping @MainActor (URL?) -> Void)
+}
 
-    private let bookmarkStore: LocalResourceFolderBookmarkStore
-    private let validator: LocalResourceFolderValidator
-    private var accessedURL: URL?
-
-    init(
-        bookmarkStore: LocalResourceFolderBookmarkStore = LocalResourceFolderBookmarkStore(),
-        validator: LocalResourceFolderValidator = LocalResourceFolderValidator()
-    ) {
-        self.bookmarkStore = bookmarkStore
-        self.validator = validator
-        restore()
-    }
-
-    func chooseFolder() {
+@MainActor
+final class NSOpenPanelLocalResourceFolderPicker: LocalResourceFolderPicking {
+    func chooseFolder(completion: @escaping @MainActor (URL?) -> Void) {
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
         panel.canChooseDirectories = true
@@ -97,10 +87,39 @@ final class LocalResourceFolderController: ObservableObject {
         panel.message = "Choose a local folder containing manuals and support resources."
         panel.prompt = "Choose Folder"
 
-        guard panel.runModal() == .OK, let url = panel.url else {
-            return
+        panel.begin { response in
+            completion(response == .OK ? panel.url : nil)
         }
-        select(url: url)
+    }
+}
+
+@MainActor
+final class LocalResourceFolderController: ObservableObject {
+    @Published private(set) var state: LocalResourceFolderState = .empty
+
+    private let bookmarkStore: LocalResourceFolderBookmarkStore
+    private let validator: LocalResourceFolderValidator
+    private let picker: any LocalResourceFolderPicking
+    private var accessedURL: URL?
+
+    init(
+        bookmarkStore: LocalResourceFolderBookmarkStore = LocalResourceFolderBookmarkStore(),
+        validator: LocalResourceFolderValidator = LocalResourceFolderValidator(),
+        picker: any LocalResourceFolderPicking = NSOpenPanelLocalResourceFolderPicker()
+    ) {
+        self.bookmarkStore = bookmarkStore
+        self.validator = validator
+        self.picker = picker
+        restore()
+    }
+
+    func chooseFolder() {
+        picker.chooseFolder { [weak self] url in
+            guard let self, let url else {
+                return
+            }
+            self.select(url: url)
+        }
     }
 
     func clearSelection() {
