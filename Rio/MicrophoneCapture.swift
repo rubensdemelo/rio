@@ -43,6 +43,7 @@ struct MicrophoneAudioFormat: Sendable, Equatable {
 
 enum MicrophoneTapFormat: Sendable, Equatable {
     case engineNative
+    case hardwareInput
     case explicit(MicrophoneAudioFormat)
 }
 
@@ -131,6 +132,12 @@ final class AVAudioEngineMicrophoneDriver: MicrophoneEngineDriver, @unchecked Se
         switch format {
         case .engineNative:
             tapFormat = nil
+        case .hardwareInput:
+            // On some routes AVAudioEngine exposes a converted output format
+            // (for example 44.1 kHz) while the microphone hardware is running
+            // at a different rate (for example 16 kHz). A tap must match the
+            // hardware-side input format or the engine cannot start.
+            tapFormat = inputNode.inputFormat(forBus: 0)
         case .explicit:
             tapFormat = inputNode.outputFormat(forBus: 0)
         }
@@ -497,9 +504,7 @@ actor AVAudioEngineMicrophoneCapture: SessionAudioCapture {
         )
 
         do {
-            // The input route owns its hardware format. Supplying a separately
-            // observed format can make AVAudioEngine abort with a tap mismatch.
-            engine.installTap(bufferSize: bufferSize, format: .engineNative) { [queue, diagnosticsStore, inputLevelMonitor] chunk in
+            engine.installTap(bufferSize: bufferSize, format: .hardwareInput) { [queue, diagnosticsStore, inputLevelMonitor] chunk in
                 inputLevelMonitor.update(level: chunk.inputLevel)
                 let outcome = queue.enqueue(chunk)
                 diagnosticsStore.record(outcome.result, queueDepth: outcome.queueDepth)

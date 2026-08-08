@@ -105,7 +105,7 @@ final class MicrophoneCaptureTests: XCTestCase {
         )
     }
 
-    func testCaptureRequestsTheEngineNativeFormatForItsTap() async throws {
+    func testCaptureRequestsTheHardwareInputFormatForItsTap() async throws {
         let engine = TestMicrophoneEngine()
         let capture = AVAudioEngineMicrophoneCapture(
             engine: engine,
@@ -114,7 +114,7 @@ final class MicrophoneCaptureTests: XCTestCase {
 
         _ = try await capture.start()
 
-        XCTAssertEqual(engine.installedTapFormat, .engineNative)
+        XCTAssertEqual(engine.installedTapFormat, .hardwareInput)
         await capture.stop()
     }
 
