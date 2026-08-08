@@ -187,6 +187,13 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(presentation.confirmationTitle, "Review Apple Intelligence settings?")
     }
 
+    func testAppleIntelligenceActionTargetsTheAppleIntelligenceAndSiriPane() {
+        XCTAssertEqual(
+            SystemSettingsOpener.appleIntelligenceAndSiriURL.absoluteString,
+            "x-apple.systempreferences:com.apple.Siri-Settings.extension"
+        )
+    }
+
     func testAppleIntelligenceDisabledNoticeIsShownOnceAndOnlyForDisabledState() {
         let suiteName = "RioTests.Notice.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

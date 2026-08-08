@@ -33,8 +33,16 @@ struct PreferredLanguageConfiguration: Equatable {
     }
 }
 
-private enum SystemSettingsOpener {
-    static func open() {
+enum SystemSettingsOpener {
+    static let appleIntelligenceAndSiriURL = URL(
+        string: "x-apple.systempreferences:com.apple.Siri-Settings.extension"
+    )!
+
+    static func openAppleIntelligenceAndSiri() {
+        guard !NSWorkspace.shared.open(appleIntelligenceAndSiriURL) else {
+            return
+        }
+
         NSWorkspace.shared.open(
             URL(fileURLWithPath: "/System/Applications/System Settings.app")
         )
@@ -858,8 +866,8 @@ private struct AppleIntelligenceLanguageAction: View {
             isPresented: $isConfirmationPresented,
             titleVisibility: .visible
         ) {
-            Button("Open System Settings") {
-                SystemSettingsOpener.open()
+            Button("Open Apple Intelligence & Siri") {
+                SystemSettingsOpener.openAppleIntelligenceAndSiri()
             }
             Button("Not now", role: .cancel) {}
         } message: {
@@ -877,11 +885,11 @@ struct LanguageSetupActionPresentation: Equatable {
         if preferredLanguage.isRequiredLanguage {
             buttonTitle = "Review language settings…"
             confirmationTitle = "Review Apple Intelligence settings?"
-            confirmationDetail = "Rio will open System Settings. Confirm that Siri also uses English (US), then turn on Apple Intelligence. Rio will not change any setting."
+            confirmationDetail = "Rio will open Apple Intelligence & Siri in System Settings. Confirm that Siri also uses English (US), then turn on Apple Intelligence. Rio will not change any setting."
         } else {
             buttonTitle = "Change language…"
             confirmationTitle = "Change language to English (US)?"
-            confirmationDetail = "Rio will open System Settings so you can set macOS and Siri to English (US), then turn on Apple Intelligence. Rio will not change any setting."
+            confirmationDetail = "Rio will open Apple Intelligence & Siri in System Settings so you can set macOS and Siri to English (US), then turn on Apple Intelligence. Rio will not change any setting."
         }
     }
 }
