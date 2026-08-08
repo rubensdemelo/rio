@@ -41,6 +41,11 @@ struct MicrophoneAudioFormat: Sendable, Equatable {
     let channelCount: Int
 }
 
+enum MicrophoneTapFormat: Sendable, Equatable {
+    case engineNative
+    case explicit(MicrophoneAudioFormat)
+}
+
 final class AudioInputLevelMonitor: @unchecked Sendable {
     private let lock = NSLock()
     private var lastLevel: Float = 0
@@ -91,6 +96,7 @@ protocol MicrophoneEngineDriver: AnyObject, Sendable {
     var inputFormat: MicrophoneAudioFormat { get }
     func installTap(
         bufferSize: UInt32,
+        format: MicrophoneTapFormat,
         handler: @escaping @Sendable (AudioChunk) -> Void
     )
     func removeTap()
@@ -117,15 +123,22 @@ final class AVAudioEngineMicrophoneDriver: MicrophoneEngineDriver, @unchecked Se
 
     func installTap(
         bufferSize: UInt32,
+        format: MicrophoneTapFormat,
         handler: @escaping @Sendable (AudioChunk) -> Void
     ) {
         let inputNode = engine.inputNode
-        let format = inputNode.outputFormat(forBus: 0)
+        let tapFormat: AVAudioFormat?
+        switch format {
+        case .engineNative:
+            tapFormat = nil
+        case .explicit:
+            tapFormat = inputNode.outputFormat(forBus: 0)
+        }
 
         inputNode.installTap(
             onBus: 0,
             bufferSize: AVAudioFrameCount(bufferSize),
-            format: format
+            format: tapFormat
         ) { [self] buffer, _ in
             guard let channelData = buffer.floatChannelData else {
                 return
@@ -484,7 +497,9 @@ actor AVAudioEngineMicrophoneCapture: SessionAudioCapture {
         )
 
         do {
-            engine.installTap(bufferSize: bufferSize) { [queue, diagnosticsStore, inputLevelMonitor] chunk in
+            // The input route owns its hardware format. Supplying a separately
+            // observed format can make AVAudioEngine abort with a tap mismatch.
+            engine.installTap(bufferSize: bufferSize, format: .engineNative) { [queue, diagnosticsStore, inputLevelMonitor] chunk in
                 inputLevelMonitor.update(level: chunk.inputLevel)
                 let outcome = queue.enqueue(chunk)
                 diagnosticsStore.record(outcome.result, queueDepth: outcome.queueDepth)

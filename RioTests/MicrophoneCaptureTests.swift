@@ -105,6 +105,19 @@ final class MicrophoneCaptureTests: XCTestCase {
         )
     }
 
+    func testCaptureRequestsTheEngineNativeFormatForItsTap() async throws {
+        let engine = TestMicrophoneEngine()
+        let capture = AVAudioEngineMicrophoneCapture(
+            engine: engine,
+            permissionProvider: TestMicrophonePermissionProvider(permission: .granted)
+        )
+
+        _ = try await capture.start()
+
+        XCTAssertEqual(engine.installedTapFormat, .engineNative)
+        await capture.stop()
+    }
+
     func testStartAndStopAreIdempotentAndRestartCreatesNewCapture() async throws {
         let engine = TestMicrophoneEngine()
         let capture = AVAudioEngineMicrophoneCapture(
@@ -229,6 +242,7 @@ private final class TestMicrophoneEngine: MicrophoneEngineDriver, @unchecked Sen
     private(set) var startCount = 0
     private(set) var stopCount = 0
     private(set) var removeTapCount = 0
+    private(set) var installedTapFormat: MicrophoneTapFormat?
 
     init(
         format: MicrophoneAudioFormat = MicrophoneAudioFormat(sampleRate: 48_000, channelCount: 1),
@@ -240,8 +254,10 @@ private final class TestMicrophoneEngine: MicrophoneEngineDriver, @unchecked Sen
 
     func installTap(
         bufferSize: UInt32,
+        format: MicrophoneTapFormat,
         handler: @escaping @Sendable (AudioChunk) -> Void
     ) {
+        installedTapFormat = format
         self.handler = handler
     }
 
