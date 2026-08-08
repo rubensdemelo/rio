@@ -24,7 +24,7 @@ struct RioApp: App {
         }
         .defaultSize(width: 560, height: 620)
 
-        MenuBarExtra("Rio", systemImage: "waveform") {
+        MenuBarExtra("Rio", image: "RioMenuBarIcon") {
             RioMenuBarMenu(controller: sessionController)
         }
         .menuBarExtraStyle(.menu)
