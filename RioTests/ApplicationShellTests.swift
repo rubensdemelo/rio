@@ -167,6 +167,26 @@ final class ApplicationShellTests: XCTestCase {
         )
     }
 
+    func testLanguageSetupActionConfirmsTheUserControlledLanguageChange() {
+        let presentation = LanguageSetupActionPresentation(
+            preferredLanguage: PreferredLanguageConfiguration(identifier: "es-ES")
+        )
+
+        XCTAssertEqual(presentation.buttonTitle, "Change language…")
+        XCTAssertEqual(presentation.confirmationTitle, "Change language to English (US)?")
+        XCTAssertTrue(presentation.confirmationDetail.contains("macOS and Siri"))
+        XCTAssertTrue(presentation.confirmationDetail.contains("will not change any setting"))
+    }
+
+    func testLanguageSetupActionOnlyRequestsReviewWhenPreferredLanguageIsEnglishUS() {
+        let presentation = LanguageSetupActionPresentation(
+            preferredLanguage: PreferredLanguageConfiguration(identifier: "en-US")
+        )
+
+        XCTAssertEqual(presentation.buttonTitle, "Review language settings…")
+        XCTAssertEqual(presentation.confirmationTitle, "Review Apple Intelligence settings?")
+    }
+
     func testAppleIntelligenceDisabledNoticeIsShownOnceAndOnlyForDisabledState() {
         let suiteName = "RioTests.Notice.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

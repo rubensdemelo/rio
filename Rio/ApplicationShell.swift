@@ -819,10 +819,9 @@ private struct PrerequisiteChecklistView: View {
 
                         if check.kind == .appleIntelligence,
                            check.reason == .appleIntelligenceDisabled {
-                            Button("Open System Settings") {
-                                SystemSettingsOpener.open()
-                            }
-                            .controlSize(.small)
+                            AppleIntelligenceLanguageAction(
+                                preferredLanguage: .current
+                            )
                         }
                     }
                 }
@@ -837,6 +836,53 @@ private struct PrerequisiteChecklistView: View {
         )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Listening prerequisites")
+    }
+}
+
+private struct AppleIntelligenceLanguageAction: View {
+    let preferredLanguage: PreferredLanguageConfiguration
+
+    @State private var isConfirmationPresented = false
+
+    private var presentation: LanguageSetupActionPresentation {
+        LanguageSetupActionPresentation(preferredLanguage: preferredLanguage)
+    }
+
+    var body: some View {
+        Button(presentation.buttonTitle) {
+            isConfirmationPresented = true
+        }
+        .controlSize(.small)
+        .confirmationDialog(
+            presentation.confirmationTitle,
+            isPresented: $isConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Open System Settings") {
+                SystemSettingsOpener.open()
+            }
+            Button("Not now", role: .cancel) {}
+        } message: {
+            Text(presentation.confirmationDetail)
+        }
+    }
+}
+
+struct LanguageSetupActionPresentation: Equatable {
+    let buttonTitle: String
+    let confirmationTitle: String
+    let confirmationDetail: String
+
+    init(preferredLanguage: PreferredLanguageConfiguration) {
+        if preferredLanguage.isRequiredLanguage {
+            buttonTitle = "Review language settings…"
+            confirmationTitle = "Review Apple Intelligence settings?"
+            confirmationDetail = "Rio will open System Settings. Confirm that Siri also uses English (US), then turn on Apple Intelligence. Rio will not change any setting."
+        } else {
+            buttonTitle = "Change language…"
+            confirmationTitle = "Change language to English (US)?"
+            confirmationDetail = "Rio will open System Settings so you can set macOS and Siri to English (US), then turn on Apple Intelligence. Rio will not change any setting."
+        }
     }
 }
 
