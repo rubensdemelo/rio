@@ -2,37 +2,6 @@ import Combine
 import AppKit
 import SwiftUI
 
-struct PreferredLanguageConfiguration: Equatable {
-    static let requiredIdentifier = "en-US"
-
-    let identifier: String?
-
-    init(identifier: String?) {
-        let trimmedIdentifier = identifier?.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.identifier = trimmedIdentifier?.isEmpty == false ? trimmedIdentifier : nil
-    }
-
-    static var current: PreferredLanguageConfiguration {
-        PreferredLanguageConfiguration(identifier: Locale.preferredLanguages.first)
-    }
-
-    var isRequiredLanguage: Bool {
-        canonicalIdentifier == Self.requiredIdentifier
-    }
-
-    var displayName: String? {
-        guard let canonicalIdentifier else { return nil }
-        return Locale(identifier: "en-US").localizedString(forIdentifier: canonicalIdentifier)
-            ?? canonicalIdentifier
-    }
-
-    private var canonicalIdentifier: String? {
-        identifier.map {
-            Locale(identifier: $0).identifier.replacing("_", with: "-")
-        }
-    }
-}
-
 enum SystemSettingsOpener {
     static let appleIntelligenceAndSiriURL = URL(
         string: "x-apple.systempreferences:com.apple.Siri-Settings.extension"
@@ -827,9 +796,7 @@ private struct PrerequisiteChecklistView: View {
 
                         if check.kind == .appleIntelligence,
                            check.reason == .appleIntelligenceDisabled {
-                            AppleIntelligenceLanguageAction(
-                                preferredLanguage: .current
-                            )
+                            AppleIntelligenceLanguageAction()
                         }
                     }
                 }
@@ -848,12 +815,10 @@ private struct PrerequisiteChecklistView: View {
 }
 
 private struct AppleIntelligenceLanguageAction: View {
-    let preferredLanguage: PreferredLanguageConfiguration
-
     @State private var isConfirmationPresented = false
 
     private var presentation: LanguageSetupActionPresentation {
-        LanguageSetupActionPresentation(preferredLanguage: preferredLanguage)
+        LanguageSetupActionPresentation()
     }
 
     var body: some View {
@@ -881,16 +846,10 @@ struct LanguageSetupActionPresentation: Equatable {
     let confirmationTitle: String
     let confirmationDetail: String
 
-    init(preferredLanguage: PreferredLanguageConfiguration) {
-        if preferredLanguage.isRequiredLanguage {
-            buttonTitle = "Review language settings…"
-            confirmationTitle = "Review Apple Intelligence settings?"
-            confirmationDetail = "Rio will open Apple Intelligence & Siri in System Settings. Confirm that Siri also uses English (US), then turn on Apple Intelligence. Rio will not change any setting."
-        } else {
-            buttonTitle = "Change language…"
-            confirmationTitle = "Change language to English (US)?"
-            confirmationDetail = "Rio will open Apple Intelligence & Siri in System Settings so you can set macOS and Siri to English (US), then turn on Apple Intelligence. Rio will not change any setting."
-        }
+    init() {
+        buttonTitle = "Review Apple Intelligence & Siri…"
+        confirmationTitle = "Review Apple Intelligence & Siri?"
+        confirmationDetail = "Rio will open Apple Intelligence & Siri in System Settings. Review the compatibility message and make any required changes there. Rio will not change any setting."
     }
 }
 
@@ -900,13 +859,10 @@ struct PrerequisiteCheckPresentation: Equatable {
     let symbolName: String
     let tintName: SessionStatusPresentation.TintName
 
-    init(
-        check: PrerequisiteCheck,
-        preferredLanguage: PreferredLanguageConfiguration = .current
-    ) {
+    init(check: PrerequisiteCheck) {
         title = check.kind.title
         if let reason = check.reason {
-            detail = reason.guidanceMessage(preferredLanguage: preferredLanguage)
+            detail = reason.guidanceMessage
             symbolName = "exclamationmark.circle.fill"
             tintName = .unavailable
         } else {
@@ -989,8 +945,7 @@ struct SessionStatusPresentation: Equatable {
     init(
         status: SessionStatus,
         unavailableReason: UnavailableReason? = nil,
-        failure: PipelineFailure? = nil,
-        preferredLanguage: PreferredLanguageConfiguration = .current
+        failure: PipelineFailure? = nil
     ) {
         switch status {
         case .stopped:
@@ -1025,8 +980,8 @@ struct SessionStatusPresentation: Equatable {
             tintName = .warning
         case .unavailable:
             title = "Unavailable"
-            detail = unavailableReason?.guidanceMessage(preferredLanguage: preferredLanguage)
-                ?? failure?.guidanceMessage(preferredLanguage: preferredLanguage)
+            detail = unavailableReason?.guidanceMessage
+                ?? failure?.guidanceMessage
                 ?? "Rio could not start listening."
             symbolName = "xmark.circle"
             tintName = .unavailable
@@ -1100,9 +1055,7 @@ private extension PrerequisiteKind {
 }
 
 private extension UnavailableReason {
-    func guidanceMessage(
-        preferredLanguage: PreferredLanguageConfiguration = .current
-    ) -> String {
+    var guidanceMessage: String {
         switch self {
         case .microphonePermissionUndetermined:
             "Click Start Listening and allow microphone access when macOS asks."
@@ -1119,7 +1072,7 @@ private extension UnavailableReason {
         case .languageModelDeviceNotEligible:
             "This Mac does not support Apple Intelligence. Use a compatible Mac."
         case .appleIntelligenceDisabled:
-            appleIntelligenceDisabledGuidance(preferredLanguage: preferredLanguage)
+            "Apple Intelligence is unavailable. Open System Settings → Apple Intelligence & Siri and review the compatibility message there. Apple does not expose the Mac or Siri language to Rio, so Rio cannot determine whether language alignment or an organization restriction is preventing access. If the message says your organization restricts access, contact your IT administrator."
         case .languageModelNotReady:
             "Keep Apple Intelligence enabled and this Mac online while the model finishes preparing."
         case .languageModelLocaleUnsupported(let identifier):
@@ -1127,34 +1080,13 @@ private extension UnavailableReason {
         }
     }
 
-    private func appleIntelligenceDisabledGuidance(
-        preferredLanguage: PreferredLanguageConfiguration
-    ) -> String {
-        let requiredLanguage = "English (US)"
-        let languageGuidance: String
-
-        if let displayName = preferredLanguage.displayName,
-           let identifier = preferredLanguage.identifier {
-            if preferredLanguage.isRequiredLanguage {
-                languageGuidance = "Rio detected your Mac’s preferred language is already \(requiredLanguage). In System Settings, make sure Siri also uses \(requiredLanguage)"
-            } else {
-                languageGuidance = "Your Mac’s preferred language is \(displayName) (\(identifier)). Change macOS and Siri to \(requiredLanguage)"
-            }
-        } else {
-            languageGuidance = "Set Siri and macOS to \(requiredLanguage)"
-        }
-
-        return "Open System Settings → Apple Intelligence & Siri. \(languageGuidance) and turn on Apple Intelligence. If macOS says your organization restricts access, contact your IT administrator."
-    }
 }
 
 private extension PipelineFailure {
-    func guidanceMessage(
-        preferredLanguage: PreferredLanguageConfiguration = .current
-    ) -> String {
+    var guidanceMessage: String {
         switch self {
         case .unavailable(let reason):
-            reason.guidanceMessage(preferredLanguage: preferredLanguage)
+            reason.guidanceMessage
         case .stage(_, .interrupted):
             "Listening was interrupted."
         case .stage(_, .overloaded):

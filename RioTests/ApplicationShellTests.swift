@@ -127,64 +127,40 @@ final class ApplicationShellTests: XCTestCase {
     }
 
     func testPrerequisitePresentationExplainsLanguageAndOrganizationBlockers() {
-        let preferredLanguage = PreferredLanguageConfiguration(identifier: "en-GB")
         let presentation = PrerequisiteCheckPresentation(
             check: PrerequisiteCheck(
                 kind: .appleIntelligence,
                 reason: .appleIntelligenceDisabled
-            ),
-            preferredLanguage: preferredLanguage
+            )
         )
 
         XCTAssertEqual(presentation.title, "Apple Intelligence")
         XCTAssertTrue(presentation.detail.contains("System Settings"))
-        XCTAssertTrue(presentation.detail.contains("preferred language is English (United Kingdom)"))
-        XCTAssertTrue(presentation.detail.contains("en-GB"))
-        XCTAssertTrue(presentation.detail.contains("English (US)"))
+        XCTAssertTrue(presentation.detail.contains("compatibility message"))
+        XCTAssertTrue(presentation.detail.contains("does not expose"))
         XCTAssertTrue(presentation.detail.contains("organization"))
         XCTAssertEqual(presentation.symbolName, "exclamationmark.circle.fill")
     }
 
-    func testAppleIntelligenceGuidanceRecognizesRequiredPreferredLanguage() {
+    func testRegionalLocaleDoesNotClaimToBeAppleIntelligenceLanguage() {
         let presentation = PrerequisiteCheckPresentation(
             check: PrerequisiteCheck(
                 kind: .appleIntelligence,
                 reason: .appleIntelligenceDisabled
-            ),
-            preferredLanguage: PreferredLanguageConfiguration(identifier: "en_US")
+            )
         )
 
-        XCTAssertTrue(presentation.detail.contains("preferred language is already English (US)"))
-        XCTAssertTrue(presentation.detail.contains("Siri also uses English (US)"))
+        XCTAssertFalse(presentation.detail.contains("preferred language"))
+        XCTAssertFalse(presentation.detail.contains("Change macOS"))
     }
 
-    func testPreferredLanguageConfigurationNormalizesLanguageIdentifiers() {
-        XCTAssertTrue(PreferredLanguageConfiguration(identifier: "en_US").isRequiredLanguage)
-        XCTAssertFalse(PreferredLanguageConfiguration(identifier: "es-ES").isRequiredLanguage)
-        XCTAssertEqual(
-            PreferredLanguageConfiguration(identifier: "es-ES").displayName,
-            "Spanish (Spain)"
-        )
-    }
+    func testLanguageSetupActionConfirmsTheUserControlledSettingsReview() {
+        let presentation = LanguageSetupActionPresentation()
 
-    func testLanguageSetupActionConfirmsTheUserControlledLanguageChange() {
-        let presentation = LanguageSetupActionPresentation(
-            preferredLanguage: PreferredLanguageConfiguration(identifier: "es-ES")
-        )
-
-        XCTAssertEqual(presentation.buttonTitle, "Change language…")
-        XCTAssertEqual(presentation.confirmationTitle, "Change language to English (US)?")
-        XCTAssertTrue(presentation.confirmationDetail.contains("macOS and Siri"))
+        XCTAssertEqual(presentation.buttonTitle, "Review Apple Intelligence & Siri…")
+        XCTAssertEqual(presentation.confirmationTitle, "Review Apple Intelligence & Siri?")
+        XCTAssertTrue(presentation.confirmationDetail.contains("compatibility message"))
         XCTAssertTrue(presentation.confirmationDetail.contains("will not change any setting"))
-    }
-
-    func testLanguageSetupActionOnlyRequestsReviewWhenPreferredLanguageIsEnglishUS() {
-        let presentation = LanguageSetupActionPresentation(
-            preferredLanguage: PreferredLanguageConfiguration(identifier: "en-US")
-        )
-
-        XCTAssertEqual(presentation.buttonTitle, "Review language settings…")
-        XCTAssertEqual(presentation.confirmationTitle, "Review Apple Intelligence settings?")
     }
 
     func testAppleIntelligenceActionTargetsTheAppleIntelligenceAndSiriPane() {
