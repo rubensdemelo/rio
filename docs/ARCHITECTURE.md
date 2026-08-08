@@ -138,7 +138,7 @@ Diagnostics may record durations, queue depth, model availability, and error cod
 
 ### Application shell
 
-The app exposes a native `MenuBarExtra` alongside the main `WindowGroup`. The
+The app exposes a native `MenuBarExtra` alongside the single main `Window`. The
 menu-bar scene shares the main actor-isolated `LiveSessionController`, so its
 start/stop action cannot create a second listening session or a separate insight
 store. Open Rio targets the main window scene by ID; Quit Rio terminates the

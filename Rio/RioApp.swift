@@ -16,7 +16,7 @@ struct RioApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("Rio", id: "main") {
+        Window("Rio", id: "main") {
             RioView(
                 controller: sessionController,
                 resourceFolderController: resourceFolderController
