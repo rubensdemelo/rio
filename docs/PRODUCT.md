@@ -21,7 +21,7 @@ menu-bar menu provides the same start/stop listening action as the main window,
 plus Open Rio and Quit Rio actions. Closing the main window does not quit Rio;
 the menu-bar item remains the way to reopen or quit the app.
 
-While listening, Rio shows a live microphone input level and non-content speech-recognition activity status so the user can tell that capture is active without exposing a transcript. The user can pause and resume capture without ending the session, or stop listening to clear the session. A concise cue explains that processing is temporary and on-device.
+While listening, Rio shows a compact live microphone input level so the user can tell that capture is active without exposing a transcript. The main window has one primary action: start listening or stop listening and clear the session. A concise cue explains that processing is temporary and on-device.
 
 When the user starts listening:
 

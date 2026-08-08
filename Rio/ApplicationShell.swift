@@ -230,9 +230,23 @@ struct RioView<Controller: SessionShellControlling>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            sessionStatus
+            if showsSessionStatus {
+                sessionStatus
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 16)
+            }
+
+            if showsVoiceFeedback {
+                VoiceFeedbackView(
+                    status: controller.status,
+                    feedback: controller.feedback,
+                    failure: controller.failure,
+                    unavailableReason: controller.unavailableReason
+                )
                 .padding(.horizontal, 24)
-                .padding(.vertical, 16)
+                .padding(.top, 16)
+            }
+
             content
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             Divider()
@@ -278,16 +292,20 @@ struct RioView<Controller: SessionShellControlling>: View {
             .accessibilityLabel("Session status")
             .accessibilityValue("\(presentation.title). \(presentation.detail)")
 
-            if controller.status == .listening || controller.status == .processing || controller.status == .paused
-                || controller.status == .interrupted || hasMicrophoneFailure {
-                VoiceFeedbackView(
-                    status: controller.status,
-                    feedback: controller.feedback,
-                    failure: controller.failure,
-                    unavailableReason: controller.unavailableReason
-                )
-            }
         }
+    }
+
+    private var showsSessionStatus: Bool {
+        switch controller.status {
+        case .checkingAvailability, .paused, .interrupted, .unavailable:
+            true
+        case .stopped, .listening, .processing:
+            hasMicrophoneFailure
+        }
+    }
+
+    private var showsVoiceFeedback: Bool {
+        controller.status == .listening || controller.status == .processing || hasMicrophoneFailure
     }
 
     private var hasMicrophoneFailure: Bool {
@@ -306,7 +324,9 @@ struct RioView<Controller: SessionShellControlling>: View {
         if controller.cards.isEmpty {
             ScrollView {
                 VStack(spacing: 18) {
-                    if controller.status != .stopped {
+                    if controller.status != .stopped,
+                       controller.status != .listening,
+                       controller.status != .processing {
                         SessionEmptyView(
                             presentation: EmptyStatePresentation(
                                 status: controller.status,
@@ -348,29 +368,8 @@ struct RioView<Controller: SessionShellControlling>: View {
     }
 
     private var sessionControls: some View {
-        HStack(spacing: 12) {
-            if controller.status == .listening || controller.status == .processing || controller.status == .paused {
-                Button {
-                    Task { await controller.performPauseAction() }
-                } label: {
-                    Label(
-                        controller.pauseActionTitle,
-                        systemImage: controller.status == .paused ? "play.fill" : "pause.fill"
-                    )
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                .disabled(controller.isPerformingPrimaryAction || controller.isPerformingPauseAction)
-                .accessibilityLabel(controller.pauseActionTitle)
-                .accessibilityHint(
-                    controller.status == .paused
-                        ? "Resumes microphone input and speech recognition."
-                        : "Temporarily pauses microphone input without ending this session."
-                )
-            }
-
-            primaryAction
-        }
+        primaryAction
+            .frame(maxWidth: .infinity)
     }
 
     private var primaryAction: some View {
@@ -581,11 +580,39 @@ private struct VoiceFeedbackView: View {
             unavailableReason: unavailableReason
         )
 
+        if presentation.condition == .live || presentation.condition == .waiting {
+            HStack(spacing: 12) {
+                AudioInputMeterView(
+                    level: feedback.audioInput.level,
+                    isActive: true
+                )
+                .frame(width: 72, height: 28)
+
+                Label(presentation.title, systemImage: presentation.symbolName)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(presentation.tint)
+
+                Spacer(minLength: 0)
+
+                Text("On-device. Nothing is saved.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 4)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Voice feedback")
+            .accessibilityValue("\(presentation.title). \(presentation.detail)")
+        } else {
+            detailedFeedback(presentation)
+        }
+    }
+
+    private func detailedFeedback(_ presentation: VoiceFeedbackPresentation) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 12) {
                 AudioInputMeterView(
                     level: feedback.audioInput.level,
-                    isActive: presentation.condition == .live || presentation.condition == .waiting
+                    isActive: false
                 )
                 .frame(width: 92, height: 38)
 
@@ -601,10 +628,6 @@ private struct VoiceFeedbackView: View {
 
                 Spacer(minLength: 0)
             }
-
-            Label("Temporary, on-device processing. Nothing is saved.", systemImage: "lock.shield")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
         }
         .padding(12)
         .background(
