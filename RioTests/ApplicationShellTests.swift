@@ -122,23 +122,49 @@ final class ApplicationShellTests: XCTestCase {
         )
         XCTAssertEqual(
             EmptyStatePresentation(status: .unavailable, statusDetail: unavailable.detail).detail,
-            "Keep Apple Intelligence enabled and this Mac online while the model finishes preparing."
+            "Resolve the unavailable prerequisite above, then try again."
         )
     }
 
     func testPrerequisitePresentationExplainsLanguageAndOrganizationBlockers() {
+        let preferredLanguage = PreferredLanguageConfiguration(identifier: "en-GB")
         let presentation = PrerequisiteCheckPresentation(
             check: PrerequisiteCheck(
                 kind: .appleIntelligence,
                 reason: .appleIntelligenceDisabled
-            )
+            ),
+            preferredLanguage: preferredLanguage
         )
 
         XCTAssertEqual(presentation.title, "Apple Intelligence")
         XCTAssertTrue(presentation.detail.contains("System Settings"))
-        XCTAssertTrue(presentation.detail.contains("same language"))
+        XCTAssertTrue(presentation.detail.contains("preferred language is English (United Kingdom)"))
+        XCTAssertTrue(presentation.detail.contains("en-GB"))
+        XCTAssertTrue(presentation.detail.contains("English (US)"))
         XCTAssertTrue(presentation.detail.contains("organization"))
         XCTAssertEqual(presentation.symbolName, "exclamationmark.circle.fill")
+    }
+
+    func testAppleIntelligenceGuidanceRecognizesRequiredPreferredLanguage() {
+        let presentation = PrerequisiteCheckPresentation(
+            check: PrerequisiteCheck(
+                kind: .appleIntelligence,
+                reason: .appleIntelligenceDisabled
+            ),
+            preferredLanguage: PreferredLanguageConfiguration(identifier: "en_US")
+        )
+
+        XCTAssertTrue(presentation.detail.contains("preferred language is already English (US)"))
+        XCTAssertTrue(presentation.detail.contains("Siri also uses English (US)"))
+    }
+
+    func testPreferredLanguageConfigurationNormalizesLanguageIdentifiers() {
+        XCTAssertTrue(PreferredLanguageConfiguration(identifier: "en_US").isRequiredLanguage)
+        XCTAssertFalse(PreferredLanguageConfiguration(identifier: "es-ES").isRequiredLanguage)
+        XCTAssertEqual(
+            PreferredLanguageConfiguration(identifier: "es-ES").displayName,
+            "Spanish (Spain)"
+        )
     }
 
     func testAppleIntelligenceDisabledNoticeIsShownOnceAndOnlyForDisabledState() {

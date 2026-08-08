@@ -1,5 +1,45 @@
 import Combine
+import AppKit
 import SwiftUI
+
+struct PreferredLanguageConfiguration: Equatable {
+    static let requiredIdentifier = "en-US"
+
+    let identifier: String?
+
+    init(identifier: String?) {
+        let trimmedIdentifier = identifier?.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.identifier = trimmedIdentifier?.isEmpty == false ? trimmedIdentifier : nil
+    }
+
+    static var current: PreferredLanguageConfiguration {
+        PreferredLanguageConfiguration(identifier: Locale.preferredLanguages.first)
+    }
+
+    var isRequiredLanguage: Bool {
+        canonicalIdentifier == Self.requiredIdentifier
+    }
+
+    var displayName: String? {
+        guard let canonicalIdentifier else { return nil }
+        return Locale(identifier: "en-US").localizedString(forIdentifier: canonicalIdentifier)
+            ?? canonicalIdentifier
+    }
+
+    private var canonicalIdentifier: String? {
+        identifier.map {
+            Locale(identifier: $0).identifier.replacing("_", with: "-")
+        }
+    }
+}
+
+private enum SystemSettingsOpener {
+    static func open() {
+        NSWorkspace.shared.open(
+            URL(fileURLWithPath: "/System/Applications/System Settings.app")
+        )
+    }
+}
 
 enum FakeSessionStartOutcome: Sendable, Equatable {
     case listening
@@ -776,6 +816,14 @@ private struct PrerequisiteChecklistView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
+
+                        if check.kind == .appleIntelligence,
+                           check.reason == .appleIntelligenceDisabled {
+                            Button("Open System Settings") {
+                                SystemSettingsOpener.open()
+                            }
+                            .controlSize(.small)
+                        }
                     }
                 }
                 .accessibilityElement(children: .combine)
@@ -798,10 +846,13 @@ struct PrerequisiteCheckPresentation: Equatable {
     let symbolName: String
     let tintName: SessionStatusPresentation.TintName
 
-    init(check: PrerequisiteCheck) {
+    init(
+        check: PrerequisiteCheck,
+        preferredLanguage: PreferredLanguageConfiguration = .current
+    ) {
         title = check.kind.title
         if let reason = check.reason {
-            detail = reason.guidanceMessage
+            detail = reason.guidanceMessage(preferredLanguage: preferredLanguage)
             symbolName = "exclamationmark.circle.fill"
             tintName = .unavailable
         } else {
@@ -884,7 +935,8 @@ struct SessionStatusPresentation: Equatable {
     init(
         status: SessionStatus,
         unavailableReason: UnavailableReason? = nil,
-        failure: PipelineFailure? = nil
+        failure: PipelineFailure? = nil,
+        preferredLanguage: PreferredLanguageConfiguration = .current
     ) {
         switch status {
         case .stopped:
@@ -919,7 +971,8 @@ struct SessionStatusPresentation: Equatable {
             tintName = .warning
         case .unavailable:
             title = "Unavailable"
-            detail = unavailableReason?.guidanceMessage ?? failure?.guidanceMessage
+            detail = unavailableReason?.guidanceMessage(preferredLanguage: preferredLanguage)
+                ?? failure?.guidanceMessage(preferredLanguage: preferredLanguage)
                 ?? "Rio could not start listening."
             symbolName = "xmark.circle"
             tintName = .unavailable
@@ -972,8 +1025,8 @@ struct EmptyStatePresentation: Equatable {
             detail = "Start listening to try again."
             symbolName = "exclamationmark.circle"
         case .unavailable:
-            title = "Rio is unavailable"
-            detail = statusDetail
+            title = "Rio needs setup"
+            detail = "Resolve the unavailable prerequisite above, then try again."
             symbolName = "xmark.circle"
         }
     }
@@ -993,7 +1046,9 @@ private extension PrerequisiteKind {
 }
 
 private extension UnavailableReason {
-    var guidanceMessage: String {
+    func guidanceMessage(
+        preferredLanguage: PreferredLanguageConfiguration = .current
+    ) -> String {
         switch self {
         case .microphonePermissionUndetermined:
             "Click Start Listening and allow microphone access when macOS asks."
@@ -1010,20 +1065,42 @@ private extension UnavailableReason {
         case .languageModelDeviceNotEligible:
             "This Mac does not support Apple Intelligence. Use a compatible Mac."
         case .appleIntelligenceDisabled:
-            "Open System Settings → Apple Intelligence & Siri. Set macOS and Siri to the same language (Rio requires English (US)) and turn on Apple Intelligence. If macOS says your organization restricts access, contact your IT administrator."
+            appleIntelligenceDisabledGuidance(preferredLanguage: preferredLanguage)
         case .languageModelNotReady:
             "Keep Apple Intelligence enabled and this Mac online while the model finishes preparing."
         case .languageModelLocaleUnsupported(let identifier):
             "The on-device language model does not support \(identifier). Rio currently requires English (US)."
         }
     }
+
+    private func appleIntelligenceDisabledGuidance(
+        preferredLanguage: PreferredLanguageConfiguration
+    ) -> String {
+        let requiredLanguage = "English (US)"
+        let languageGuidance: String
+
+        if let displayName = preferredLanguage.displayName,
+           let identifier = preferredLanguage.identifier {
+            if preferredLanguage.isRequiredLanguage {
+                languageGuidance = "Rio detected your Mac’s preferred language is already \(requiredLanguage). In System Settings, make sure Siri also uses \(requiredLanguage)"
+            } else {
+                languageGuidance = "Your Mac’s preferred language is \(displayName) (\(identifier)). Change macOS and Siri to \(requiredLanguage)"
+            }
+        } else {
+            languageGuidance = "Set Siri and macOS to \(requiredLanguage)"
+        }
+
+        return "Open System Settings → Apple Intelligence & Siri. \(languageGuidance) and turn on Apple Intelligence. If macOS says your organization restricts access, contact your IT administrator."
+    }
 }
 
 private extension PipelineFailure {
-    var guidanceMessage: String {
+    func guidanceMessage(
+        preferredLanguage: PreferredLanguageConfiguration = .current
+    ) -> String {
         switch self {
         case .unavailable(let reason):
-            reason.guidanceMessage
+            reason.guidanceMessage(preferredLanguage: preferredLanguage)
         case .stage(_, .interrupted):
             "Listening was interrupted."
         case .stage(_, .overloaded):
