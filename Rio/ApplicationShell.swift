@@ -720,12 +720,14 @@ private struct OpenAIProviderSetupView: View {
                 Spacer(minLength: 16)
 
                 if providerSettings.isConfigured {
-                    Button("Remove", role: .destructive) {
+                    Button(role: .destructive) {
                         providerSettings.remove()
                         didChangeConfiguration()
+                    } label: {
+                        Label("Delete", systemImage: "trash")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
+                    .buttonStyle(.bordered)
+                    .tint(.secondary)
                 } else {
                     Button("Add key") {
                         isShowingKeyDetails = true
@@ -774,13 +776,15 @@ private struct OpenAIAPIKeyDetailsView: View {
 
             HStack {
                 if providerSettings.isConfigured {
-                    Button("Remove key", role: .destructive) {
+                    Button(role: .destructive) {
                         providerSettings.remove()
                         didChangeConfiguration()
                         closeDetails()
+                    } label: {
+                        Label("Delete", systemImage: "trash")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
+                    .buttonStyle(.bordered)
+                    .tint(.secondary)
                 }
                 Spacer()
                 Button("Back", action: closeDetails)
