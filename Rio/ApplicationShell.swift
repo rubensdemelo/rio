@@ -374,6 +374,7 @@ struct RioView<Controller: SessionShellControlling>: View {
                     }
                 }
                 .padding(.horizontal, 24)
+                .padding(.top, 24)
                 .padding(.bottom, 20)
             }
             .accessibilityLabel("Meeting insights")
