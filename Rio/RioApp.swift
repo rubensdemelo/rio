@@ -25,7 +25,8 @@ struct RioApp: App {
                 .environmentObject(insightHistory)
                 .environmentObject(panelRouter)
         }
-        .defaultSize(width: 560, height: 620)
+        .defaultSize(width: 560, height: 96)
+        .windowResizability(.contentSize)
 
         MenuBarExtra("Rio", image: "RioMenuBarIcon") {
             RioMenuBarMenu(controller: sessionController)

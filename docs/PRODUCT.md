@@ -14,7 +14,9 @@ It is not an enterprise recording platform, collaboration workspace, meeting arc
 
 ## Core experience
 
-The app opens to one clear listening control and a small status indicator.
+The app opens to one clear listening control at the top of a compact window. It
+does not reserve an empty canvas: listening feedback, setup guidance, errors,
+and insight cards appear below that action only when they are useful.
 
 Rio also remains available from the macOS menu bar while the app is running. The
 menu-bar menu provides the same start/stop listening action as the main window,

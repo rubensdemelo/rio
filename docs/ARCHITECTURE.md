@@ -135,6 +135,10 @@ open the same sheets as the main-window toolbar. Open Rio targets the main
 window scene by ID; Quit Rio terminates the application. The menu-bar scene has
 no meeting-data state of its own.
 
+The main window uses its content size rather than a fixed idle canvas. Its
+single listening action is always first; status feedback, setup guidance, and
+insight cards are conditionally composed below it.
+
 ## Failure behavior
 
 A failure must not silently leave the app appearing to listen.

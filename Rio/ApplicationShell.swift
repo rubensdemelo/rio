@@ -243,11 +243,11 @@ struct RioView<Controller: SessionShellControlling>: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        VStack(alignment: .leading, spacing: 16) {
+            sessionControls
+
             if showsSessionStatus {
                 sessionStatus
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 16)
             }
 
             if showsVoiceFeedback {
@@ -257,33 +257,13 @@ struct RioView<Controller: SessionShellControlling>: View {
                     failure: controller.failure,
                     unavailableReason: controller.unavailableReason
                 )
-                .padding(.horizontal, 24)
-                .padding(.top, 16)
             }
 
             content
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            Divider()
-            sessionControls
-                .padding(24)
         }
-        .frame(minWidth: 480, idealWidth: 560, minHeight: 460, idealHeight: 620)
+        .padding(16)
+        .frame(minWidth: 480, idealWidth: 560, maxWidth: 640, alignment: .topLeading)
         .background(Color(nsColor: .windowBackgroundColor))
-        .toolbar {
-            Button {
-                panelRouter.showProvider()
-            } label: {
-                Label("Provider", systemImage: "key")
-            }
-            .help("Configure your OpenAI API key")
-
-            Button {
-                panelRouter.showRecentInsights()
-            } label: {
-                Label("Recent", systemImage: "clock.arrow.circlepath")
-            }
-            .help("Show insights saved in the last two days")
-        }
         .task {
             await controller.checkReadiness()
         }
@@ -360,60 +340,32 @@ struct RioView<Controller: SessionShellControlling>: View {
 
     @ViewBuilder
     private var content: some View {
-        if controller.cards.isEmpty {
-            ScrollView {
-                VStack(spacing: 18) {
-                    if !providerSettings.isConfigured {
-                        OpenAIProviderSetupCard {
-                            panelRouter.showProvider()
-                        }
-                        .padding(.horizontal, 24)
-                    }
-
-                    if controller.status != .stopped,
-                       controller.status != .listening,
-                       controller.status != .processing {
-                        SessionEmptyView(
-                            presentation: EmptyStatePresentation(
-                                status: controller.status,
-                                statusDetail: SessionStatusPresentation(
-                                    status: controller.status,
-                                    unavailableReason: controller.unavailableReason,
-                                    failure: controller.failure
-                                ).detail,
-                                hasUnavailablePrerequisite: hasUnavailablePrerequisite
-                            )
-                        )
-                    }
-
-                    if let readiness = controller.readiness, !readiness.isReady {
-                        PrerequisiteChecklistView(report: readiness)
-                            .padding(.horizontal, 24)
-
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 24)
+        if !providerSettings.isConfigured {
+            OpenAIProviderSetupCard {
+                panelRouter.showProvider()
             }
-            .accessibilityLabel("Listening readiness")
-        } else {
-            ScrollView {
-                LazyVStack(spacing: 12) {
-                    ForEach(controller.cards, id: \.stableKey) { card in
-                        InsightCardView(card: card)
-                    }
+        }
+
+        if let readiness = controller.readiness, !readiness.isReady {
+            PrerequisiteChecklistView(report: readiness)
+        }
+
+        if !controller.cards.isEmpty {
+            LazyVStack(spacing: 12) {
+                ForEach(controller.cards, id: \.stableKey) { card in
+                    InsightCardView(card: card)
                 }
-                .padding(.horizontal, 24)
-                .padding(.top, 24)
-                .padding(.bottom, 20)
             }
             .accessibilityLabel("Meeting insights")
         }
     }
 
     private var sessionControls: some View {
-        primaryAction
-            .frame(maxWidth: .infinity)
+        HStack {
+            Spacer()
+            primaryAction
+            Spacer()
+        }
     }
 
     private var primaryAction: some View {
@@ -640,19 +592,6 @@ private struct AudioInputMeterView: View {
         let threshold = centerDistance * 0.38
         let normalized = max(0, min(1, (level - threshold) / 0.62))
         return 6 + CGFloat(normalized) * 28
-    }
-}
-
-private struct SessionEmptyView: View {
-    let presentation: EmptyStatePresentation
-
-    var body: some View {
-        ContentUnavailableView {
-            Label(presentation.title, systemImage: presentation.symbolName)
-        } description: {
-            Text(presentation.detail)
-        }
-        .accessibilityElement(children: .combine)
     }
 }
 
