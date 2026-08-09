@@ -2,6 +2,26 @@ import Combine
 import AppKit
 import SwiftUI
 
+@MainActor
+final class RioPanelRouter: ObservableObject {
+    enum Panel: String, Identifiable {
+        case recentInsights
+        case provider
+
+        var id: String { rawValue }
+    }
+
+    @Published var presentedPanel: Panel?
+
+    func showRecentInsights() {
+        presentedPanel = .recentInsights
+    }
+
+    func showProvider() {
+        presentedPanel = .provider
+    }
+}
+
 enum SystemSettingsOpener {
     static let screenAndSystemAudioRecordingURL = URL(
         string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
@@ -216,8 +236,7 @@ struct RioView<Controller: SessionShellControlling>: View {
     @ObservedObject private var controller: Controller
     @EnvironmentObject private var providerSettings: OpenAIProviderSettings
     @EnvironmentObject private var insightHistory: InsightHistoryStore
-    @State private var isShowingProviderSetup = false
-    @State private var isShowingRecentInsights = false
+    @EnvironmentObject private var panelRouter: RioPanelRouter
 
     init(controller: Controller) {
         self.controller = controller
@@ -252,14 +271,14 @@ struct RioView<Controller: SessionShellControlling>: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .toolbar {
             Button {
-                isShowingProviderSetup = true
+                panelRouter.showProvider()
             } label: {
                 Label("Provider", systemImage: "key")
             }
             .help("Configure your OpenAI API key")
 
             Button {
-                isShowingRecentInsights = true
+                panelRouter.showRecentInsights()
             } label: {
                 Label("Recent", systemImage: "clock.arrow.circlepath")
             }
@@ -268,13 +287,15 @@ struct RioView<Controller: SessionShellControlling>: View {
         .task {
             await controller.checkReadiness()
         }
-        .sheet(isPresented: $isShowingProviderSetup) {
-            OpenAIProviderSetupView {
-                Task { await controller.checkReadiness() }
+        .sheet(item: $panelRouter.presentedPanel) { panel in
+            switch panel {
+            case .provider:
+                OpenAIProviderSetupView {
+                    Task { await controller.checkReadiness() }
+                }
+            case .recentInsights:
+                RecentInsightsView()
             }
-        }
-        .sheet(isPresented: $isShowingRecentInsights) {
-            RecentInsightsView()
         }
     }
 
@@ -344,7 +365,7 @@ struct RioView<Controller: SessionShellControlling>: View {
                 VStack(spacing: 18) {
                     if !providerSettings.isConfigured {
                         OpenAIProviderSetupCard {
-                            isShowingProviderSetup = true
+                            panelRouter.showProvider()
                         }
                         .padding(.horizontal, 24)
                     }
@@ -1123,12 +1144,14 @@ extension InsightCard {
     RioView(controller: FakeSessionController())
         .environmentObject(OpenAIProviderSettings())
         .environmentObject(InsightHistoryStore())
+        .environmentObject(RioPanelRouter())
 }
 
 #Preview("Listening — empty") {
     RioView(controller: FakeSessionController(status: .listening))
         .environmentObject(OpenAIProviderSettings())
         .environmentObject(InsightHistoryStore())
+        .environmentObject(RioPanelRouter())
 }
 
 #Preview("Insight cards") {
@@ -1162,6 +1185,7 @@ extension InsightCard {
     )
     .environmentObject(OpenAIProviderSettings())
     .environmentObject(InsightHistoryStore())
+    .environmentObject(RioPanelRouter())
 }
 
 #Preview("Unavailable") {
@@ -1174,6 +1198,7 @@ extension InsightCard {
     )
     .environmentObject(OpenAIProviderSettings())
     .environmentObject(InsightHistoryStore())
+    .environmentObject(RioPanelRouter())
 }
 
 #Preview("Interrupted") {
@@ -1186,4 +1211,5 @@ extension InsightCard {
     )
     .environmentObject(OpenAIProviderSettings())
     .environmentObject(InsightHistoryStore())
+    .environmentObject(RioPanelRouter())
 }
