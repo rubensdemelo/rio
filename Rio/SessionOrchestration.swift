@@ -327,7 +327,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
                 }
 
                 status = .processing
-                let updates = try await insightGenerator.generate(from: batch)
+                let updates = try await generateInsights(for: batch, sessionID: sessionID)
                 guard activeSessionID == sessionID else {
                     return
                 }
@@ -339,6 +339,23 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
                 return
             }
             await fail(failure, sessionID: sessionID)
+        }
+    }
+
+    private func generateInsights(
+        for batch: MeetingContextBatch,
+        sessionID: UInt64
+    ) async throws(PipelineFailure) -> [InsightUpdate] {
+        do {
+            return try await insightGenerator.generate(from: batch)
+        } catch let failure where failure == .stage(.insightGeneration, .failed) {
+            // A single Foundation Models request may fail transiently. Rebuild the
+            // ephemeral model session and retry the same bounded batch once.
+            await insightGenerator.stop()
+            try ensureActive(sessionID)
+            try await insightGenerator.startSession(localeIdentifier: localeIdentifier)
+            try ensureActive(sessionID)
+            return try await insightGenerator.generate(from: batch)
         }
     }
 

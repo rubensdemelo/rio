@@ -281,7 +281,8 @@ final class SessionLifecycleTests: XCTestCase {
     func testGenerationFailurePropagatesAfterFinalizedSpeech() async throws {
         let speech = TestSessionSpeechRecognizer()
         let generator = TestSessionInsightGenerator(
-            generateFailure: .stage(.insightGeneration, .failed)
+            generateFailure: .stage(.insightGeneration, .failed),
+            generateFailureCount: 2
         )
         let state = TestSessionInsightState()
         let coordinator = makeCoordinator(
@@ -298,6 +299,32 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertTrue(state.appliedContexts.isEmpty)
         let generatorCancellations = await generator.cancelCount()
         XCTAssertEqual(generatorCancellations, 1)
+    }
+
+    func testTransientGenerationFailureRestartsTheModelAndRetriesTheBatch() async throws {
+        let speech = TestSessionSpeechRecognizer()
+        let generator = TestSessionInsightGenerator(
+            updates: [makeUpdate(text: "recovered synthetic insight")],
+            generateFailure: .stage(.insightGeneration, .failed)
+        )
+        let state = TestSessionInsightState()
+        let coordinator = makeCoordinator(
+            speech: speech,
+            generator: generator,
+            state: state
+        )
+
+        try await coordinator.start()
+        let speechStream = await speech.lastStream()
+        speechStream?.yield(makeSegment(sequence: 1, text: "synthetic retry"))
+        await waitUntil { state.appliedContexts.count == 1 }
+
+        XCTAssertEqual(coordinator.status, SessionStatus.listening)
+        let modelStops = await generator.stopCount()
+        let modelStarts = await generator.startSessionCount()
+        XCTAssertEqual(modelStops, 1)
+        XCTAssertEqual(modelStarts, 2)
+        await coordinator.stop()
     }
 
     func testStopWhileProcessingCancelsGenerationAndClearsState() async throws {
