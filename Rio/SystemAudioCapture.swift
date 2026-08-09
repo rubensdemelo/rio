@@ -251,6 +251,9 @@ extension ScreenCaptureKitSystemAudioCapture: SCStreamOutput, SCStreamDelegate {
     }
 
     nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
-        Task { await cancel() }
+        // ScreenCaptureKit ended an active capture. Preserve it as an
+        // interruption so the session can distinguish it from a permission or
+        // setup problem and offer a meaningful retry.
+        Task { await finish(throwing: .stage(.audioCapture, .interrupted)) }
     }
 }
