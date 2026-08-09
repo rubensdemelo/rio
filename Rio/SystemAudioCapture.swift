@@ -11,6 +11,45 @@ private final class SendableSampleBuffer: @unchecked Sendable {
     }
 }
 
+/// Decodes the linear PCM layouts ScreenCaptureKit can deliver without
+/// assuming that 32-bit samples are floating point.
+enum SystemAudioSampleDecoder {
+    static func decode(
+        bytes: UnsafeRawBufferPointer,
+        bitsPerChannel: UInt32,
+        formatFlags: UInt32
+    ) -> [Float]? {
+        let isFloat = formatFlags & kAudioFormatFlagIsFloat != 0
+        let isSignedInteger = formatFlags & kAudioFormatFlagIsSignedInteger != 0
+        let isBigEndian = formatFlags & kAudioFormatFlagIsBigEndian != 0
+
+        switch (isFloat, isSignedInteger, bitsPerChannel) {
+        case (true, _, 32):
+            guard bytes.count.isMultiple(of: MemoryLayout<Float>.size) else { return nil }
+            return stride(from: 0, to: bytes.count, by: MemoryLayout<Float>.size).compactMap {
+                let sample = bytes.loadUnaligned(fromByteOffset: $0, as: Float.self)
+                return sample.isFinite ? sample : nil
+            }
+        case (_, true, 16):
+            guard bytes.count.isMultiple(of: MemoryLayout<Int16>.size) else { return nil }
+            return stride(from: 0, to: bytes.count, by: MemoryLayout<Int16>.size).map {
+                let raw = bytes.loadUnaligned(fromByteOffset: $0, as: Int16.self)
+                let sample = isBigEndian ? Int16(bigEndian: raw) : Int16(littleEndian: raw)
+                return max(-1, Float(sample) / Float(Int16.max))
+            }
+        case (_, true, 32):
+            guard bytes.count.isMultiple(of: MemoryLayout<Int32>.size) else { return nil }
+            return stride(from: 0, to: bytes.count, by: MemoryLayout<Int32>.size).map {
+                let raw = bytes.loadUnaligned(fromByteOffset: $0, as: Int32.self)
+                let sample = isBigEndian ? Int32(bigEndian: raw) : Int32(littleEndian: raw)
+                return max(-1, Float(sample) / Float(Int32.max))
+            }
+        default:
+            return nil
+        }
+    }
+}
+
 /// Captures the Mac's meeting/system audio without recording pixels or audio files.
 ///
 /// ScreenCaptureKit's display filter is required to receive system audio, but this
@@ -168,20 +207,36 @@ actor ScreenCaptureKitSystemAudioCapture: NSObject, SessionAudioCapture {
         guard status == noErr else { return nil }
 
         let channelCount = Int(description.mChannelsPerFrame)
-        var samples = [Float](repeating: 0, count: frameCount * channelCount)
+        let requiredSampleCount = frameCount * channelCount
+        var samples = [Float](repeating: 0, count: requiredSampleCount)
         let buffers = UnsafeMutableAudioBufferListPointer(list)
         if buffers.count == 1, let data = buffers[0].mData {
-            let source = data.assumingMemoryBound(to: Float.self)
-            let sampleCount = samples.count
-            samples.withUnsafeMutableBufferPointer {
-                $0.baseAddress!.update(from: source, count: sampleCount)
-            }
+            let source = UnsafeRawBufferPointer(
+                start: data,
+                count: Int(buffers[0].mDataByteSize)
+            )
+            guard let decoded = SystemAudioSampleDecoder.decode(
+                bytes: source,
+                bitsPerChannel: description.mBitsPerChannel,
+                formatFlags: description.mFormatFlags
+            ), decoded.count >= requiredSampleCount else { return nil }
+            samples = Array(decoded.prefix(requiredSampleCount))
         } else {
             guard buffers.count >= channelCount else { return nil }
             for channel in 0..<channelCount {
                 guard let data = buffers[channel].mData else { return nil }
-                let source = data.assumingMemoryBound(to: Float.self)
-                for frame in 0..<frameCount { samples[(frame * channelCount) + channel] = source[frame] }
+                let source = UnsafeRawBufferPointer(
+                    start: data,
+                    count: Int(buffers[channel].mDataByteSize)
+                )
+                guard let decoded = SystemAudioSampleDecoder.decode(
+                    bytes: source,
+                    bitsPerChannel: description.mBitsPerChannel,
+                    formatFlags: description.mFormatFlags
+                ), decoded.count >= frameCount else { return nil }
+                for frame in 0..<frameCount {
+                    samples[(frame * channelCount) + channel] = decoded[frame]
+                }
             }
         }
         return AudioChunk(sequenceNumber: sequenceNumber, duration: .seconds(Double(frameCount) / description.mSampleRate), sampleRate: description.mSampleRate, channelCount: channelCount, samples: samples)

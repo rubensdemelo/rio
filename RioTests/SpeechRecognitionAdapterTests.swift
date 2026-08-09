@@ -54,6 +54,24 @@ final class SpeechRecognitionAdapterTests: XCTestCase {
         XCTAssertGreaterThan(second.frameLength, 0)
     }
 
+    func testSystemAudioDecoderNormalizesSigned32BitPCM() throws {
+        let source: [Int32] = [Int32.min, 0, Int32.max]
+        let samples = try source.withUnsafeBytes {
+            try XCTUnwrap(
+                SystemAudioSampleDecoder.decode(
+                    bytes: $0,
+                    bitsPerChannel: 32,
+                    formatFlags: kAudioFormatFlagIsSignedInteger
+                )
+            )
+        }
+
+        XCTAssertEqual(samples.count, 3)
+        XCTAssertEqual(samples[0], -1, accuracy: 0.0001)
+        XCTAssertEqual(samples[1], 0, accuracy: 0.0001)
+        XCTAssertEqual(samples[2], 1, accuracy: 0.0001)
+    }
+
     func testAssetInventoryStatesAreRepresentedExplicitly() {
         XCTAssertEqual(SpeechAssetState(.unsupported), .unsupported)
         XCTAssertEqual(SpeechAssetState(.supported), .supported)
