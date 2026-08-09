@@ -673,6 +673,7 @@ private struct OpenAIProviderSetupView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var providerSettings: OpenAIProviderSettings
     @State private var isShowingKeyDetails = false
+    @State private var isConfirmingDeletion = false
 
     let didChangeConfiguration: () -> Void
 
@@ -689,6 +690,19 @@ private struct OpenAIProviderSetupView: View {
         }
         .padding(24)
         .frame(width: 440)
+        .confirmationDialog(
+            "Delete Open AI API key?",
+            isPresented: $isConfirmingDeletion,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                providerSettings.remove()
+                didChangeConfiguration()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the key from your login Keychain. You can add it again later.")
+        }
     }
 
     private var keyOverview: some View {
@@ -721,8 +735,7 @@ private struct OpenAIProviderSetupView: View {
 
                 if providerSettings.isConfigured {
                     Button(role: .destructive) {
-                        providerSettings.remove()
-                        didChangeConfiguration()
+                        isConfirmingDeletion = true
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
@@ -747,6 +760,7 @@ private struct OpenAIProviderSetupView: View {
 
 private struct OpenAIAPIKeyDetailsView: View {
     @EnvironmentObject private var providerSettings: OpenAIProviderSettings
+    @State private var isConfirmingDeletion = false
 
     let didChangeConfiguration: () -> Void
     let closeDetails: () -> Void
@@ -777,9 +791,7 @@ private struct OpenAIAPIKeyDetailsView: View {
             HStack {
                 if providerSettings.isConfigured {
                     Button(role: .destructive) {
-                        providerSettings.remove()
-                        didChangeConfiguration()
-                        closeDetails()
+                        isConfirmingDeletion = true
                     } label: {
                         Label("Delete", systemImage: "trash")
                     }
@@ -797,6 +809,20 @@ private struct OpenAIAPIKeyDetailsView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(providerSettings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
+        }
+        .confirmationDialog(
+            "Delete Open AI API key?",
+            isPresented: $isConfirmingDeletion,
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                providerSettings.remove()
+                didChangeConfiguration()
+                closeDetails()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the key from your login Keychain. You can add it again later.")
         }
     }
 }
