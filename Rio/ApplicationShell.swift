@@ -702,7 +702,7 @@ private struct OpenAIProviderSetupView: View {
 
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("OpenAI API key")
+                    Text("Open AI")
                         .font(.body.weight(.medium))
                     HStack(spacing: 8) {
                         Circle()
@@ -716,16 +716,20 @@ private struct OpenAIProviderSetupView: View {
 
                 Spacer(minLength: 16)
 
-                Button(providerSettings.isConfigured ? "Details…" : "Add key") {
-                    isShowingKeyDetails = true
+                if providerSettings.isConfigured {
+                    Button("Remove", role: .destructive) {
+                        providerSettings.remove()
+                        didChangeConfiguration()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                } else {
+                    Button("Add key") {
+                        isShowingKeyDetails = true
+                    }
+                    .buttonStyle(.bordered)
                 }
-                .buttonStyle(.bordered)
             }
-            .padding(18)
-            .background(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor))
-            )
 
             HStack {
                 Spacer()
