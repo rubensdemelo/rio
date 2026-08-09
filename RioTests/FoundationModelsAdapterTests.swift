@@ -174,6 +174,7 @@ final class FoundationModelsAdapterTests: XCTestCase {
         XCTAssertEqual(prompts.count, 1)
         XCTAssertEqual(prompts.first?.contains("<MEETING_TEXT>"), true)
         XCTAssertEqual(prompts.first?.contains(meetingText), true)
+        XCTAssertTrue(prompts.first?.contains("Do not return an empty response") == true)
         XCTAssertFalse(instructions.contains(meetingText))
         XCTAssertTrue(FoundationModelsPrompt.instructions.contains("untrusted"))
     }

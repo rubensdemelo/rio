@@ -189,6 +189,10 @@ enum FoundationModelsPrompt {
         </MEETING_TEXT>
 
         Produce updates only when the meeting content supports them. Do not summarize the transcript.
+        Do not return an empty response when the batch contains a factual statement,
+        decision, question, risk, or proposed next step. Return one concise, cautious
+        insight in the fitting category instead. Omit only social filler, silence, or
+        repeated content with no new meeting signal.
         """
     }
 }
