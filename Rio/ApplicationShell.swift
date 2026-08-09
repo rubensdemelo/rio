@@ -1003,7 +1003,7 @@ private extension UnavailableReason {
         case .speechLocaleUnsupported(let identifier):
             "Speech recognition does not support \(identifier). Rio currently requires English (US)."
         case .speechAssetsNotReady:
-            "Keep this Mac online. Rio will download the required speech assets, then try again."
+            "Rio needs Apple’s on-device speech-recognition asset for English (US). Rio has asked macOS to download it; keep this Mac online, then try again. There is nothing to add manually."
         case .languageModelDeviceNotEligible:
             "This Mac does not support Apple Intelligence. Use a compatible Mac."
         case .appleIntelligenceDisabled:

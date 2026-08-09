@@ -149,6 +149,19 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(presentation.symbolName, "exclamationmark.circle.fill")
     }
 
+    func testSpeechAssetsPresentationNamesTheRequiredEnglishAsset() {
+        let presentation = PrerequisiteCheckPresentation(
+            check: PrerequisiteCheck(
+                kind: .speechRecognition,
+                reason: .speechAssetsNotReady
+            )
+        )
+
+        XCTAssertTrue(presentation.detail.contains("English (US)"))
+        XCTAssertTrue(presentation.detail.contains("on-device speech-recognition asset"))
+        XCTAssertTrue(presentation.detail.contains("nothing to add manually"))
+    }
+
     func testRegionalLocaleDoesNotClaimToBeAppleIntelligenceLanguage() {
         let presentation = PrerequisiteCheckPresentation(
             check: PrerequisiteCheck(
