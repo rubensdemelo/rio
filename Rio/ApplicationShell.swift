@@ -675,26 +675,29 @@ private struct OpenAIProviderSetupView: View {
     let didChangeConfiguration: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("Bring your own key")
-                .font(.title2.weight(.semibold))
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Provider")
-                    .font(.subheadline.weight(.medium))
-                Text("OpenAI (default)")
+        VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Bring your own key")
+                    .font(.title2.weight(.bold))
+                Text("Stored only in your login Keychain. It is never shown again.")
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Provider")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .textCase(.uppercase)
+                Text("OpenAI")
+                    .font(.body.weight(.medium))
             }
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("OpenAI API key")
-                    .font(.subheadline.weight(.medium))
+                    .font(.headline)
                 SecureField("Paste your API key", text: $providerSettings.apiKey)
                     .textFieldStyle(.roundedBorder)
-                Text("Stored only in your login Keychain. Rio uses it for transcription and insights; it is never shown again.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
 
             if let errorMessage = providerSettings.errorMessage {
@@ -709,6 +712,8 @@ private struct OpenAIProviderSetupView: View {
                         providerSettings.remove()
                         didChangeConfiguration()
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
                 }
                 Spacer()
                 Button("Cancel") { dismiss() }
