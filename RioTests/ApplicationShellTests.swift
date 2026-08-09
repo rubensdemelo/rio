@@ -79,7 +79,7 @@ final class ApplicationShellTests: XCTestCase {
     }
 
     func testUnavailableOutcomeNeverClaimsToBeListening() async {
-        let reason = UnavailableReason.appleIntelligenceDisabled
+        let reason = UnavailableReason.openAIAPIKeyMissing
         let controller = FakeSessionController(startOutcome: .unavailable(reason))
 
         await controller.performPrimaryAction()
@@ -119,7 +119,7 @@ final class ApplicationShellTests: XCTestCase {
         let interrupted = SessionStatusPresentation(status: .interrupted)
         let unavailable = SessionStatusPresentation(
             status: .unavailable,
-            unavailableReason: .languageModelNotReady
+            unavailableReason: .openAIAPIKeyMissing
         )
 
         XCTAssertEqual(stopped.title, "Stopped")
@@ -157,19 +157,17 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(presentation.detail, "Try Start Listening again.")
     }
 
-    func testPrerequisitePresentationExplainsLanguageAndOrganizationBlockers() {
+    func testOpenAIPrerequisiteExplainsTheRequiredConfigurationAndPrivacyBoundary() {
         let presentation = PrerequisiteCheckPresentation(
             check: PrerequisiteCheck(
-                kind: .appleIntelligence,
-                reason: .appleIntelligenceDisabled
+                kind: .openAI,
+                reason: .openAIAPIKeyMissing
             )
         )
 
-        XCTAssertEqual(presentation.title, "Apple Intelligence")
-        XCTAssertTrue(presentation.detail.contains("System Settings"))
-        XCTAssertTrue(presentation.detail.contains("compatibility message"))
-        XCTAssertTrue(presentation.detail.contains("does not expose"))
-        XCTAssertTrue(presentation.detail.contains("organization"))
+        XCTAssertEqual(presentation.title, "OpenAI API")
+        XCTAssertTrue(presentation.detail.contains("OPENAI_API_KEY"))
+        XCTAssertTrue(presentation.detail.contains("temporary meeting text"))
         XCTAssertEqual(presentation.symbolName, "exclamationmark.circle.fill")
     }
 
@@ -186,84 +184,11 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertTrue(presentation.detail.contains("nothing to add manually"))
     }
 
-    func testRegionalLocaleDoesNotClaimToBeAppleIntelligenceLanguage() {
-        let presentation = PrerequisiteCheckPresentation(
-            check: PrerequisiteCheck(
-                kind: .appleIntelligence,
-                reason: .appleIntelligenceDisabled
-            )
-        )
-
-        XCTAssertFalse(presentation.detail.contains("preferred language"))
-        XCTAssertFalse(presentation.detail.contains("Change macOS"))
-    }
-
-    func testLanguageSetupActionConfirmsTheUserControlledSettingsReview() {
-        let presentation = LanguageSetupActionPresentation()
-
-        XCTAssertEqual(presentation.buttonTitle, "Review Apple Intelligence & Siri…")
-        XCTAssertEqual(presentation.confirmationTitle, "Review Apple Intelligence & Siri?")
-        XCTAssertTrue(presentation.confirmationDetail.contains("compatibility message"))
-        XCTAssertTrue(presentation.confirmationDetail.contains("will not change any setting"))
-    }
-
-    func testAppleIntelligenceActionTargetsTheAppleIntelligenceAndSiriPane() {
-        XCTAssertEqual(
-            SystemSettingsOpener.appleIntelligenceAndSiriURL.absoluteString,
-            "x-apple.systempreferences:com.apple.Siri-Settings.extension"
-        )
-    }
-
     func testMeetingAudioActionTargetsTheScreenRecordingPrivacyPane() {
         XCTAssertEqual(
             SystemSettingsOpener.screenAndSystemAudioRecordingURL.absoluteString,
             "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
         )
-    }
-
-    func testAppleIntelligenceDisabledNoticeIsShownOnceAndOnlyForDisabledState() {
-        let suiteName = "RioTests.Notice.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer {
-            defaults.removePersistentDomain(forName: suiteName)
-        }
-
-        let disabledReadiness = SessionReadiness(
-            checks: [
-                PrerequisiteCheck(
-                    kind: .appleIntelligence,
-                    reason: .appleIntelligenceDisabled
-                )
-            ]
-        )
-        let notReadyReadiness = SessionReadiness(
-            checks: [
-                PrerequisiteCheck(
-                    kind: .appleIntelligence,
-                    reason: .languageModelNotReady
-                )
-            ]
-        )
-
-        let presenter = AppleIntelligenceDisabledNoticePresenter(defaults: defaults)
-        presenter.update(for: notReadyReadiness)
-        XCTAssertFalse(presenter.isVisible)
-
-        presenter.update(for: disabledReadiness)
-        XCTAssertTrue(presenter.isVisible)
-
-        let secondPresenter = AppleIntelligenceDisabledNoticePresenter(defaults: defaults)
-        secondPresenter.update(for: disabledReadiness)
-        XCTAssertFalse(secondPresenter.isVisible)
-    }
-
-    func testAppleIntelligenceDisabledNoticeExplainsModelDownloadAndStorageWithoutExactSize() {
-        let detail = AppleIntelligenceDisabledNoticePresentation.detail
-
-        XCTAssertTrue(detail.contains("on-device models"))
-        XCTAssertTrue(detail.contains("several gigabytes"))
-        XCTAssertTrue(detail.contains("free disk space"))
-        XCTAssertFalse(detail.range(of: #"\b\d+(?:\.\d+)?\s*(?:GB|TB|gigabytes?)\b"#, options: .regularExpression) != nil)
     }
 
     func testVoiceFeedbackUsesNonContentSpeechActivityInsteadOfTranscript() {

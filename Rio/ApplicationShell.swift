@@ -3,22 +3,9 @@ import AppKit
 import SwiftUI
 
 enum SystemSettingsOpener {
-    static let appleIntelligenceAndSiriURL = URL(
-        string: "x-apple.systempreferences:com.apple.Siri-Settings.extension"
-    )!
     static let screenAndSystemAudioRecordingURL = URL(
         string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
     )!
-
-    static func openAppleIntelligenceAndSiri() {
-        guard !NSWorkspace.shared.open(appleIntelligenceAndSiriURL) else {
-            return
-        }
-
-        NSWorkspace.shared.open(
-            URL(fileURLWithPath: "/System/Applications/System Settings.app")
-        )
-    }
 
     static func openScreenAndSystemAudioRecording() {
         guard !NSWorkspace.shared.open(screenAndSystemAudioRecordingURL) else {
@@ -227,18 +214,9 @@ final class FakeSessionController: SessionShellControlling {
 
 struct RioView<Controller: SessionShellControlling>: View {
     @ObservedObject private var controller: Controller
-    @StateObject private var noticePresenter: AppleIntelligenceDisabledNoticePresenter
 
-    init(
-        controller: Controller,
-        noticeDefaults: UserDefaults = .standard
-    ) {
+    init(controller: Controller) {
         self.controller = controller
-        _noticePresenter = StateObject(
-            wrappedValue: AppleIntelligenceDisabledNoticePresenter(
-                defaults: noticeDefaults
-            )
-        )
     }
 
     var body: some View {
@@ -270,10 +248,6 @@ struct RioView<Controller: SessionShellControlling>: View {
         .background(Color(nsColor: .windowBackgroundColor))
         .task {
             await controller.checkReadiness()
-            noticePresenter.update(for: controller.readiness)
-        }
-        .onChange(of: controller.readiness) { _, readiness in
-            noticePresenter.update(for: readiness)
         }
     }
 
@@ -361,10 +335,6 @@ struct RioView<Controller: SessionShellControlling>: View {
                         PrerequisiteChecklistView(report: readiness)
                             .padding(.horizontal, 24)
 
-                        if noticePresenter.isVisible {
-                            AppleIntelligenceDisabledNoticeView()
-                                .padding(.horizontal, 24)
-                        }
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -433,75 +403,6 @@ struct RioView<Controller: SessionShellControlling>: View {
         case .stopped, .interrupted, .unavailable:
             "Starts a new listening session. Keyboard shortcut Command-L."
         }
-    }
-}
-
-struct AppleIntelligenceDisabledNoticePresentation: Equatable {
-    static let title = "Apple Intelligence is turned off"
-    static let detail = "Turning it on downloads on-device models and requires several gigabytes of free disk space. Open System Settings → Apple Intelligence & Siri to enable it."
-}
-
-@MainActor
-final class AppleIntelligenceDisabledNoticePresenter: ObservableObject {
-    static let defaultsKey = "rio.appleIntelligenceDisabledNoticePresented"
-
-    @Published private(set) var isVisible = false
-
-    private let defaults: UserDefaults
-    private var hasPresented: Bool
-
-    init(defaults: UserDefaults = .standard) {
-        self.defaults = defaults
-        hasPresented = defaults.bool(
-            forKey: Self.defaultsKey
-        )
-    }
-
-    func update(for readiness: SessionReadiness?) {
-        guard !hasPresented,
-              readiness?.checks.contains(where: { check in
-                  check.kind == .appleIntelligence
-                      && check.reason == .appleIntelligenceDisabled
-              }) == true else {
-            return
-        }
-
-        hasPresented = true
-        defaults.set(true, forKey: Self.defaultsKey)
-        isVisible = true
-    }
-}
-
-private struct AppleIntelligenceDisabledNoticeView: View {
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "internaldrive.fill")
-                .foregroundStyle(.orange)
-                .frame(width: 18)
-
-            VStack(alignment: .leading, spacing: 4) {
-                Text(AppleIntelligenceDisabledNoticePresentation.title)
-                    .font(.subheadline.weight(.semibold))
-                Text(AppleIntelligenceDisabledNoticePresentation.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: 460, alignment: .leading)
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.orange.opacity(0.10))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.orange.opacity(0.25), lineWidth: 1)
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(
-            "\(AppleIntelligenceDisabledNoticePresentation.title). \(AppleIntelligenceDisabledNoticePresentation.detail)"
-        )
     }
 }
 
@@ -723,11 +624,6 @@ private struct PrerequisiteChecklistView: View {
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
 
-                        if check.kind == .appleIntelligence,
-                           check.reason == .appleIntelligenceDisabled {
-                            AppleIntelligenceLanguageAction()
-                        }
-
                         if check.kind == .meetingAudio,
                            check.reason == .systemAudioPermissionDenied {
                             Button("Open Screen & System Audio Recording") {
@@ -748,45 +644,6 @@ private struct PrerequisiteChecklistView: View {
         )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Listening prerequisites")
-    }
-}
-
-private struct AppleIntelligenceLanguageAction: View {
-    @State private var isConfirmationPresented = false
-
-    private var presentation: LanguageSetupActionPresentation {
-        LanguageSetupActionPresentation()
-    }
-
-    var body: some View {
-        Button(presentation.buttonTitle) {
-            isConfirmationPresented = true
-        }
-        .controlSize(.small)
-        .confirmationDialog(
-            presentation.confirmationTitle,
-            isPresented: $isConfirmationPresented,
-            titleVisibility: .visible
-        ) {
-            Button("Open Apple Intelligence & Siri") {
-                SystemSettingsOpener.openAppleIntelligenceAndSiri()
-            }
-            Button("Not now", role: .cancel) {}
-        } message: {
-            Text(presentation.confirmationDetail)
-        }
-    }
-}
-
-struct LanguageSetupActionPresentation: Equatable {
-    let buttonTitle: String
-    let confirmationTitle: String
-    let confirmationDetail: String
-
-    init() {
-        buttonTitle = "Review Apple Intelligence & Siri…"
-        confirmationTitle = "Review Apple Intelligence & Siri?"
-        confirmationDetail = "Rio will open Apple Intelligence & Siri in System Settings. Review the compatibility message and make any required changes there. Rio will not change any setting."
     }
 }
 
@@ -988,8 +845,8 @@ private extension PrerequisiteKind {
             "Meeting audio access"
         case .speechRecognition:
             "Speech recognition"
-        case .appleIntelligence:
-            "Apple Intelligence"
+        case .openAI:
+            "OpenAI API"
         }
     }
 }
@@ -1013,14 +870,10 @@ private extension UnavailableReason {
             "Speech recognition does not support \(identifier). Rio currently requires English (US)."
         case .speechAssetsNotReady:
             "Rio needs Apple’s on-device speech-recognition asset for English (US). Rio has asked macOS to download it; keep this Mac online, then try again. There is nothing to add manually."
-        case .languageModelDeviceNotEligible:
-            "This Mac does not support Apple Intelligence. Use a compatible Mac."
-        case .appleIntelligenceDisabled:
-            "Apple Intelligence is unavailable. Open System Settings → Apple Intelligence & Siri and review the compatibility message there. Apple does not expose the Mac or Siri language to Rio, so Rio cannot determine whether language alignment or an organization restriction is preventing access. If the message says your organization restricts access, contact your IT administrator."
-        case .languageModelNotReady:
-            "Keep Apple Intelligence enabled and this Mac online while the model finishes preparing."
-        case .languageModelLocaleUnsupported(let identifier):
-            "The on-device language model does not support \(identifier). Rio currently requires English (US)."
+        case .openAIAPIKeyMissing:
+            "Set OPENAI_API_KEY in the environment before launching Rio. Rio sends only bounded, temporary meeting text to OpenAI for insight generation."
+        case .openAIAPIKeyInvalid:
+            "Rio could not authenticate with OpenAI. Check OPENAI_API_KEY and start listening again."
         }
     }
 
@@ -1138,8 +991,8 @@ extension InsightCard {
     RioView(
         controller: FakeSessionController(
             status: .unavailable,
-            unavailableReason: .appleIntelligenceDisabled,
-            startOutcome: .unavailable(.appleIntelligenceDisabled)
+            unavailableReason: .openAIAPIKeyMissing,
+            startOutcome: .unavailable(.openAIAPIKeyMissing)
         )
     )
 }

@@ -25,7 +25,7 @@ M1-01 Core contracts
    |-- M1-02 Insight state
    |-- M1-03 Rolling context
    |-- M1-04 SwiftUI shell
-   |-- M1-05 Foundation Models adapter
+   |-- M1-05 OpenAI Responses adapter
    |-- M1-06 Microphone capture
    `-- M1-07 Speech recognition
               |
@@ -62,7 +62,7 @@ A task is complete only when:
 | M1-02 | Insight validation and store | M1-01 | Tested add, update, and resolve behavior |
 | M1-03 | Rolling context and batching | M1-01 | Bounded temporary finalized text |
 | M1-04 | SwiftUI application shell | M1-01 | Start/stop, status, and cards using fakes |
-| M1-05 | Foundation Models adapter | M1-01 | Typed insight generation and availability checks |
+| M1-05 | OpenAI Responses adapter | M1-01 | Structured cloud insight generation and API-key availability checks |
 | M1-06 | Bounded microphone capture | M1-01 | Live in-memory microphone audio stream |
 | M1-07 | SpeechAnalyzer adapter | M1-01 | Finalized temporary speech segments |
 | M1-08 | Session lifecycle orchestration | M1-02, M1-03, M1-05, M1-06, M1-07 | Cancellation-safe complete pipeline |
@@ -227,26 +227,26 @@ Do not add a transcript view, debug transcript panel, editor, history, export, o
 - The interface has no path to temporary speech text.
 - The UI never claims to be listening after a pipeline failure.
 
-### M1-05: Foundation Models adapter
+### M1-05: OpenAI Responses adapter
 
 #### Build
 
-- Map `SystemLanguageModel.availability` into device-not-eligible, Apple-Intelligence-disabled, and model-not-ready states.
-- Validate the meeting locale with `supportsLocale`.
-- Create one `LanguageModelSession` per listening session.
+- Read `OPENAI_API_KEY` only from the launch environment and report missing or rejected keys explicitly.
+- Send bounded finalized meeting text to OpenAI's Responses API with a request timeout.
+- Create one logical API session per listening session.
 - Put stable developer-authored rules in model instructions.
 - Put untrusted meeting text only in prompts.
-- Define `@Generable` wire types for structured updates.
+- Request strict JSON Schema output and decode it into wire types for structured updates.
 - Translate generated values into validated domain updates.
 - Serialize model requests.
-- Reset model state on stop, cancellation, or failure.
+- Cancel in-flight requests and release in-memory state on stop, cancellation, or failure.
 
 The model instructions must request concise cards, prefer updates and resolutions over duplicates, restrict output to the five MVP categories, forbid invented owners, and treat meeting text as untrusted content.
 
 #### Test
 
-- Availability-reason mapping.
-- Unsupported locale handling.
+- Missing and rejected API-key handling.
+- Request construction and strict-schema configuration.
 - Generated DTO-to-domain conversion.
 - Rejection of malformed or excessive output.
 - Cancellation and session reset.
@@ -258,7 +258,7 @@ The model instructions must request concise cards, prefer updates and resolution
 - Meeting content never appears in instructions or logs.
 - Model output reaches the store only after validation.
 
-Model quality is a hardware validation because responses are nondeterministic.
+Model quality requires live API validation because responses are nondeterministic.
 
 ### M1-06: Bounded microphone capture
 

@@ -6,7 +6,7 @@ The insight stream is the product. Rio is not a transcription app, note-taking a
 
 ## Status
 
-M1-09 provides the native microphone-to-insight vertical slice, including temporary speech recognition, bounded context, on-device Foundation Models generation, in-memory cards, session cleanup, and the SwiftUI composition root. Automated M1-10 checks pass; direct hardware acceptance remains open.
+Rio uses temporary on-device speech recognition, bounded context, OpenAI insight generation, in-memory cards, session cleanup, and a SwiftUI composition root. Automated checks cover the pipeline; direct hardware acceptance remains open.
 
 ## MVP experience
 
@@ -22,7 +22,7 @@ Insights update or replace stale cards instead of accumulating duplicates. Rio n
 
 Rio does not display a live transcript. Audio and temporary speech-to-text output are discarded continuously and cleared when listening stops.
 
-## Apple-native pipeline
+## Meeting pipeline
 
 ```text
 Microphone + meeting/system audio
@@ -36,7 +36,7 @@ SpeechAnalyzer + SpeechTranscriber
           temporary text
                  │
                  v
- Foundation Models / Apple Intelligence
+      OpenAI Responses API
                  │
                  v
         live insight cards
@@ -47,20 +47,18 @@ The current M1 vertical slice uses:
 - Swift and SwiftUI for the application and interface.
 - AVAudioEngine for microphone capture. ScreenCaptureKit meeting/system audio is planned for Milestone 2.
 - SpeechAnalyzer and SpeechTranscriber for temporary, on-device speech-to-text.
-- The Foundation Models framework and `SystemLanguageModel` for on-device meeting understanding.
-- Guided generation for structured, typed insight updates.
+- OpenAI's Responses API with strict JSON Schema output for insight updates.
 
 ## Requirements
 
 The first release targets:
 
 - macOS 26 or later.
-- A Mac that supports Apple Intelligence.
-- Apple Intelligence enabled and ready on the device.
-- English (US) speech and language-model support; the current M1 composition root uses `en-US` regardless of the Mac's system locale.
+- English (US) speech support; the current composition root uses `en-US` regardless of the Mac's system locale.
 - Microphone and screen-capture permissions.
+- An `OPENAI_API_KEY` in the environment that launches Rio.
 
-Rio checks these capabilities at runtime and explains unavailable states. The MVP does not use a cloud-model fallback.
+Rio checks these capabilities at runtime and explains unavailable states. Rio sends bounded temporary meeting text to OpenAI to generate insight cards; it does not store that text locally.
 
 ## Data lifecycle
 
@@ -81,7 +79,7 @@ Meeting data is ephemeral in the MVP:
 - Transcript export, meeting history, or a database.
 - Meeting bots, speaker identification, or diarization.
 - Accounts, calendar integrations, team workspaces, or cloud synchronization.
-- OpenAI or another cloud inference provider.
+- Apple Intelligence or another on-device language-model dependency.
 - Windows and Linux support.
 
 ## Project documents
@@ -97,6 +95,13 @@ Meeting data is ephemeral in the MVP:
 The project uses Xcode 26.6, Swift 6, and a macOS 26 deployment target. Build and test from the repository root:
 
 Development builds must use a stable Apple Development signing identity so macOS can associate microphone permission with the same Rio bundle and signing authority across frequent rebuilds. Copy `Config/Development.xcconfig.example` to `Config/Development.xcconfig`, set `DEVELOPMENT_TEAM` to the team shown in Xcode’s Signing & Capabilities editor, and sign in to Xcode with that Apple Developer account. `make final` automatically uses the local config when present. Do not delete or recreate that identity while testing, because changing the bundle identifier or signing authority legitimately causes macOS to ask again. If no local config exists, the build falls back to Xcode’s ad-hoc “Sign to Run Locally” behavior, which is suitable only for transient builds and may cause TCC to ask again after rebuilds.
+
+To generate insights, export an OpenAI API key in the same shell that launches Rio; never add it to source control or the app bundle. `RIO_OPENAI_MODEL` is optional and defaults to `gpt-5-mini`.
+
+```sh
+export OPENAI_API_KEY="..."
+make final
+```
 
 `make final` clears the generated `.build/` directory before building, and `make clean` can be used to clear it without rebuilding.
 

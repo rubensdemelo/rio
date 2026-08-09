@@ -188,16 +188,7 @@ enum RioCompositionRoot {
             }
         )
         let insightStore = InMemoryInsightStore()
-        let insightGenerator: any SessionInsightGenerator
-        if #available(macOS 26.0, *) {
-            insightGenerator = FoundationModelsInsightGenerator(
-                runtime: AppleFoundationModelsRuntime()
-            )
-        } else {
-            insightGenerator = UnavailableFoundationModelsInsightGenerator(
-                reason: .languageModelDeviceNotEligible
-            )
-        }
+        let insightGenerator: any SessionInsightGenerator = OpenAIInsightGenerator()
         let lifecycle = SessionLifecycleCoordinator(
             localeIdentifier: localeIdentifier,
             capture: capture,

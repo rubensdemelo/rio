@@ -12,13 +12,13 @@ For technical-support calls, Rio identifies symptoms, errors, product/version/en
 
 ## MVP
 
-The first release targets macOS 26+ on Macs that support Apple Intelligence.
+The first release targets macOS 26+.
 
 Rio uses native Apple technologies:
 
 - ScreenCaptureKit for meeting/system audio and microphone capture.
 - SpeechAnalyzer and SpeechTranscriber for temporary, on-device speech-to-text.
-- The Foundation Models framework and its system language model for on-device meeting understanding.
+- OpenAI's Responses API for cloud insight generation from bounded temporary meeting text.
 - SwiftUI for a small native interface.
 
 The interface has one primary action: start or stop listening. While listening, it displays a changing stream of concise insights:
@@ -33,7 +33,7 @@ Insights should update or replace earlier cards as the meeting develops instead 
 
 ## Data lifecycle
 
-Audio is processed as a live stream and is not recorded to a file. Speech-to-text output is held only in a bounded, rolling context window. The app continuously discards audio buffers and transcript text that are no longer needed.
+Audio is processed as a live stream and is not recorded to a file. Speech-to-text output is held only in a bounded, rolling context window. Bounded temporary text is sent to OpenAI only to generate the current live insights; Rio does not store it. The app continuously discards audio buffers and transcript text that are no longer needed.
 
 Current insight cards may remain visible until the user stops the meeting or closes the window. The MVP does not create an automatic meeting archive.
 
@@ -52,4 +52,4 @@ Current insight cards may remain visible until the user stops the meeting or clo
 
 ## Engineering priority
 
-First prove one complete native loop on supported Macs: capture a real meeting, derive temporary text, generate useful Apple Intelligence insights, and run reliably for a full meeting with bounded memory and no persistent meeting data.
+First prove one complete loop on supported Macs: capture a real meeting, derive temporary text, generate useful OpenAI insights, and run reliably for a full meeting with bounded memory and no persistent meeting data.

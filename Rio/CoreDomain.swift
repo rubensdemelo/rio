@@ -132,16 +132,14 @@ enum UnavailableReason: Sendable, Equatable {
     case speechRecognitionUnavailable
     case speechLocaleUnsupported(identifier: String)
     case speechAssetsNotReady
-    case languageModelDeviceNotEligible
-    case appleIntelligenceDisabled
-    case languageModelNotReady
-    case languageModelLocaleUnsupported(identifier: String)
+    case openAIAPIKeyMissing
+    case openAIAPIKeyInvalid
 }
 
 enum PrerequisiteKind: Sendable, Equatable, CaseIterable {
     case meetingAudio
     case speechRecognition
-    case appleIntelligence
+    case openAI
 }
 
 struct PrerequisiteCheck: Sendable, Equatable, Identifiable {

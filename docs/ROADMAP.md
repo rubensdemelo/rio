@@ -4,20 +4,20 @@ The repository contains the native M1 implementation through the vertical-slice 
 
 ## Milestone 1: Native vertical slice
 
-Goal: prove the complete Apple-native understanding loop with the smallest possible app.
+Goal: prove the complete meeting-understanding loop with the smallest possible app.
 
 - Create a macOS 26+ SwiftUI application target.
 - Add one start/stop listening control and a clear session status.
 - Capture microphone audio for the initial development loop.
 - Feed audio to SpeechAnalyzer and SpeechTranscriber.
 - Hold finalized text in a bounded, in-memory rolling context.
-- Check `SystemLanguageModel` availability and locale support.
-- Generate typed insight updates with Foundation Models guided generation.
+- Check that an OpenAI API key is configured before listening.
+- Generate JSON-Schema-constrained insight updates through OpenAI's Responses API.
 - Render simple insight cards without displaying transcript text.
 - Clear all audio, temporary text, model-session state, and insights when the session ends.
 - Add deterministic fixtures and unit tests for context limits and insight update behavior.
 
-Exit criterion: speaking into the Mac produces useful, structured insight cards through an entirely native, on-device pipeline.
+Exit criterion: speaking into the Mac produces useful, structured insight cards through the bounded local capture/speech pipeline and OpenAI insight generation.
 
 ### Milestone 1 validation status
 
@@ -25,13 +25,13 @@ Verified on macOS 26.5.2:
 
 - 68 unit tests pass in both Debug and Release configurations.
 - Debug and Release builds pass with warnings treated as errors and Swift 6 complete strict-concurrency checking enabled.
-- Static privacy scans find no production logging, persistence, or networking APIs.
+- Static privacy scans find no production logging or persistence APIs.
 - The built application launches and exits cleanly without creating meeting-content files; its inspected container contains only window-frame preferences.
 
 Not yet verified:
 
 - Microphone permission grant or denial behavior in the live app.
-- Live microphone speech through SpeechAnalyzer, Foundation Models availability, and visible cards.
+- Live microphone speech through SpeechAnalyzer, OpenAI API configuration, and visible cards.
 - Restart, interruption, unsupported-locale, model-unavailable, and stop-during-stage hardware paths.
 - The 15-to-30-minute bounded-memory smoke session and Instruments resource-growth inspection.
 
@@ -79,7 +79,7 @@ Goal: ship a technical preview that behaves predictably for a full meeting.
 - Run one-hour capture and insight-generation soak tests.
 - Verify bounded audio queues, text context, model context, and card count.
 - Confirm that no meeting content is written to logs, caches, crash annotations, or persistent storage.
-- Test Apple Intelligence disabled, model assets downloading, unsupported locales, and ineligible hardware.
+- Test missing and rejected OpenAI API keys, unavailable network/service responses, speech assets downloading, and unsupported locales.
 - Add accessibility, keyboard control, and basic VoiceOver coverage.
 - Sign, notarize, and package the macOS app.
 
@@ -89,7 +89,7 @@ Exit criterion: a one-hour meeting completes without unbounded memory growth, si
 
 - Saving or exporting insights.
 - Meeting history.
-- Cloud or third-party model providers.
+- Alternative cloud or third-party model providers.
 - Audio or transcript storage.
 - Speaker identification and diarization.
 - Accounts, calendars, and integrations.

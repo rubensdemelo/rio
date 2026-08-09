@@ -8,7 +8,7 @@ The insight stream is the product. Audio capture and speech-to-text are temporar
 
 ## Audience
 
-Rio is for people who want to stay engaged in meetings without operating a recorder, reading a transcript, or taking continuous notes. The first release is a focused technical preview for macOS 26+ on Macs that support Apple Intelligence.
+Rio is for people who want to stay engaged in meetings without operating a recorder, reading a transcript, or taking continuous notes. The first release is a focused technical preview for macOS 26+.
 
 It is not an enterprise recording platform, collaboration workspace, meeting archive, diagnostic authority, or autonomous operator.
 
@@ -21,14 +21,14 @@ menu-bar menu provides the same start/stop listening action as the main window,
 plus Open Rio and Quit Rio actions. Closing the main window does not quit Rio;
 the menu-bar item remains the way to reopen or quit the app.
 
-While listening, Rio shows a compact live microphone input level so the user can tell that capture is active without exposing a transcript. The main window has one primary action: start listening or stop listening and clear the session. A concise cue explains that processing is temporary and on-device.
+While listening, Rio shows a compact live microphone input level so the user can tell that capture is active without exposing a transcript. The main window has one primary action: start listening or stop listening and clear the session. A concise cue explains that processing is temporary and not retained by Rio.
 
 When the user starts listening:
 
 1. Rio captures system/meeting audio, including browser-based calls.
 2. Apple's Speech framework converts the live audio into temporary finalized text.
-3. A bounded rolling text window is sent to Apple's on-device system language model.
-4. The model returns structured incident-signal and insight updates.
+3. A bounded rolling text window is sent to OpenAI's Responses API.
+4. The API returns structured incident-signal and insight updates.
 5. The UI adds, updates, or removes concise cards as the support call develops.
 
 For the incident-copilot evaluation target, the useful signal set is symptoms, errors, product/version/environment facts, recent changes, failed checks, and unanswered diagnostic questions. Rio may formulate intent for trusted local manuals and runbooks and offer evidence-grounded possible investigation directions and next-best questions. It does not state diagnoses as facts, infer action owners, fabricate source evidence, or execute automatic actions.
@@ -51,23 +51,20 @@ Each card contains a concise statement, its category, and a simple state such as
 
 Rio must not guess an action-item owner. Owner attribution is validated only when the temporary meeting text explicitly names one, but it is not displayed on the compact MVP insight cards.
 
-## Apple Intelligence
+## OpenAI API
 
-The MVP uses the Foundation Models framework to access the on-device system language model that powers Apple Intelligence. Insight responses use guided generation to produce typed Swift values rather than free-form text that the app must parse.
+Rio uses OpenAI's Responses API for meeting understanding. Requests use a strict JSON Schema and Rio validates the returned insight updates before rendering cards. The default model is `gpt-5-mini`; `RIO_OPENAI_MODEL` can select another compatible model.
 
-When the app loads and before listening begins, Rio checks Screen & System Audio Recording access, speech recognition and its required assets, Apple Intelligence, and locale support. It shows all unavailable prerequisites together with the macOS action needed to resolve each one, including a button that opens the Screen & System Audio Recording privacy pane directly. When the fixed English (US) speech-recognition asset is still downloading, the UI names that exact on-device asset and explains that macOS downloads it in the background; it does not imply that the user must manually add an app or recording permission. Foundation Models reports Apple Intelligence as unavailable but does not disclose whether language alignment or organization policy is the cause. Rio therefore asks the user to review the compatibility message in System Settings rather than inferring a Mac or Siri language from the system locale; it does not change a system setting itself. The confirmation action opens the Apple Intelligence & Siri pane directly, falling back to System Settings if macOS declines that route. Apple Intelligence may be unavailable because the Mac is ineligible, the feature is disabled, required assets are not ready, the Mac and Siri languages do not match, organization policy restricts access, or the locale is unsupported. The MVP explains the condition and does not offer a cloud-model fallback.
+Before listening, Rio checks Screen & System Audio Recording access, speech recognition and its required assets, and whether `OPENAI_API_KEY` is present in the environment that launched the app. A missing or rejected key blocks listening with direct guidance. The UI retains the direct button to the Screen & System Audio Recording privacy pane. When the fixed English (US) speech-recognition asset is still downloading, the UI names that exact on-device asset and explains that macOS downloads it in the background.
 
-When Foundation Models reports that Apple Intelligence is disabled, Rio shows a one-time, non-blocking notice explaining that enabling it downloads on-device models and requires several gigabytes of free disk space. Unsupported devices and models that are still downloading use their existing unavailable-state guidance instead.
-
-Speech recognition is a separate native stage. SpeechAnalyzer and SpeechTranscriber perform on-device speech-to-text suitable for meetings; Foundation Models then interprets that temporary text.
-
-The current M1 implementation uses English (US) (`en-US`) for both speech recognition and meeting understanding regardless of the Mac's system locale. Locale selection is not yet a user-facing control.
+Speech recognition remains a separate native stage. SpeechAnalyzer and SpeechTranscriber perform on-device speech-to-text suitable for meetings; OpenAI interprets bounded batches of that temporary text. The current implementation uses English (US) (`en-US`) for speech recognition regardless of the Mac's system locale. Locale selection is not yet a user-facing control.
 
 ## Data lifecycle
 
 - Audio remains in memory only long enough to feed speech recognition.
 - Audio is never intentionally written to disk.
 - Finalized transcript segments live in a bounded rolling context window.
+- Bounded temporary meeting text is transmitted to OpenAI only to create the current insight updates.
 - Old text is continuously discarded.
 - All temporary meeting text is discarded when listening stops.
 - Current insight cards are session-only and disappear when the session ends unless a later product decision adds explicit insight export.
@@ -81,7 +78,7 @@ The current M1 implementation uses English (US) (`en-US`) for both speech recogn
 - Transcript export, automatic meeting history, or searchable archives.
 - Meeting bots or joining calls on the user's behalf.
 - Speaker identification, diarization, or guessed speaker ownership.
-- OpenAI or another cloud-model fallback in the MVP.
+- Apple Intelligence or another on-device language-model dependency.
 - Accounts, calendars, CRM integrations, team workspaces, or cloud synchronization.
 - Generic assistant chat, unrelated recommendations, or autonomous actions.
 - Windows and Linux support in the MVP.
@@ -97,5 +94,5 @@ The MVP is successful when:
 5. An action-item owner is never inferred without explicit support in the temporary text.
 6. Stopping listening promptly releases capture resources and clears temporary audio and text.
 7. A one-hour meeting completes without deadlock, unrecovered capture failure, or unbounded memory growth.
-8. The app clearly reports unavailable Apple Intelligence, unsupported language, denied permission, and interrupted capture states.
+8. The app clearly reports a missing or rejected OpenAI API key, unsupported speech language, denied permission, and interrupted capture states.
 9. No meeting content is persisted or logged unintentionally.

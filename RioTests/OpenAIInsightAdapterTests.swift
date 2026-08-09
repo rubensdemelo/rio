@@ -1,0 +1,189 @@
+import Foundation
+import XCTest
+
+final class OpenAIInsightAdapterTests: XCTestCase {
+    func testMissingKeyIsUnavailable() async {
+        let generator = OpenAIInsightGenerator(configuration: nil)
+        let availability = await generator.availability()
+
+        XCTAssertEqual(
+            availability,
+            .unavailable(.openAIAPIKeyMissing)
+        )
+
+        do {
+            try await generator.startSession(localeIdentifier: "en-US")
+            XCTFail("A missing API key must prevent listening")
+        } catch let failure {
+            XCTAssertEqual(failure, .unavailable(.openAIAPIKeyMissing))
+        }
+    }
+
+    func testRequestUsesResponsesAPIAndKeepsInstructionsSeparateFromMeetingText() async throws {
+        let meetingText = "Synthetic meeting phrase: Alex owns migration follow-up."
+        let client = RecordingOpenAIHTTPClient(responseData: makeAPIResponseData())
+        let generator = OpenAIInsightGenerator(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client
+        )
+        let batch = makeBatch(text: meetingText)
+
+        try await generator.startSession(localeIdentifier: "en-US")
+        _ = try await generator.generate(from: batch)
+
+        let requests = await client.requests()
+        XCTAssertEqual(requests.count, 1)
+        let request = try XCTUnwrap(requests.first)
+        XCTAssertEqual(request.url?.absoluteString, "https://api.openai.com/v1/responses")
+        XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-key")
+
+        let body = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: Any]
+        )
+        XCTAssertEqual(body["model"] as? String, OpenAIAPIConfiguration.defaultModel)
+        XCTAssertEqual(body["instructions"] as? String, OpenAIInsightPrompt.instructions)
+        XCTAssertFalse((body["instructions"] as? String ?? "").contains(meetingText))
+        XCTAssertTrue((body["input"] as? String ?? "").contains("<MEETING_TEXT>"))
+        XCTAssertTrue((body["input"] as? String ?? "").contains(meetingText))
+
+        let text = try XCTUnwrap(body["text"] as? [String: Any])
+        let format = try XCTUnwrap(text["format"] as? [String: Any])
+        XCTAssertEqual(format["type"] as? String, "json_schema")
+        XCTAssertEqual(format["strict"] as? Bool, true)
+    }
+
+    func testTranslationPreservesExplicitOwnersOnlyWhenSupportedByMeetingText() async throws {
+        let client = RecordingOpenAIHTTPClient(
+            responseData: makeAPIResponseData(
+                updates: [
+                    [
+                        "stableKey": "action-1",
+                        "operation": "add",
+                        "category": "action",
+                        "text": "Complete the migration follow-up.",
+                        "explicitOwner": "Alex",
+                    ],
+                    [
+                        "stableKey": "decision-1",
+                        "operation": "add",
+                        "category": "decision",
+                        "text": "Use the migration plan.",
+                        "explicitOwner": "Invented Owner",
+                    ],
+                ]
+            )
+        )
+        let generator = OpenAIInsightGenerator(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client
+        )
+
+        try await generator.startSession(localeIdentifier: "en-US")
+        let updates = try await generator.generate(
+            from: makeBatch(text: "Alex owns the migration follow-up.")
+        )
+
+        XCTAssertEqual(updates[0].explicitOwner, "Alex")
+        XCTAssertNil(updates[1].explicitOwner)
+    }
+
+    func testInvalidKeyBecomesAnActionableUnavailableState() async throws {
+        let client = RecordingOpenAIHTTPClient(statusCode: 401, responseData: Data())
+        let generator = OpenAIInsightGenerator(
+            configuration: OpenAIAPIConfiguration(apiKey: "invalid"),
+            client: client
+        )
+
+        try await generator.startSession(localeIdentifier: "en-US")
+        do {
+            _ = try await generator.generate(from: makeBatch(text: "Synthetic meeting text"))
+            XCTFail("An unauthorized response must fail")
+        } catch let failure {
+            XCTAssertEqual(failure, .unavailable(.openAIAPIKeyInvalid))
+        }
+    }
+
+    func testMalformedGeneratedOutputIsRejected() async throws {
+        let client = RecordingOpenAIHTTPClient(
+            responseData: makeAPIResponseData(
+                updates: [[
+                    "stableKey": " ",
+                    "operation": "add",
+                    "category": "important",
+                    "text": "Useful point",
+                    "explicitOwner": "",
+                ]]
+            )
+        )
+        let generator = OpenAIInsightGenerator(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client
+        )
+
+        try await generator.startSession(localeIdentifier: "en-US")
+        do {
+            _ = try await generator.generate(from: makeBatch(text: "Synthetic meeting text"))
+            XCTFail("Malformed output must be rejected")
+        } catch let failure {
+            XCTAssertEqual(failure, .stage(.insightGeneration, .invalidState))
+        }
+    }
+
+    private func makeBatch(text: String) -> MeetingContextBatch {
+        MeetingContextBatch(
+            segments: [
+                FinalizedSpeechSegment(
+                    sequenceNumber: 1,
+                    text: text,
+                    startOffset: .zero,
+                    endOffset: .seconds(1)
+                ),
+            ]
+        )
+    }
+
+    private func makeAPIResponseData(
+        updates: [[String: String]] = []
+    ) -> Data {
+        let structuredOutput = try! JSONSerialization.data(
+            withJSONObject: ["updates": updates]
+        )
+        let outputText = String(decoding: structuredOutput, as: UTF8.self)
+        return try! JSONSerialization.data(
+            withJSONObject: [
+                "output": [[
+                    "content": [[
+                        "type": "output_text",
+                        "text": outputText,
+                    ]],
+                ]],
+            ]
+        )
+    }
+}
+
+private actor RecordingOpenAIHTTPClient: OpenAIHTTPClient {
+    private let statusCode: Int
+    private let responseData: Data
+    private var recordedRequests: [URLRequest] = []
+
+    init(statusCode: Int = 200, responseData: Data) {
+        self.statusCode = statusCode
+        self.responseData = responseData
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        recordedRequests.append(request)
+        let response = HTTPURLResponse(
+            url: URL(string: "https://api.openai.com/v1/responses")!,
+            statusCode: statusCode,
+            httpVersion: nil,
+            headerFields: nil
+        )!
+        return (responseData, response)
+    }
+
+    func requests() -> [URLRequest] {
+        recordedRequests
+    }
+}

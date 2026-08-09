@@ -136,9 +136,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
             let supportsLocale = await insightGenerator.supportsLocale(
                 identifier: localeIdentifier
             )
-            modelReason = supportsLocale
-                ? nil
-                : .languageModelLocaleUnsupported(identifier: localeIdentifier)
+            modelReason = supportsLocale ? nil : .openAIAPIKeyMissing
         case .unavailable(let reason):
             modelReason = reason
         }
@@ -147,7 +145,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
             checks: [
                 PrerequisiteCheck(kind: .meetingAudio, reason: meetingAudioReason),
                 PrerequisiteCheck(kind: .speechRecognition, reason: speechReason),
-                PrerequisiteCheck(kind: .appleIntelligence, reason: modelReason),
+                PrerequisiteCheck(kind: .openAI, reason: modelReason),
             ]
         )
         readiness = report
@@ -380,8 +378,8 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         do {
             return try await insightGenerator.generate(from: batch)
         } catch let failure where failure == .stage(.insightGeneration, .failed) {
-            // A single Foundation Models request may fail transiently. Rebuild the
-            // ephemeral model session and retry the same bounded batch once.
+            // A single API request may fail transiently. Rebuild the ephemeral
+            // request state and retry the same bounded batch once.
             await insightGenerator.stop()
             try ensureActive(sessionID)
             try await insightGenerator.startSession(localeIdentifier: localeIdentifier)

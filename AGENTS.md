@@ -19,11 +19,11 @@ When documents conflict, `docs/PRODUCT.md` defines product behavior and `docs/AR
 
 The first MVP:
 
-- Targets macOS 26+ on Macs that support Apple Intelligence.
+- Targets macOS 26+.
 - Uses native Swift and SwiftUI.
 - Uses ScreenCaptureKit for meeting/system audio and microphone capture where supported.
 - Uses SpeechAnalyzer and SpeechTranscriber for temporary on-device speech-to-text.
-- Uses the Foundation Models framework and `SystemLanguageModel` for meeting understanding.
+- Uses OpenAI's Responses API for meeting understanding from bounded temporary text.
 - Shows concise live insight cards.
 - Keeps audio, temporary text, model sessions, and insights in memory only for the active session.
 
@@ -33,7 +33,7 @@ Do not add the following without an explicit product decision and matching docum
 - Note-taking features.
 - Audio recording, playback, or persistent audio storage.
 - Transcript export, meeting history, or a database.
-- OpenAI or another cloud inference provider.
+- Apple Intelligence or another on-device language-model dependency.
 - Accounts, calendars, CRM integrations, team workspaces, or cloud synchronization.
 - Speaker identification or diarization.
 - A Rust core, C ABI, or cross-platform abstraction.
@@ -60,10 +60,10 @@ Prefer removing complexity over adding configuration. New controls and settings 
 - Use structured concurrency and propagate session cancellation through the entire pipeline.
 - Serialize context batching and insight generation so model requests cannot race.
 - Apply SwiftUI state changes on the main actor.
-- Use Foundation Models guided generation with `@Generable` types for insight output.
+- Use OpenAI Responses API strict JSON Schema output for insight generation.
 - Put developer-authored rules in model instructions and untrusted meeting text in prompts.
 - Validate generated output before applying it to UI state.
-- Check speech-model, language-model, locale, asset, hardware, and permission availability explicitly.
+- Check speech-model, OpenAI API-key, locale, asset, hardware, and permission availability explicitly.
 - Represent expected unavailable states in the UI instead of treating them as generic errors.
 
 ## Data lifecycle and privacy
@@ -75,7 +75,7 @@ All meeting data is ephemeral for the MVP:
 - Feed only finalized speech results into the insight context.
 - Keep temporary text bounded by age and model token budget.
 - Bound the number of active insight cards.
-- Clear capture buffers, temporary text, language-model sessions, and insight state when listening stops.
+- Clear capture buffers, temporary text, in-flight API requests, and insight state when listening stops.
 - Perform the same cleanup after errors and cancellation.
 - Never include audio, transcript text, insight text, prompts containing meeting content, or secrets in logs, analytics, crash annotations, fixtures, or snapshots.
 
@@ -97,7 +97,7 @@ Prioritize tests for:
 - Insight parsing, validation, deduplication, updates, and resolution.
 - The rule against guessed action-item owners.
 - Session cancellation and cleanup from every state.
-- Permission denial and unavailable speech or language models.
+- Permission denial and unavailable speech or OpenAI API configuration.
 - Bounded queues and overload behavior.
 - Recovery from capture interruption and device changes.
 

@@ -139,7 +139,7 @@ final class SessionLifecycleTests: XCTestCase {
     func testModelUnavailableStopsBeforeCapture() async throws {
         let capture = TestSessionAudioCapture()
         let generator = TestSessionInsightGenerator(
-            availability: .unavailable(.languageModelNotReady)
+            availability: .unavailable(.openAIAPIKeyMissing)
         )
         let coordinator = makeCoordinator(
             capture: capture,
@@ -152,7 +152,7 @@ final class SessionLifecycleTests: XCTestCase {
         } catch let failure {
             XCTAssertEqual(
                 failure,
-                .unavailable(.languageModelNotReady)
+                .unavailable(.openAIAPIKeyMissing)
             )
         }
 
@@ -177,7 +177,7 @@ final class SessionLifecycleTests: XCTestCase {
             )
         )
         let generator = TestSessionInsightGenerator(
-            availability: .unavailable(.appleIntelligenceDisabled)
+            availability: .unavailable(.openAIAPIKeyInvalid)
         )
         let coordinator = makeCoordinator(
             capture: capture,
@@ -189,11 +189,11 @@ final class SessionLifecycleTests: XCTestCase {
 
         XCTAssertEqual(
             report.checks.map(\.kind),
-            [.meetingAudio, .speechRecognition, .appleIntelligence]
+            [.meetingAudio, .speechRecognition, .openAI]
         )
         XCTAssertEqual(report.checks[0].reason, .microphonePermissionDenied)
         XCTAssertEqual(report.checks[1].reason, .speechRecognitionUnavailable)
-        XCTAssertEqual(report.checks[2].reason, .appleIntelligenceDisabled)
+        XCTAssertEqual(report.checks[2].reason, .openAIAPIKeyInvalid)
         XCTAssertFalse(report.isReady)
     }
 

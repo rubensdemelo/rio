@@ -284,7 +284,7 @@ final class DeterministicSessionLifecycle: SessionLifecycle {
             checks: [
                 PrerequisiteCheck(kind: .meetingAudio, reason: reason),
                 PrerequisiteCheck(kind: .speechRecognition, reason: reason),
-                PrerequisiteCheck(kind: .appleIntelligence, reason: reason),
+                PrerequisiteCheck(kind: .openAI, reason: reason),
             ]
         )
         readiness = report
