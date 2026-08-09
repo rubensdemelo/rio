@@ -250,6 +250,20 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertEqual(state.resetCount, 2)
     }
 
+    func testTransientStartupCancellationRetriesWithFreshPipeline() async throws {
+        let capture = TestSessionAudioCapture(startFailure: .cancelled)
+        let coordinator = makeCoordinator(capture: capture)
+
+        try await coordinator.start()
+
+        XCTAssertEqual(coordinator.status, .listening)
+        let captureStarts = await capture.startCount()
+        let captureCancellations = await capture.cancelCount()
+        XCTAssertEqual(captureStarts, 2)
+        XCTAssertEqual(captureCancellations, 1)
+        await coordinator.stop()
+    }
+
     func testSpeechFailureWhileListeningPropagatesAndCleans() async throws {
         let capture = TestSessionAudioCapture()
         let speech = TestSessionSpeechRecognizer()
@@ -633,6 +647,7 @@ actor TestSessionAudioCapture: SessionAudioCapture {
     private let configuredPermission: MicrophonePermission
     private let configuredAvailability: Availability
     private let startFailure: PipelineFailure?
+    private var remainingStartFailures: Int
     private let configuredInputSnapshot: AudioInputSnapshot
     private var currentStream: TestStream<AudioChunk>?
     private var starts = 0
@@ -643,11 +658,13 @@ actor TestSessionAudioCapture: SessionAudioCapture {
         permission: MicrophonePermission = .granted,
         availability: Availability = .available,
         startFailure: PipelineFailure? = nil,
+        startFailureCount: Int = 1,
         inputSnapshot: AudioInputSnapshot = .inactive
     ) {
         configuredPermission = permission
         configuredAvailability = availability
         self.startFailure = startFailure
+        remainingStartFailures = startFailure == nil ? 0 : startFailureCount
         configuredInputSnapshot = inputSnapshot
     }
 
@@ -665,7 +682,8 @@ actor TestSessionAudioCapture: SessionAudioCapture {
 
     func start() async throws(PipelineFailure) -> AudioStream {
         starts += 1
-        if let startFailure {
+        if let startFailure, remainingStartFailures > 0 {
+            remainingStartFailures -= 1
             throw startFailure
         }
         let source = TestStream<AudioChunk>()

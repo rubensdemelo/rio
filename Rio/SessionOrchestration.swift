@@ -159,6 +159,26 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
             throw .stage(.sessionLifecycle, .invalidState)
         }
 
+        do {
+            try await startAttempt()
+        } catch let failure {
+            guard shouldRetryStartup(after: failure), !Task.isCancelled else {
+                throw failure
+            }
+
+            // Native capture and speech services can report cancellation while a
+            // previous session is still releasing. Cleanup completed before this
+            // point, so retry once with a fresh, entirely in-memory pipeline.
+            do {
+                try await Task.sleep(for: .milliseconds(300))
+            } catch {
+                throw .cancelled
+            }
+            try await startAttempt()
+        }
+    }
+
+    private func startAttempt() async throws(PipelineFailure) {
         nextSessionID &+= 1
         let sessionID = nextSessionID
         activeSessionID = sessionID
@@ -199,6 +219,17 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
             let failure = error
             await cleanup(sessionID: sessionID, kind: .failure(failure))
             throw failure
+        }
+    }
+
+    private func shouldRetryStartup(after failure: PipelineFailure) -> Bool {
+        switch failure {
+        case .cancelled,
+             .stage(.speechRecognition, .invalidState),
+             .stage(.insightGeneration, .invalidState):
+            true
+        case .unavailable, .stage:
+            false
         }
     }
 
