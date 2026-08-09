@@ -231,7 +231,7 @@ Do not add a transcript view, debug transcript panel, editor, history, export, o
 
 #### Build
 
-- Read `OPENAI_API_KEY` only from the launch environment and report missing or rejected keys explicitly.
+- Store the user's OpenAI API key only in the macOS Keychain and report missing or rejected keys explicitly.
 - Send bounded finalized meeting text to OpenAI's Responses API with a request timeout.
 - Create one logical API session per listening session.
 - Put stable developer-authored rules in model instructions.

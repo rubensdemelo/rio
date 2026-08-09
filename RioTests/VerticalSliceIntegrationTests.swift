@@ -101,7 +101,8 @@ final class VerticalSliceIntegrationTests: XCTestCase {
                     explicitOwner: nil
                 )
             ],
-            generateFailure: .stage(.insightGeneration, .failed)
+            generateFailure: .stage(.insightGeneration, .failed),
+            generateFailureCount: 2
         )
         let contextFactory = TestMeetingContextFactory()
         let store = InMemoryInsightStore()

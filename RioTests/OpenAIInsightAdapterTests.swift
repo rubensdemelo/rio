@@ -3,7 +3,10 @@ import XCTest
 
 final class OpenAIInsightAdapterTests: XCTestCase {
     func testMissingKeyIsUnavailable() async {
-        let generator = OpenAIInsightGenerator(configuration: nil)
+        let generator = OpenAIInsightGenerator(
+            configuration: nil,
+            configurationProvider: { nil }
+        )
         let availability = await generator.availability()
 
         XCTAssertEqual(

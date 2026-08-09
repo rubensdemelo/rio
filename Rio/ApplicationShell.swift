@@ -214,6 +214,8 @@ final class FakeSessionController: SessionShellControlling {
 
 struct RioView<Controller: SessionShellControlling>: View {
     @ObservedObject private var controller: Controller
+    @EnvironmentObject private var providerSettings: OpenAIProviderSettings
+    @State private var isShowingProviderSetup = false
 
     init(controller: Controller) {
         self.controller = controller
@@ -246,8 +248,21 @@ struct RioView<Controller: SessionShellControlling>: View {
         }
         .frame(minWidth: 480, idealWidth: 560, minHeight: 460, idealHeight: 620)
         .background(Color(nsColor: .windowBackgroundColor))
+        .toolbar {
+            Button {
+                isShowingProviderSetup = true
+            } label: {
+                Label("Provider", systemImage: "key")
+            }
+            .help("Configure your OpenAI API key")
+        }
         .task {
             await controller.checkReadiness()
+        }
+        .sheet(isPresented: $isShowingProviderSetup) {
+            OpenAIProviderSetupView {
+                Task { await controller.checkReadiness() }
+            }
         }
     }
 
@@ -315,6 +330,13 @@ struct RioView<Controller: SessionShellControlling>: View {
         if controller.cards.isEmpty {
             ScrollView {
                 VStack(spacing: 18) {
+                    if !providerSettings.isConfigured {
+                        OpenAIProviderSetupCard {
+                            isShowingProviderSetup = true
+                        }
+                        .padding(.horizontal, 24)
+                    }
+
                     if controller.status != .stopped,
                        controller.status != .listening,
                        controller.status != .processing {
@@ -444,7 +466,7 @@ struct VoiceFeedbackPresentation: Equatable {
         } else if status == .paused {
             condition = .paused
             title = "Listening paused"
-            detail = "Meeting audio and speech recognition are paused."
+            detail = "Meeting audio and transcription are paused."
             symbolName = "pause.circle.fill"
             tintName = .warning
         } else if feedback.audioInput.isMuted {
@@ -470,10 +492,10 @@ struct VoiceFeedbackPresentation: Equatable {
 
     private static func speechDetail(for count: Int) -> String {
         guard count > 0 else {
-            return "Speech recognition is active. Collecting finalized message chunks for insights."
+            return "Transcription is active. Collecting finalized message chunks for insights."
         }
         let noun = count == 1 ? "chunk" : "chunks"
-        return "Speech recognition is active. \(count) message \(noun) collected for insights."
+        return "Transcription is active. \(count) message \(noun) collected for insights."
     }
 
     var tint: Color {
@@ -514,7 +536,7 @@ private struct VoiceFeedbackView: View {
 
                 Spacer(minLength: 0)
 
-                Text("On-device. Nothing is saved.")
+                Text("Live chunks sent to OpenAI. Nothing is saved by Rio.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -644,6 +666,92 @@ private struct PrerequisiteChecklistView: View {
         )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Listening prerequisites")
+    }
+}
+
+private struct OpenAIProviderSetupCard: View {
+    let openSetup: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Connect OpenAI", systemImage: "key.fill")
+                .font(.headline)
+            Text("Bring your own OpenAI API key to transcribe meeting audio and generate insights. The key stays in your Mac’s Keychain.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button("Add OpenAI API key", action: openSetup)
+                .buttonStyle(.borderedProminent)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.accentColor.opacity(0.3), lineWidth: 1)
+        }
+    }
+}
+
+private struct OpenAIProviderSetupView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var providerSettings: OpenAIProviderSettings
+
+    let didChangeConfiguration: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Bring your own key")
+                .font(.title2.weight(.semibold))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Provider")
+                    .font(.subheadline.weight(.medium))
+                Text("OpenAI (default)")
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("OpenAI API key")
+                    .font(.subheadline.weight(.medium))
+                SecureField("Paste your API key", text: $providerSettings.apiKey)
+                    .textFieldStyle(.roundedBorder)
+                Text("Stored only in your login Keychain. Rio uses it for transcription and insights; it is never shown again.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if let errorMessage = providerSettings.errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            HStack {
+                if providerSettings.isConfigured {
+                    Button("Remove key", role: .destructive) {
+                        providerSettings.remove()
+                        didChangeConfiguration()
+                    }
+                }
+                Spacer()
+                Button("Cancel") { dismiss() }
+                Button("Save key") {
+                    if providerSettings.save() {
+                        didChangeConfiguration()
+                        dismiss()
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(providerSettings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(24)
+        .frame(width: 440)
     }
 }
 
@@ -865,9 +973,9 @@ private extension UnavailableReason {
         case .systemAudioUnavailable:
             "Rio could not find a display to capture meeting audio from. Connect or enable a display, then try again."
         case .openAIAPIKeyMissing:
-            "Set OPENAI_API_KEY in the environment before launching Rio. Rio sends bounded, temporary meeting-audio chunks to OpenAI for transcription and temporary meeting text for insights."
+            "Add your OpenAI API key in Rio’s Provider settings. Rio sends bounded, temporary meeting-audio chunks to OpenAI for transcription and temporary meeting text for insights."
         case .openAIAPIKeyInvalid:
-            "Rio could not authenticate with OpenAI. Check OPENAI_API_KEY and start listening again."
+            "Rio could not authenticate with OpenAI. Replace the key in Rio’s Provider settings and start listening again."
         }
     }
 
@@ -944,10 +1052,12 @@ extension InsightCard {
 
 #Preview("Stopped") {
     RioView(controller: FakeSessionController())
+        .environmentObject(OpenAIProviderSettings())
 }
 
 #Preview("Listening — empty") {
     RioView(controller: FakeSessionController(status: .listening))
+        .environmentObject(OpenAIProviderSettings())
 }
 
 #Preview("Insight cards") {
@@ -979,6 +1089,7 @@ extension InsightCard {
             ]
         )
     )
+    .environmentObject(OpenAIProviderSettings())
 }
 
 #Preview("Unavailable") {
@@ -989,6 +1100,7 @@ extension InsightCard {
             startOutcome: .unavailable(.openAIAPIKeyMissing)
         )
     )
+    .environmentObject(OpenAIProviderSettings())
 }
 
 #Preview("Interrupted") {
@@ -999,4 +1111,5 @@ extension InsightCard {
             startOutcome: .interrupted
         )
     )
+    .environmentObject(OpenAIProviderSettings())
 }

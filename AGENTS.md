@@ -77,6 +77,7 @@ All meeting data is ephemeral for the MVP:
 - Bound the number of active insight cards.
 - Clear capture buffers, temporary text, in-flight API requests, and insight state when listening stops.
 - Perform the same cleanup after errors and cancellation.
+- Store a user-provided API key only in the macOS Keychain; never use app preferences, source, an app bundle, logs, or an environment-variable runtime dependency for credentials.
 - Never include audio, transcript text, insight text, prompts containing meeting content, or secrets in logs, analytics, crash annotations, fixtures, or snapshots.
 
 Diagnostics may contain non-content metadata such as timing, queue depth, availability state, and error codes.

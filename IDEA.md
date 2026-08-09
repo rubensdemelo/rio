@@ -33,7 +33,7 @@ Insights should update or replace earlier cards as the meeting develops instead 
 
 ## Data lifecycle
 
-Audio is processed as a live stream and is not recorded to a file. Bounded in-memory WAV chunks are sent to OpenAI only for temporary transcription. The resulting text is held only in a bounded, rolling context window and sent to OpenAI only for current live insights. Rio does not store either; the app continuously discards audio buffers and text that are no longer needed.
+Audio is processed as a live stream and is not recorded to a file. Bounded in-memory WAV chunks are sent to OpenAI only for temporary transcription. The resulting text is held only in a bounded, rolling context window and sent to OpenAI only for current live insights. Rio does not store either; the app continuously discards audio buffers and text that are no longer needed. A user-provided OpenAI API key is stored separately in the macOS Keychain and is not meeting data.
 
 Current insight cards may remain visible until the user stops the meeting or closes the window. The MVP does not create an automatic meeting archive.
 

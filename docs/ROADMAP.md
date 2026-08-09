@@ -11,7 +11,7 @@ Goal: prove the complete meeting-understanding loop with the smallest possible a
 - Capture microphone audio for the initial development loop.
 - Send bounded in-memory audio batches to OpenAI transcription.
 - Hold finalized text in a bounded, in-memory rolling context.
-- Check that an OpenAI API key is configured before listening.
+- Let the user add their own OpenAI API key in Provider settings and check the stored Keychain credential before listening.
 - Generate JSON-Schema-constrained insight updates through OpenAI's Responses API.
 - Render simple insight cards without displaying transcript text.
 - Clear all audio, temporary text, model-session state, and insights when the session ends.

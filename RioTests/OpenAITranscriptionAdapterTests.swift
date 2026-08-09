@@ -39,7 +39,10 @@ final class OpenAITranscriptionAdapterTests: XCTestCase {
     }
 
     func testMissingAPIKeyIsReportedBeforeAudioCapture() async {
-        let adapter = OpenAITranscriptionAdapter(configuration: nil)
+        let adapter = OpenAITranscriptionAdapter(
+            configuration: nil,
+            configurationProvider: { nil }
+        )
         let availability = await adapter.availability()
         XCTAssertEqual(availability, .unavailable(.openAIAPIKeyMissing))
         do {

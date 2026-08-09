@@ -55,9 +55,9 @@ The first release targets:
 
 - macOS 26 or later.
 - Screen & System Audio Recording permission.
-- An `OPENAI_API_KEY` in the environment that launches Rio.
+- An OpenAI API key, added in Rio's Provider settings.
 
-Rio checks these capabilities at runtime and explains unavailable states. Rio sends bounded temporary meeting-audio chunks to OpenAI for transcription and bounded temporary text for insight cards; it does not store either locally.
+Rio checks these capabilities at runtime and explains unavailable states. OpenAI is the default provider. Rio sends bounded temporary meeting-audio chunks to OpenAI for transcription and bounded temporary text for insight cards; it does not store either locally.
 
 ## Data lifecycle
 
@@ -68,7 +68,7 @@ Meeting data is ephemeral in the MVP:
 - Only finalized transcription results enter the rolling insight context.
 - Old audio and text are continuously discarded.
 - Stopping a session clears remaining audio, temporary text, model-session state, and insight cards.
-- Meeting content must never appear in logs, analytics, crash annotations, or test fixtures.
+- Meeting content and API keys must never appear in logs, analytics, crash annotations, or test fixtures.
 
 ## MVP exclusions
 
@@ -95,10 +95,9 @@ The project uses Xcode 26.6, Swift 6, and a macOS 26 deployment target. Build an
 
 Development builds must use a stable Apple Development signing identity so macOS can associate microphone permission with the same Rio bundle and signing authority across frequent rebuilds. Copy `Config/Development.xcconfig.example` to `Config/Development.xcconfig`, set `DEVELOPMENT_TEAM` to the team shown in Xcode’s Signing & Capabilities editor, and sign in to Xcode with that Apple Developer account. `make final` automatically uses the local config when present. Do not delete or recreate that identity while testing, because changing the bundle identifier or signing authority legitimately causes macOS to ask again. If no local config exists, the build falls back to Xcode’s ad-hoc “Sign to Run Locally” behavior, which is suitable only for transient builds and may cause TCC to ask again after rebuilds.
 
-To transcribe and generate insights, export an OpenAI API key in the same shell that runs `make final`; never add it to source control or the app bundle. `make final` launches Rio directly so it inherits that key. `RIO_OPENAI_MODEL` is optional and defaults to `gpt-5-mini`; `RIO_OPENAI_TRANSCRIPTION_MODEL` is optional and defaults to `gpt-4o-transcribe`.
+On first launch, use **Provider** to add your own OpenAI API key. Rio stores it only in your login Keychain, never in the app bundle, source tree, preferences, logs, or an environment variable. The current defaults are `gpt-5-mini` for insights and `gpt-4o-transcribe` for transcription.
 
 ```sh
-export OPENAI_API_KEY="..."
 make final
 ```
 

@@ -207,28 +207,31 @@ private actor OpenAITranscriptionQueue {
 }
 
 actor OpenAITranscriptionAdapter: SessionSpeechRecognizer {
-    private let configuration: OpenAIAPIConfiguration?
+    private let configurationProvider: @Sendable () -> OpenAIAPIConfiguration?
     private let client: any OpenAIHTTPClient
     private let batchDuration: Duration
     private var processingTask: Task<Void, Never>?
     private var queue: OpenAITranscriptionQueue?
 
     init(
-        configuration: OpenAIAPIConfiguration? = .environment(),
+        configuration: OpenAIAPIConfiguration? = nil,
+        configurationProvider: @escaping @Sendable () -> OpenAIAPIConfiguration? = {
+            OpenAIAPIConfiguration.stored()
+        },
         client: any OpenAIHTTPClient = URLSessionOpenAIHTTPClient(),
         batchDuration: Duration = .seconds(3)
     ) {
-        self.configuration = configuration
+        self.configurationProvider = { configuration ?? configurationProvider() }
         self.client = client
         self.batchDuration = batchDuration
     }
 
     func availability() async -> Availability {
-        configuration == nil ? .unavailable(.openAIAPIKeyMissing) : .available
+        configurationProvider() == nil ? .unavailable(.openAIAPIKeyMissing) : .available
     }
 
     func prepare() async throws(PipelineFailure) {
-        guard configuration != nil else {
+        guard configurationProvider() != nil else {
             throw .unavailable(.openAIAPIKeyMissing)
         }
     }
@@ -237,7 +240,7 @@ actor OpenAITranscriptionAdapter: SessionSpeechRecognizer {
         guard processingTask == nil, queue == nil else {
             throw .stage(.speechRecognition, .invalidState)
         }
-        guard let configuration else {
+        guard let configuration = configurationProvider() else {
             throw .unavailable(.openAIAPIKeyMissing)
         }
 

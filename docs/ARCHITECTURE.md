@@ -77,9 +77,9 @@ The first implementation should trigger insight analysis on a small batch of new
 
 ### Meeting understanding
 
-Use OpenAI's Responses API with `gpt-5-mini` by default. The app needs the `OPENAI_API_KEY` only in the process environment that launches Rio; it is never embedded in the bundle, source tree, diagnostics, or app preferences. `RIO_OPENAI_MODEL` optionally selects a compatible insight model and `RIO_OPENAI_TRANSCRIPTION_MODEL` a compatible transcription model.
+Use OpenAI's Responses API with `gpt-5-mini` by default. OpenAI is the default and only MVP provider. The user supplies their own API key in Provider settings; Rio stores it only in the macOS Keychain and never in the bundle, source tree, diagnostics, app preferences, or an environment variable. Transcription uses `gpt-4o-transcribe` by default.
 
-When the app window loads and before starting a session, inspect all session prerequisites and retain a combined readiness report for the UI. Preflight checks capture availability, transcription configuration, and API-key configuration. A missing or rejected API key is an explicit unavailable state; transient network or service errors are explicit transient failures, not a permissions issue.
+When the app window loads and before starting a session, inspect all session prerequisites and retain a combined readiness report for the UI. Preflight checks capture availability, transcription configuration, and a stored API key. A missing or rejected API key is an explicit unavailable state; transient network or service errors are explicit transient failures, not a permissions issue.
 
 Each request has stable developer-authored instructions and one untrusted meeting-text input. The request asks the API for strict JSON Schema output; meeting text never enters instructions. A conceptual result is:
 
@@ -110,6 +110,8 @@ All queues and buffers are bounded:
 - In-flight API requests are cancelled and their in-memory request context is released when listening stops.
 
 Diagnostics may record durations, queue depth, model availability, and error codes. They must never record audio, transcript text, generated insight text, or other meeting content.
+
+The user-provided API key is the only persistent configuration needed for cloud inference. It is held by the macOS Keychain rather than the meeting-data lifecycle and is never copied into `UserDefaults`, files, logs, or environment-dependent runtime configuration.
 
 ## Concurrency
 

@@ -166,7 +166,7 @@ final class ApplicationShellTests: XCTestCase {
         )
 
         XCTAssertEqual(presentation.title, "OpenAI API")
-        XCTAssertTrue(presentation.detail.contains("OPENAI_API_KEY"))
+        XCTAssertTrue(presentation.detail.contains("Provider settings"))
         XCTAssertTrue(presentation.detail.contains("temporary meeting text"))
         XCTAssertEqual(presentation.symbolName, "exclamationmark.circle.fill")
     }
@@ -181,6 +181,24 @@ final class ApplicationShellTests: XCTestCase {
 
         XCTAssertEqual(presentation.title, "Meeting transcription")
         XCTAssertTrue(presentation.detail.contains("meeting-audio chunks"))
+    }
+
+    func testBringYourOwnKeyStoresOnlyAConfiguredState() {
+        let store = TestOpenAIAPIKeyStore()
+        let settings = OpenAIProviderSettings(keyStore: store)
+
+        XCTAssertEqual(settings.providerName, "OpenAI")
+        XCTAssertFalse(settings.isConfigured)
+
+        settings.apiKey = " test-key "
+        XCTAssertTrue(settings.save())
+        XCTAssertTrue(settings.isConfigured)
+        XCTAssertEqual(store.storedValue, "test-key")
+        XCTAssertTrue(settings.apiKey.isEmpty)
+
+        settings.remove()
+        XCTAssertFalse(settings.isConfigured)
+        XCTAssertNil(store.storedValue)
     }
 
     func testMeetingAudioActionTargetsTheScreenRecordingPrivacyPane() {
@@ -254,4 +272,12 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(controller.cards, [card])
     }
 
+}
+
+private final class TestOpenAIAPIKeyStore: OpenAIAPIKeyStore, @unchecked Sendable {
+    var storedValue: String?
+
+    func load() throws -> String? { storedValue }
+    func save(_ key: String) throws { storedValue = key }
+    func remove() throws { storedValue = nil }
 }

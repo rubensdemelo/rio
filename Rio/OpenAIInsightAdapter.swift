@@ -18,29 +18,13 @@ struct OpenAIAPIConfiguration: Sendable, Equatable {
         self.transcriptionModel = transcriptionModel
     }
 
-    static func environment(
-        values: [String: String] = ProcessInfo.processInfo.environment
+    static func stored(
+        keyStore: any OpenAIAPIKeyStore = KeychainOpenAIAPIKeyStore()
     ) -> OpenAIAPIConfiguration? {
-        guard let apiKey = values["OPENAI_API_KEY"]?.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        ),
-        !apiKey.isEmpty else {
+        guard let apiKey = try? keyStore.load() else {
             return nil
         }
-
-        let model = values["RIO_OPENAI_MODEL"]?.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
-        let transcriptionModel = values["RIO_OPENAI_TRANSCRIPTION_MODEL"]?.trimmingCharacters(
-            in: .whitespacesAndNewlines
-        )
-        return OpenAIAPIConfiguration(
-            apiKey: apiKey,
-            model: model?.isEmpty == false ? model! : defaultModel,
-            transcriptionModel: transcriptionModel?.isEmpty == false
-                ? transcriptionModel!
-                : defaultTranscriptionModel
-        )
+        return OpenAIAPIConfiguration(apiKey: apiKey)
     }
 }
 
@@ -361,7 +345,7 @@ private enum OpenAIResponsesRequest {
 }
 
 actor OpenAIInsightGenerator: SessionInsightGenerator {
-    private let configuration: OpenAIAPIConfiguration?
+    private let configurationProvider: @Sendable () -> OpenAIAPIConfiguration?
     private let client: any OpenAIHTTPClient
     private let instructions: String
     private let generationGate = InsightGenerationGate()
@@ -370,17 +354,20 @@ actor OpenAIInsightGenerator: SessionInsightGenerator {
     private var activeGenerations: [Int: Task<[InsightUpdate], any Error>] = [:]
 
     init(
-        configuration: OpenAIAPIConfiguration? = .environment(),
+        configuration: OpenAIAPIConfiguration? = nil,
+        configurationProvider: @escaping @Sendable () -> OpenAIAPIConfiguration? = {
+            OpenAIAPIConfiguration.stored()
+        },
         client: any OpenAIHTTPClient = URLSessionOpenAIHTTPClient(),
         instructions: String = OpenAIInsightPrompt.instructions
     ) {
-        self.configuration = configuration
+        self.configurationProvider = { configuration ?? configurationProvider() }
         self.client = client
         self.instructions = instructions
     }
 
     func availability() async -> Availability {
-        configuration == nil ? .unavailable(.openAIAPIKeyMissing) : .available
+        configurationProvider() == nil ? .unavailable(.openAIAPIKeyMissing) : .available
     }
 
     func supportsLocale(identifier: String) async -> Bool {
@@ -391,7 +378,7 @@ actor OpenAIInsightGenerator: SessionInsightGenerator {
         guard !isSessionActive else {
             throw .stage(.insightGeneration, .invalidState)
         }
-        guard configuration != nil else {
+        guard configurationProvider() != nil else {
             throw .unavailable(.openAIAPIKeyMissing)
         }
         guard await supportsLocale(identifier: localeIdentifier) else {
@@ -405,7 +392,7 @@ actor OpenAIInsightGenerator: SessionInsightGenerator {
             await reset()
             throw .cancelled
         }
-        guard isSessionActive, let configuration else {
+        guard isSessionActive, let configuration = configurationProvider() else {
             throw .stage(.insightGeneration, .invalidState)
         }
 
