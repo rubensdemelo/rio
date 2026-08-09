@@ -129,16 +129,13 @@ enum UnavailableReason: Sendable, Equatable {
     case audioInputUnavailable
     case systemAudioPermissionDenied
     case systemAudioUnavailable
-    case speechRecognitionUnavailable
-    case speechLocaleUnsupported(identifier: String)
-    case speechAssetsNotReady
     case openAIAPIKeyMissing
     case openAIAPIKeyInvalid
 }
 
 enum PrerequisiteKind: Sendable, Equatable, CaseIterable {
     case meetingAudio
-    case speechRecognition
+    case meetingTranscription
     case openAI
 }
 

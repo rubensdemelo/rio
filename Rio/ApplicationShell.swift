@@ -843,8 +843,8 @@ private extension PrerequisiteKind {
         switch self {
         case .meetingAudio:
             "Meeting audio access"
-        case .speechRecognition:
-            "Speech recognition"
+        case .meetingTranscription:
+            "Meeting transcription"
         case .openAI:
             "OpenAI API"
         }
@@ -864,14 +864,8 @@ private extension UnavailableReason {
             "Click Start Listening to let macOS request access. Then enable Rio here if it appears."
         case .systemAudioUnavailable:
             "Rio could not find a display to capture meeting audio from. Connect or enable a display, then try again."
-        case .speechRecognitionUnavailable:
-            "This Mac cannot use on-device speech recognition. Use a supported macOS 26+ Mac."
-        case .speechLocaleUnsupported(let identifier):
-            "Speech recognition does not support \(identifier). Rio currently requires English (US)."
-        case .speechAssetsNotReady:
-            "Rio needs Apple’s on-device speech-recognition asset for English (US). Rio has asked macOS to download it; keep this Mac online, then try again. There is nothing to add manually."
         case .openAIAPIKeyMissing:
-            "Set OPENAI_API_KEY in the environment before launching Rio. Rio sends only bounded, temporary meeting text to OpenAI for insight generation."
+            "Set OPENAI_API_KEY in the environment before launching Rio. Rio sends bounded, temporary meeting-audio chunks to OpenAI for transcription and temporary meeting text for insights."
         case .openAIAPIKeyInvalid:
             "Rio could not authenticate with OpenAI. Check OPENAI_API_KEY and start listening again."
         }
@@ -887,7 +881,7 @@ private extension PipelineFailure {
         case .stage(.audioCapture, .failed):
             "System audio capture stopped unexpectedly. Rio will retry when it can; otherwise start listening again."
         case .stage(.speechRecognition, .failed):
-            "Speech recognition stopped unexpectedly. Start listening again."
+            "Meeting transcription stopped unexpectedly. Start listening again."
         case .stage(.insightGeneration, .failed):
             "Insight generation stopped unexpectedly. Start listening again."
         case .stage(_, .interrupted):

@@ -171,9 +171,7 @@ enum RioCompositionRoot {
     static func makeLiveController() -> LiveSessionController {
         let localeIdentifier = defaultLocaleIdentifier
         let capture = ScreenCaptureKitSystemAudioCapture()
-        let speechRecognizer = SpeechAnalyzerTranscriberAdapter(
-            localeIdentifier: localeIdentifier
-        )
+        let speechRecognizer = OpenAITranscriptionAdapter()
         let contextFactory = BoundedMeetingContextFactory(
             configuration: MeetingContextConfiguration(
                 maximumAge: .seconds(180),

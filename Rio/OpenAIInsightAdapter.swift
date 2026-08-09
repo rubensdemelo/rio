@@ -2,13 +2,20 @@ import Foundation
 
 struct OpenAIAPIConfiguration: Sendable, Equatable {
     static let defaultModel = "gpt-5-mini"
+    static let defaultTranscriptionModel = "gpt-4o-transcribe"
 
     let apiKey: String
     let model: String
+    let transcriptionModel: String
 
-    init(apiKey: String, model: String = Self.defaultModel) {
+    init(
+        apiKey: String,
+        model: String = Self.defaultModel,
+        transcriptionModel: String = Self.defaultTranscriptionModel
+    ) {
         self.apiKey = apiKey
         self.model = model
+        self.transcriptionModel = transcriptionModel
     }
 
     static func environment(
@@ -24,9 +31,15 @@ struct OpenAIAPIConfiguration: Sendable, Equatable {
         let model = values["RIO_OPENAI_MODEL"]?.trimmingCharacters(
             in: .whitespacesAndNewlines
         )
+        let transcriptionModel = values["RIO_OPENAI_TRANSCRIPTION_MODEL"]?.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
         return OpenAIAPIConfiguration(
             apiKey: apiKey,
-            model: model?.isEmpty == false ? model! : defaultModel
+            model: model?.isEmpty == false ? model! : defaultModel,
+            transcriptionModel: transcriptionModel?.isEmpty == false
+                ? transcriptionModel!
+                : defaultTranscriptionModel
         )
     }
 }

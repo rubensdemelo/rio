@@ -130,7 +130,7 @@ final class ApplicationShellTests: XCTestCase {
                 status: .unavailable,
                 failure: .stage(.speechRecognition, .failed)
             ).detail,
-            "Speech recognition stopped unexpectedly. Start listening again."
+            "Meeting transcription stopped unexpectedly. Start listening again."
         )
         XCTAssertEqual(
             EmptyStatePresentation(status: .stopped, statusDetail: stopped.detail).title,
@@ -171,17 +171,16 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(presentation.symbolName, "exclamationmark.circle.fill")
     }
 
-    func testSpeechAssetsPresentationNamesTheRequiredEnglishAsset() {
+    func testMeetingTranscriptionPresentationNamesItsAPIRequirement() {
         let presentation = PrerequisiteCheckPresentation(
             check: PrerequisiteCheck(
-                kind: .speechRecognition,
-                reason: .speechAssetsNotReady
+                kind: .meetingTranscription,
+                reason: .openAIAPIKeyMissing
             )
         )
 
-        XCTAssertTrue(presentation.detail.contains("English (US)"))
-        XCTAssertTrue(presentation.detail.contains("on-device speech-recognition asset"))
-        XCTAssertTrue(presentation.detail.contains("nothing to add manually"))
+        XCTAssertEqual(presentation.title, "Meeting transcription")
+        XCTAssertTrue(presentation.detail.contains("meeting-audio chunks"))
     }
 
     func testMeetingAudioActionTargetsTheScreenRecordingPrivacyPane() {

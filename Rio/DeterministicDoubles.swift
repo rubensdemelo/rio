@@ -283,7 +283,7 @@ final class DeterministicSessionLifecycle: SessionLifecycle {
         let report = SessionReadiness(
             checks: [
                 PrerequisiteCheck(kind: .meetingAudio, reason: reason),
-                PrerequisiteCheck(kind: .speechRecognition, reason: reason),
+                PrerequisiteCheck(kind: .meetingTranscription, reason: reason),
                 PrerequisiteCheck(kind: .openAI, reason: reason),
             ]
         )

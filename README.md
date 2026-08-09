@@ -6,7 +6,7 @@ The insight stream is the product. Rio is not a transcription app, note-taking a
 
 ## Status
 
-Rio uses temporary on-device speech recognition, bounded context, OpenAI insight generation, in-memory cards, session cleanup, and a SwiftUI composition root. Automated checks cover the pipeline; direct hardware acceptance remains open.
+Rio uses bounded in-memory OpenAI transcription, bounded context, OpenAI insight generation, in-memory cards, session cleanup, and a SwiftUI composition root. Automated checks cover the pipeline; direct hardware acceptance remains open.
 
 ## MVP experience
 
@@ -31,7 +31,7 @@ Microphone + meeting/system audio
         ScreenCaptureKit
                  │
                  v
-SpeechAnalyzer + SpeechTranscriber
+OpenAI audio transcription
                  │
           temporary text
                  │
@@ -45,8 +45,8 @@ SpeechAnalyzer + SpeechTranscriber
 The current M1 vertical slice uses:
 
 - Swift and SwiftUI for the application and interface.
-- AVAudioEngine for microphone capture. ScreenCaptureKit meeting/system audio is planned for Milestone 2.
-- SpeechAnalyzer and SpeechTranscriber for temporary, on-device speech-to-text.
+- ScreenCaptureKit for meeting/system audio capture.
+- OpenAI's `gpt-4o-transcribe` for temporary cloud speech-to-text from bounded in-memory WAV chunks.
 - OpenAI's Responses API with strict JSON Schema output for insight updates.
 
 ## Requirements
@@ -54,11 +54,10 @@ The current M1 vertical slice uses:
 The first release targets:
 
 - macOS 26 or later.
-- English (US) speech support; the current composition root uses `en-US` regardless of the Mac's system locale.
-- Microphone and screen-capture permissions.
+- Screen & System Audio Recording permission.
 - An `OPENAI_API_KEY` in the environment that launches Rio.
 
-Rio checks these capabilities at runtime and explains unavailable states. Rio sends bounded temporary meeting text to OpenAI to generate insight cards; it does not store that text locally.
+Rio checks these capabilities at runtime and explains unavailable states. Rio sends bounded temporary meeting-audio chunks to OpenAI for transcription and bounded temporary text for insight cards; it does not store either locally.
 
 ## Data lifecycle
 
@@ -66,7 +65,7 @@ Meeting data is ephemeral in the MVP:
 
 - Audio is processed as a live stream and is not intentionally written to disk.
 - Audio queues and temporary text buffers are bounded.
-- Only finalized speech results enter the rolling insight context.
+- Only finalized transcription results enter the rolling insight context.
 - Old audio and text are continuously discarded.
 - Stopping a session clears remaining audio, temporary text, model-session state, and insight cards.
 - Meeting content must never appear in logs, analytics, crash annotations, or test fixtures.
@@ -96,7 +95,7 @@ The project uses Xcode 26.6, Swift 6, and a macOS 26 deployment target. Build an
 
 Development builds must use a stable Apple Development signing identity so macOS can associate microphone permission with the same Rio bundle and signing authority across frequent rebuilds. Copy `Config/Development.xcconfig.example` to `Config/Development.xcconfig`, set `DEVELOPMENT_TEAM` to the team shown in Xcode’s Signing & Capabilities editor, and sign in to Xcode with that Apple Developer account. `make final` automatically uses the local config when present. Do not delete or recreate that identity while testing, because changing the bundle identifier or signing authority legitimately causes macOS to ask again. If no local config exists, the build falls back to Xcode’s ad-hoc “Sign to Run Locally” behavior, which is suitable only for transient builds and may cause TCC to ask again after rebuilds.
 
-To generate insights, export an OpenAI API key in the same shell that launches Rio; never add it to source control or the app bundle. `RIO_OPENAI_MODEL` is optional and defaults to `gpt-5-mini`.
+To transcribe and generate insights, export an OpenAI API key in the same shell that launches Rio; never add it to source control or the app bundle. `RIO_OPENAI_MODEL` is optional and defaults to `gpt-5-mini`; `RIO_OPENAI_TRANSCRIPTION_MODEL` is optional and defaults to `gpt-4o-transcribe`.
 
 ```sh
 export OPENAI_API_KEY="..."
@@ -137,4 +136,4 @@ xcodebuild \
   test
 ```
 
-The automated M1-10 run on macOS 26.5.2 passed all 68 unit tests in Debug and Release and passed both warnings-as-errors builds. The app also launched and exited cleanly in an idle smoke check. Permission prompts, live microphone speech, SpeechAnalyzer output, Apple Intelligence availability, and the 15-to-30-minute bounded-memory session have not been directly exercised in this environment; they remain required before the M1 exit criterion can be marked complete. Verified progress is tracked in [the roadmap](docs/ROADMAP.md).
+The automated M1-10 run on macOS 26.5.2 passed all 68 unit tests in Debug and Release and passed both warnings-as-errors builds. The app also launched and exited cleanly in an idle smoke check. Permission prompts, live meeting transcription, OpenAI API configuration, and the 15-to-30-minute bounded-memory session have not been directly exercised in this environment; they remain required before the M1 exit criterion can be marked complete. Verified progress is tracked in [the roadmap](docs/ROADMAP.md).

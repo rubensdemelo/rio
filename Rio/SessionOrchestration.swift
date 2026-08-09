@@ -7,7 +7,7 @@ protocol SessionAudioCapture: AudioCapture {
 }
 
 protocol SessionSpeechRecognizer: TemporarySpeechRecognizer {
-    func availability() async -> SpeechRecognitionAvailability
+    func availability() async -> Availability
     func prepare() async throws(PipelineFailure)
 }
 
@@ -115,19 +115,18 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         } catch let failure {
             speechPreparationFailure = failure
         }
-        let speechReason = await speechRecognizer.availability().failure
-            .flatMap { failure in
+        let speechAvailability = await speechRecognizer.availability()
+        let speechReason: UnavailableReason?
+        if case .unavailable(let reason) = speechAvailability {
+            speechReason = reason
+        } else {
+            speechReason = speechPreparationFailure.flatMap { failure in
                 if case .unavailable(let reason) = failure {
                     return reason
                 }
-                return nil
+                return .openAIAPIKeyMissing
             }
-            ?? speechPreparationFailure.flatMap { failure in
-                if case .unavailable(let reason) = failure {
-                    return reason
-                }
-                return .speechRecognitionUnavailable
-            }
+        }
 
         let modelAvailability = await insightGenerator.availability()
         let modelReason: UnavailableReason?
@@ -144,7 +143,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         let report = SessionReadiness(
             checks: [
                 PrerequisiteCheck(kind: .meetingAudio, reason: meetingAudioReason),
-                PrerequisiteCheck(kind: .speechRecognition, reason: speechReason),
+                PrerequisiteCheck(kind: .meetingTranscription, reason: speechReason),
                 PrerequisiteCheck(kind: .openAI, reason: modelReason),
             ]
         )
@@ -502,7 +501,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         case .unavailable(let reason):
             return .unavailable(reason)
         case .stage, .cancelled:
-            return .unavailable(.speechRecognitionUnavailable)
+            return .unavailable(.openAIAPIKeyMissing)
         }
     }
 

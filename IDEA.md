@@ -14,10 +14,10 @@ For technical-support calls, Rio identifies symptoms, errors, product/version/en
 
 The first release targets macOS 26+.
 
-Rio uses native Apple technologies:
+Rio uses native Apple technologies for capture and interface, with OpenAI APIs for understanding:
 
 - ScreenCaptureKit for meeting/system audio and microphone capture.
-- SpeechAnalyzer and SpeechTranscriber for temporary, on-device speech-to-text.
+- OpenAI's `gpt-4o-transcribe` API for temporary meeting-audio transcription.
 - OpenAI's Responses API for cloud insight generation from bounded temporary meeting text.
 - SwiftUI for a small native interface.
 
@@ -33,7 +33,7 @@ Insights should update or replace earlier cards as the meeting develops instead 
 
 ## Data lifecycle
 
-Audio is processed as a live stream and is not recorded to a file. Speech-to-text output is held only in a bounded, rolling context window. Bounded temporary text is sent to OpenAI only to generate the current live insights; Rio does not store it. The app continuously discards audio buffers and transcript text that are no longer needed.
+Audio is processed as a live stream and is not recorded to a file. Bounded in-memory WAV chunks are sent to OpenAI only for temporary transcription. The resulting text is held only in a bounded, rolling context window and sent to OpenAI only for current live insights. Rio does not store either; the app continuously discards audio buffers and text that are no longer needed.
 
 Current insight cards may remain visible until the user stops the meeting or closes the window. The MVP does not create an automatic meeting archive.
 

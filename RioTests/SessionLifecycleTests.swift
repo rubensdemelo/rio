@@ -71,16 +71,10 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertEqual(generatorStopsAfterStop, 1)
     }
 
-    func testSpeechUnavailableStopsBeforeCapture() async throws {
+    func testTranscriptionUnavailableStopsBeforeCapture() async throws {
         let capture = TestSessionAudioCapture()
         let speech = TestSessionSpeechRecognizer(
-            availability: SpeechRecognitionAvailability(
-                transcriberIsAvailable: false,
-                requestedLocaleIdentifier: "en-US",
-                resolvedLocaleIdentifier: nil,
-                installedLocale: false,
-                assetState: .unsupported
-            )
+            availability: .unavailable(.openAIAPIKeyMissing)
         )
         let generator = TestSessionInsightGenerator()
         let coordinator = makeCoordinator(
@@ -95,7 +89,7 @@ final class SessionLifecycleTests: XCTestCase {
         } catch let failure {
             XCTAssertEqual(
                 failure,
-                .unavailable(.speechRecognitionUnavailable)
+                .unavailable(.openAIAPIKeyMissing)
             )
         }
 
@@ -106,16 +100,10 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertEqual(generatorStarts, 0)
     }
 
-    func testUnsupportedSpeechLocaleStopsBeforeCapture() async throws {
+    func testTranscriptionFailureDuringPreparationStopsBeforeCapture() async throws {
         let capture = TestSessionAudioCapture()
         let speech = TestSessionSpeechRecognizer(
-            availability: SpeechRecognitionAvailability(
-                transcriberIsAvailable: true,
-                requestedLocaleIdentifier: "zz-ZZ",
-                resolvedLocaleIdentifier: nil,
-                installedLocale: false,
-                assetState: .unsupported
-            )
+            availability: .unavailable(.openAIAPIKeyInvalid)
         )
         let coordinator = makeCoordinator(
             capture: capture,
@@ -124,11 +112,11 @@ final class SessionLifecycleTests: XCTestCase {
 
         do {
             try await coordinator.start()
-            XCTFail("An unsupported locale must stop startup")
+            XCTFail("An unavailable transcription service must stop startup")
         } catch let failure {
             XCTAssertEqual(
                 failure,
-                .unavailable(.speechLocaleUnsupported(identifier: "zz-ZZ"))
+                .unavailable(.openAIAPIKeyInvalid)
             )
         }
 
@@ -168,13 +156,7 @@ final class SessionLifecycleTests: XCTestCase {
             availability: .unavailable(.microphonePermissionDenied)
         )
         let speech = TestSessionSpeechRecognizer(
-            availability: SpeechRecognitionAvailability(
-                transcriberIsAvailable: false,
-                requestedLocaleIdentifier: "en-US",
-                resolvedLocaleIdentifier: nil,
-                installedLocale: false,
-                assetState: .unsupported
-            )
+            availability: .unavailable(.openAIAPIKeyMissing)
         )
         let generator = TestSessionInsightGenerator(
             availability: .unavailable(.openAIAPIKeyInvalid)
@@ -189,10 +171,10 @@ final class SessionLifecycleTests: XCTestCase {
 
         XCTAssertEqual(
             report.checks.map(\.kind),
-            [.meetingAudio, .speechRecognition, .openAI]
+            [.meetingAudio, .meetingTranscription, .openAI]
         )
         XCTAssertEqual(report.checks[0].reason, .microphonePermissionDenied)
-        XCTAssertEqual(report.checks[1].reason, .speechRecognitionUnavailable)
+        XCTAssertEqual(report.checks[1].reason, .openAIAPIKeyMissing)
         XCTAssertEqual(report.checks[2].reason, .openAIAPIKeyInvalid)
         XCTAssertFalse(report.isReady)
     }
@@ -710,31 +692,27 @@ actor TestSessionAudioCapture: SessionAudioCapture {
 }
 
 actor TestSessionSpeechRecognizer: SessionSpeechRecognizer {
-    private let configuredAvailability: SpeechRecognitionAvailability
+    private let configuredAvailability: Availability
     private let recognizeFailure: PipelineFailure?
     private var currentStream: TestStream<FinalizedSpeechSegment>?
     private var stops = 0
     private var cancellations = 0
 
     init(
-        availability: SpeechRecognitionAvailability = .available,
+        availability: Availability = .available,
         recognizeFailure: PipelineFailure? = nil
     ) {
         configuredAvailability = availability
         self.recognizeFailure = recognizeFailure
     }
 
-    func availability() async -> SpeechRecognitionAvailability {
+    func availability() async -> Availability {
         configuredAvailability
     }
 
-    func supportsLocale(identifier: String) async -> Bool {
-        true
-    }
-
     func prepare() async throws(PipelineFailure) {
-        if let failure = configuredAvailability.failure {
-            throw failure
+        if case .unavailable(let reason) = configuredAvailability {
+            throw .unavailable(reason)
         }
     }
 
@@ -987,17 +965,5 @@ final class TestSessionInsightState: InsightState {
         resetCount += 1
         cards.removeAll()
         appliedContexts.removeAll()
-    }
-}
-
-private extension SpeechRecognitionAvailability {
-    static var available: SpeechRecognitionAvailability {
-        SpeechRecognitionAvailability(
-            transcriberIsAvailable: true,
-            requestedLocaleIdentifier: "en-US",
-            resolvedLocaleIdentifier: "en-US",
-            installedLocale: true,
-            assetState: .installed
-        )
     }
 }

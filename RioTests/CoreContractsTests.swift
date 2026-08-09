@@ -20,7 +20,7 @@ final class CoreContractsTests: XCTestCase {
 
         XCTAssertEqual(update, copy)
         XCTAssertEqual(SessionID(rawValue: 7), SessionID(rawValue: 7))
-        XCTAssertEqual(Availability.unavailable(.speechAssetsNotReady), .unavailable(.speechAssetsNotReady))
+        XCTAssertEqual(Availability.unavailable(.openAIAPIKeyMissing), .unavailable(.openAIAPIKeyMissing))
         XCTAssertEqual(
             PipelineFailure.stage(.audioCapture, .interrupted),
             PipelineFailure.stage(.audioCapture, .interrupted)

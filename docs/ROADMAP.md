@@ -9,7 +9,7 @@ Goal: prove the complete meeting-understanding loop with the smallest possible a
 - Create a macOS 26+ SwiftUI application target.
 - Add one start/stop listening control and a clear session status.
 - Capture microphone audio for the initial development loop.
-- Feed audio to SpeechAnalyzer and SpeechTranscriber.
+- Send bounded in-memory audio batches to OpenAI transcription.
 - Hold finalized text in a bounded, in-memory rolling context.
 - Check that an OpenAI API key is configured before listening.
 - Generate JSON-Schema-constrained insight updates through OpenAI's Responses API.
@@ -17,7 +17,7 @@ Goal: prove the complete meeting-understanding loop with the smallest possible a
 - Clear all audio, temporary text, model-session state, and insights when the session ends.
 - Add deterministic fixtures and unit tests for context limits and insight update behavior.
 
-Exit criterion: speaking into the Mac produces useful, structured insight cards through the bounded local capture/speech pipeline and OpenAI insight generation.
+Exit criterion: meeting audio produces useful, structured insight cards through the bounded capture/transcription pipeline and OpenAI insight generation.
 
 ### Milestone 1 validation status
 
@@ -31,8 +31,8 @@ Verified on macOS 26.5.2:
 Not yet verified:
 
 - Microphone permission grant or denial behavior in the live app.
-- Live microphone speech through SpeechAnalyzer, OpenAI API configuration, and visible cards.
-- Restart, interruption, unsupported-locale, model-unavailable, and stop-during-stage hardware paths.
+- Live meeting audio through OpenAI transcription, OpenAI API configuration, and visible cards.
+- Restart, interruption, model-unavailable, and stop-during-stage hardware paths.
 - The 15-to-30-minute bounded-memory smoke session and Instruments resource-growth inspection.
 
 The Milestone 1 exit criterion is not marked complete until the not-yet-verified checks have direct evidence.
@@ -65,7 +65,7 @@ Goal: make the insight stream consistently useful instead of merely functional.
 - Build a small, non-sensitive evaluation corpus from synthetic meeting fixtures.
 - Add the version-controlled synthetic incident-copilot evaluation pack at `docs/evaluation/incident-copilot-mvp/`.
 - Measure time from finalized speech to visible insight.
-- Handle model refusal, context overflow, unsupported language, and generation errors.
+- Handle model refusal, context overflow, transcription, and generation errors.
 
 Exit criterion: representative meeting fixtures produce concise, non-repetitive insights with acceptable latency and no invented owners.
 
@@ -74,12 +74,12 @@ Exit criterion: representative meeting fixtures produce concise, non-repetitive 
 Goal: ship a technical preview that behaves predictably for a full meeting.
 
 - Add polished unavailable, permission, listening, processing, interrupted, and stopped states.
-- Add live non-content voice feedback with an input meter, speech-recognition activity cue, mute warning, microphone connection error, pause/resume, and stop controls.
+- Add live non-content voice feedback with an input meter, transcription activity cue, mute warning, microphone connection error, pause/resume, and stop controls.
 - Ensure cancellation and cleanup work from every state.
 - Run one-hour capture and insight-generation soak tests.
 - Verify bounded audio queues, text context, model context, and card count.
 - Confirm that no meeting content is written to logs, caches, crash annotations, or persistent storage.
-- Test missing and rejected OpenAI API keys, unavailable network/service responses, speech assets downloading, and unsupported locales.
+- Test missing and rejected OpenAI API keys, unavailable network/service responses, and bounded transcription backpressure.
 - Add accessibility, keyboard control, and basic VoiceOver coverage.
 - Sign, notarize, and package the macOS app.
 

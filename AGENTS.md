@@ -22,7 +22,7 @@ The first MVP:
 - Targets macOS 26+.
 - Uses native Swift and SwiftUI.
 - Uses ScreenCaptureKit for meeting/system audio and microphone capture where supported.
-- Uses SpeechAnalyzer and SpeechTranscriber for temporary on-device speech-to-text.
+- Sends bounded in-memory meeting-audio chunks to OpenAI's transcription API.
 - Uses OpenAI's Responses API for meeting understanding from bounded temporary text.
 - Shows concise live insight cards.
 - Keeps audio, temporary text, model sessions, and insights in memory only for the active session.
@@ -63,7 +63,7 @@ Prefer removing complexity over adding configuration. New controls and settings 
 - Use OpenAI Responses API strict JSON Schema output for insight generation.
 - Put developer-authored rules in model instructions and untrusted meeting text in prompts.
 - Validate generated output before applying it to UI state.
-- Check speech-model, OpenAI API-key, locale, asset, hardware, and permission availability explicitly.
+- Check OpenAI API-key, network, hardware, and permission availability explicitly.
 - Represent expected unavailable states in the UI instead of treating them as generic errors.
 
 ## Data lifecycle and privacy
@@ -72,7 +72,7 @@ All meeting data is ephemeral for the MVP:
 
 - Never intentionally write audio to disk.
 - Keep audio queues bounded by duration or frame count.
-- Feed only finalized speech results into the insight context.
+- Feed only finalized cloud-transcription results into the insight context.
 - Keep temporary text bounded by age and model token budget.
 - Bound the number of active insight cards.
 - Clear capture buffers, temporary text, in-flight API requests, and insight state when listening stops.
@@ -97,7 +97,7 @@ Prioritize tests for:
 - Insight parsing, validation, deduplication, updates, and resolution.
 - The rule against guessed action-item owners.
 - Session cancellation and cleanup from every state.
-- Permission denial and unavailable speech or OpenAI API configuration.
+- Permission denial and unavailable transcription or OpenAI API configuration.
 - Bounded queues and overload behavior.
 - Recovery from capture interruption and device changes.
 

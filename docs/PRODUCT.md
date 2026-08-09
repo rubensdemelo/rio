@@ -26,7 +26,7 @@ While listening, Rio shows a compact live microphone input level so the user can
 When the user starts listening:
 
 1. Rio captures system/meeting audio, including browser-based calls.
-2. Apple's Speech framework converts the live audio into temporary finalized text.
+2. Rio groups live audio into bounded, in-memory WAV chunks and sends them to OpenAI's `gpt-4o-transcribe` API for temporary finalized text.
 3. A bounded rolling text window is sent to OpenAI's Responses API.
 4. The API returns structured incident-signal and insight updates.
 5. The UI adds, updates, or removes concise cards as the support call develops.
@@ -53,18 +53,19 @@ Rio must not guess an action-item owner. Owner attribution is validated only whe
 
 ## OpenAI API
 
-Rio uses OpenAI's Responses API for meeting understanding. Requests use a strict JSON Schema and Rio validates the returned insight updates before rendering cards. The default model is `gpt-5-mini`; `RIO_OPENAI_MODEL` can select another compatible model.
+Rio uses OpenAI's `gpt-4o-transcribe` API for speech-to-text and the Responses API for meeting understanding. Insight requests use a strict JSON Schema and Rio validates the returned updates before rendering cards. The default insight model is `gpt-5-mini`; `RIO_OPENAI_MODEL` can select another compatible model. `RIO_OPENAI_TRANSCRIPTION_MODEL` optionally selects a compatible transcription model.
 
-Before listening, Rio checks Screen & System Audio Recording access, speech recognition and its required assets, and whether `OPENAI_API_KEY` is present in the environment that launched the app. A missing or rejected key blocks listening with direct guidance. The UI retains the direct button to the Screen & System Audio Recording privacy pane. When the fixed English (US) speech-recognition asset is still downloading, the UI names that exact on-device asset and explains that macOS downloads it in the background.
+Before listening, Rio checks Screen & System Audio Recording access and whether `OPENAI_API_KEY` is present in the environment that launched the app. A missing or rejected key blocks listening with direct guidance. The UI retains the direct button to the Screen & System Audio Recording privacy pane. There are no macOS speech assets to install.
 
-Speech recognition remains a separate native stage. SpeechAnalyzer and SpeechTranscriber perform on-device speech-to-text suitable for meetings; OpenAI interprets bounded batches of that temporary text. The current implementation uses English (US) (`en-US`) for speech recognition regardless of the Mac's system locale. Locale selection is not yet a user-facing control.
+Transcription is a cloud stage: Rio sends bounded in-memory WAV chunks to OpenAI, receives temporary finalized text, and immediately feeds it into the bounded insight context. TTS is not used because Rio never plays or generates meeting audio.
 
 ## Data lifecycle
 
-- Audio remains in memory only long enough to feed speech recognition.
+- Audio remains in memory only long enough to form a bounded transcription request.
 - Audio is never intentionally written to disk.
+- Bounded in-memory WAV chunks are transmitted to OpenAI only for transcription.
 - Finalized transcript segments live in a bounded rolling context window.
-- Bounded temporary meeting text is transmitted to OpenAI only to create the current insight updates.
+- Bounded temporary meeting text is transmitted to OpenAI only to create current insight updates.
 - Old text is continuously discarded.
 - All temporary meeting text is discarded when listening stops.
 - Current insight cards are session-only and disappear when the session ends unless a later product decision adds explicit insight export.
@@ -94,5 +95,5 @@ The MVP is successful when:
 5. An action-item owner is never inferred without explicit support in the temporary text.
 6. Stopping listening promptly releases capture resources and clears temporary audio and text.
 7. A one-hour meeting completes without deadlock, unrecovered capture failure, or unbounded memory growth.
-8. The app clearly reports a missing or rejected OpenAI API key, unsupported speech language, denied permission, and interrupted capture states.
+8. The app clearly reports a missing or rejected OpenAI API key, denied permission, transcription failure, and interrupted capture states.
 9. No meeting content is persisted or logged unintentionally.

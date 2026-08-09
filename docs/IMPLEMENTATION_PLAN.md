@@ -64,7 +64,7 @@ A task is complete only when:
 | M1-04 | SwiftUI application shell | M1-01 | Start/stop, status, and cards using fakes |
 | M1-05 | OpenAI Responses adapter | M1-01 | Structured cloud insight generation and API-key availability checks |
 | M1-06 | Bounded microphone capture | M1-01 | Live in-memory microphone audio stream |
-| M1-07 | SpeechAnalyzer adapter | M1-01 | Finalized temporary speech segments |
+| M1-07 | OpenAI transcription adapter | M1-01 | Finalized temporary speech segments |
 | M1-08 | Session lifecycle orchestration | M1-02, M1-03, M1-05, M1-06, M1-07 | Cancellation-safe complete pipeline |
 | M1-09 | Real vertical-slice integration | M1-04, M1-08 | Speaking produces live cards |
 | M1-10 | Milestone validation | M1-09 | Evidence-backed milestone completion |
@@ -292,34 +292,29 @@ Never write audio to files.
 - Confirm no audio files are created.
 - Confirm sustained input cannot produce unbounded queue growth.
 
-### M1-07: SpeechAnalyzer and SpeechTranscriber adapter
+### M1-07: OpenAI transcription adapter
 
 #### Build
 
-- Check `SpeechTranscriber.isAvailable`.
-- Check supported and installed locales.
-- Represent speech asset status through `AssetInventory`.
-- Select an audio format compatible with the transcriber.
-- Stream `AnalyzerInput` values into `SpeechAnalyzer`.
-- Use a transcription preset that does not request volatile results.
-- Convert finalized results into `FinalizedSpeechSegment` values.
-- Cancel and tear down the analyzer when the session ends.
+- Convert bounded captured audio to PCM16 WAV in memory.
+- Send multipart requests to OpenAI's transcription endpoint.
+- Convert nonempty results into `FinalizedSpeechSegment` values.
+- Bound queued requests and cancel all requests when the session ends.
 
 Do not log or publish recognized text outside the context pipeline.
 
 #### Test
 
-- Availability and locale mapping through wrappers or fakes.
-- Audio-sequence completion.
-- Analyzer cancellation.
-- Recognition failure propagation.
+- API-key availability through wrappers or fakes.
+- WAV request construction and audio-sequence completion.
+- Request cancellation and failure propagation.
 - Finalized-segment ordering.
 - No output after stop.
 
 #### Validate
 
 - Run a basic adapter integration using generated synthetic audio.
-- Confirm live speech produces finalized segments on supported hardware.
+- Confirm live meeting audio produces finalized segments through OpenAI.
 - Confirm temporary text is not displayed, logged, or persisted.
 
 ### M1-08: Session lifecycle orchestration
