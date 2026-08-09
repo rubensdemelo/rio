@@ -315,9 +315,14 @@ struct RioView<Controller: SessionShellControlling>: View {
     private var showsSessionStatus: Bool {
         switch controller.status {
         case .checkingAvailability, .paused, .interrupted, .unavailable:
-            true
+            if controller.status == .unavailable,
+               controller.unavailableReason == .openAIAPIKeyMissing,
+               !providerSettings.isConfigured {
+                return false
+            }
+            return true
         case .stopped, .listening, .processing:
-            hasMicrophoneFailure
+            return hasMicrophoneFailure
         }
     }
 
@@ -382,10 +387,25 @@ struct RioView<Controller: SessionShellControlling>: View {
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
         .keyboardShortcut("l", modifiers: [.command])
-        .disabled(controller.isPerformingPrimaryAction || controller.isPerformingPauseAction)
+        .disabled(isPrimaryActionDisabled)
         .accessibilityLabel(controller.primaryActionTitle)
         .accessibilityHint(primaryActionHint)
         .help("\(controller.primaryActionTitle) (⌘L)")
+    }
+
+    private var isPrimaryActionDisabled: Bool {
+        controller.isPerformingPrimaryAction
+            || controller.isPerformingPauseAction
+            || (isStartAction && !providerSettings.isConfigured)
+    }
+
+    private var isStartAction: Bool {
+        switch controller.status {
+        case .stopped, .interrupted, .unavailable:
+            true
+        case .checkingAvailability, .listening, .processing, .paused:
+            false
+        }
     }
 
     private var primaryActionSymbol: String {
@@ -402,15 +422,19 @@ struct RioView<Controller: SessionShellControlling>: View {
     }
 
     private var primaryActionHint: String {
+        if isStartAction && !providerSettings.isConfigured {
+            return "Add an OpenAI API key in Provider settings before starting listening."
+        }
+
         switch controller.status {
         case .listening, .processing:
-            "Stops the current session and clears its insights. Keyboard shortcut Command-L."
+            return "Stops the current session and clears its insights. Keyboard shortcut Command-L."
         case .paused:
-            "Stops the paused session and clears its insights. Keyboard shortcut Command-L."
+            return "Stops the paused session and clears its insights. Keyboard shortcut Command-L."
         case .checkingAvailability:
-            "Rio is checking whether listening can begin."
+            return "Rio is checking whether listening can begin."
         case .stopped, .interrupted, .unavailable:
-            "Starts a new listening session. Keyboard shortcut Command-L."
+            return "Starts a new listening session. Keyboard shortcut Command-L."
         }
     }
 }

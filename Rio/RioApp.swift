@@ -31,6 +31,7 @@ struct RioApp: App {
         MenuBarExtra("Rio", image: "RioMenuBarIcon") {
             RioMenuBarMenu(controller: sessionController)
                 .environmentObject(panelRouter)
+                .environmentObject(providerSettings)
         }
         .menuBarExtraStyle(.menu)
     }
@@ -40,6 +41,7 @@ private struct RioMenuBarMenu<Controller: SessionShellControlling>: View {
     @ObservedObject private var controller: Controller
     @Environment(\.openWindow) private var openWindow
     @EnvironmentObject private var panelRouter: RioPanelRouter
+    @EnvironmentObject private var providerSettings: OpenAIProviderSettings
 
     init(controller: Controller) {
         self.controller = controller
@@ -57,7 +59,9 @@ private struct RioMenuBarMenu<Controller: SessionShellControlling>: View {
             )
         }
         .disabled(
-            controller.isPerformingPrimaryAction || controller.status == .checkingAvailability
+            controller.isPerformingPrimaryAction
+                || controller.status == .checkingAvailability
+                || (isStartAction && !providerSettings.isConfigured)
         )
 
         Divider()
@@ -85,6 +89,15 @@ private struct RioMenuBarMenu<Controller: SessionShellControlling>: View {
 
         Button("Quit Rio") {
             NSApplication.shared.terminate(nil)
+        }
+    }
+
+    private var isStartAction: Bool {
+        switch controller.status {
+        case .stopped, .interrupted, .unavailable:
+            true
+        case .checkingAvailability, .listening, .processing, .paused:
+            false
         }
     }
 }
