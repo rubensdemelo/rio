@@ -26,6 +26,9 @@ System/meeting audio ─┘             │
                                     │
                                     v
 live SwiftUI insight cards
+                     │
+                     v
+      bounded local insight history (two days only)
 
                          MenuBarExtra
                     start/stop, open, quit
@@ -33,8 +36,8 @@ live SwiftUI insight cards
                        non-content voice feedback
                        (input level + recognition activity)
 
-Old audio buffers and temporary text are continuously discarded. Bounded audio batches are transmitted to OpenAI only for transcription; bounded temporary text is transmitted only for the active insight request.
-Stopping the session clears all remaining meeting data.
+Old audio buffers and temporary text are continuously discarded. Bounded audio batches are transmitted to OpenAI only for transcription; bounded temporary text is transmitted only for the active insight request. Generated insight cards are stored separately in a bounded local history and expire after two days.
+Stopping the session clears all remaining temporary meeting data.
 ```
 
 ## Native technology choices
@@ -98,7 +101,7 @@ The app validates semantic constraints after generation, including nonempty text
 
 An in-memory insight store applies generated updates on the main actor. Stable keys allow the model to update or resolve an existing card instead of creating duplicates.
 
-Insights exist only for the active session. The MVP does not include a database, automatic history, or export. Closing or stopping the session clears the store after an explicit confirmation if doing so would surprise the user.
+The active insight store exists only for the current session. A separate local history store merges cards by stable key within each session, saves only card category, state, text, and save time, and retains them for at most two days. It is capped at 200 entries, prunes on load and every write, and has a user-initiated clear action. It never receives audio, temporary transcript text, or explicit action-owner metadata. The MVP does not include export or history beyond this bounded window.
 
 ## Data and memory boundaries
 
@@ -107,11 +110,12 @@ All queues and buffers are bounded:
 - Audio queues have a fixed duration limit and drop or signal overload rather than grow indefinitely.
 - Temporary finalized text is limited by age and token budget.
 - The insight store has a maximum active-card count.
+- The local insight history holds at most 200 cards and removes entries older than two days.
 - In-flight API requests are cancelled and their in-memory request context is released when listening stops.
 
 Diagnostics may record durations, queue depth, model availability, and error codes. They must never record audio, transcript text, generated insight text, or other meeting content.
 
-The user-provided API key is the only persistent configuration needed for cloud inference. It is held by the macOS Keychain rather than the meeting-data lifecycle and is never copied into `UserDefaults`, files, logs, or environment-dependent runtime configuration.
+The user-provided API key is held by the macOS Keychain rather than the meeting-data lifecycle and is never copied into `UserDefaults`, files, logs, or environment-dependent runtime configuration. The two-day local insight history is the only persisted meeting-derived content and lives in an atomically written application-support JSON file.
 
 ## Concurrency
 
@@ -138,13 +142,13 @@ A failure must not silently leave the app appearing to listen.
 - Transcription failure keeps capture state accurate and offers restart.
 - A missing or rejected OpenAI API key prevents insight generation and explains the reason.
 - A failed generation request may retry after new finalized text arrives; it does not preserve unbounded text while waiting.
-- Stopping always clears temporary meeting data, including after a partial failure.
+- Stopping always clears temporary meeting data, including after a partial failure; the bounded local insight history remains until it expires or the user clears it.
 
 ## Deferred decisions
 
 The following are outside the first MVP and require a new product decision before implementation:
 
-- Insight export or session history.
+- Insight export or insight history older than two days.
 - Alternative cloud inference providers.
 - Speaker identification.
 - A portable Rust audio core.

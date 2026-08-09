@@ -25,14 +25,14 @@ The first MVP:
 - Sends bounded in-memory meeting-audio chunks to OpenAI's transcription API.
 - Uses OpenAI's Responses API for meeting understanding from bounded temporary text.
 - Shows concise live insight cards.
-- Keeps audio, temporary text, model sessions, and insights in memory only for the active session.
+- Keeps audio, temporary text, and model sessions in memory only for the active session; retains generated insight cards locally for no more than two days.
 
 Do not add the following without an explicit product decision and matching documentation update:
 
 - A visible transcript or transcript editor.
 - Note-taking features.
 - Audio recording, playback, or persistent audio storage.
-- Transcript export, meeting history, or a database.
+- Transcript export, insight history older than two days, or a database.
 - Apple Intelligence or another on-device language-model dependency.
 - Accounts, calendars, CRM integrations, team workspaces, or cloud synchronization.
 - Speaker identification or diarization.
@@ -77,8 +77,9 @@ All meeting data is ephemeral for the MVP:
 - Bound the number of active insight cards.
 - Clear capture buffers, temporary text, in-flight API requests, and insight state when listening stops.
 - Perform the same cleanup after errors and cancellation.
+- Persist only generated insight cards (category, state, text, and save time) in a bounded local history that expires after two days; never persist audio, temporary text, or owner metadata.
 - Store a user-provided API key only in the macOS Keychain; never use app preferences, source, an app bundle, logs, or an environment-variable runtime dependency for credentials.
-- Never include audio, transcript text, insight text, prompts containing meeting content, or secrets in logs, analytics, crash annotations, fixtures, or snapshots.
+- Never include audio, transcript text, prompts containing meeting content, secrets, or insight text outside the approved two-day local history in logs, analytics, crash annotations, fixtures, or snapshots.
 
 Diagnostics may contain non-content metadata such as timing, queue depth, availability state, and error codes.
 
@@ -109,7 +110,7 @@ Before considering a milestone complete:
 - Run relevant unit and integration tests.
 - Build the macOS target with warnings treated seriously.
 - Exercise start, stop, restart, denial, interruption, and model-unavailable paths.
-- Confirm that no meeting content was persisted or logged.
+- Confirm that no audio or temporary transcript content was persisted or logged, and that the only persisted meeting-derived content is the bounded two-day insight history.
 - Update `docs/ROADMAP.md` to reflect verified work only.
 
 Hardware-dependent capture and one-hour soak tests must be identified clearly when they cannot run in automated environments.

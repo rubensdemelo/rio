@@ -215,7 +215,9 @@ final class FakeSessionController: SessionShellControlling {
 struct RioView<Controller: SessionShellControlling>: View {
     @ObservedObject private var controller: Controller
     @EnvironmentObject private var providerSettings: OpenAIProviderSettings
+    @EnvironmentObject private var insightHistory: InsightHistoryStore
     @State private var isShowingProviderSetup = false
+    @State private var isShowingRecentInsights = false
 
     init(controller: Controller) {
         self.controller = controller
@@ -255,6 +257,13 @@ struct RioView<Controller: SessionShellControlling>: View {
                 Label("Provider", systemImage: "key")
             }
             .help("Configure your OpenAI API key")
+
+            Button {
+                isShowingRecentInsights = true
+            } label: {
+                Label("Recent", systemImage: "clock.arrow.circlepath")
+            }
+            .help("Show insights saved in the last two days")
         }
         .task {
             await controller.checkReadiness()
@@ -263,6 +272,9 @@ struct RioView<Controller: SessionShellControlling>: View {
             OpenAIProviderSetupView {
                 Task { await controller.checkReadiness() }
             }
+        }
+        .sheet(isPresented: $isShowingRecentInsights) {
+            RecentInsightsView()
         }
     }
 
@@ -755,6 +767,63 @@ private struct OpenAIProviderSetupView: View {
     }
 }
 
+private struct RecentInsightsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var insightHistory: InsightHistoryStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Recent insights")
+                        .font(.title2.weight(.semibold))
+                    Text("Only insight cards from the last two days are kept on this Mac.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                if !insightHistory.entries.isEmpty {
+                    Button("Clear", role: .destructive) {
+                        insightHistory.clear()
+                    }
+                }
+            }
+
+            if insightHistory.entries.isEmpty {
+                ContentUnavailableView(
+                    "No recent insights",
+                    systemImage: "clock",
+                    description: Text("Insights from meetings will appear here for two days.")
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 12) {
+                        ForEach(insightHistory.entries) { entry in
+                            VStack(alignment: .leading, spacing: 6) {
+                                InsightCardView(card: entry.card)
+                                Text(entry.savedAt, format: .dateTime.month().day().hour().minute())
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.leading, 4)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 540, height: 560)
+    }
+}
+
 struct PrerequisiteCheckPresentation: Equatable {
     let title: String
     let detail: String
@@ -1053,11 +1122,13 @@ extension InsightCard {
 #Preview("Stopped") {
     RioView(controller: FakeSessionController())
         .environmentObject(OpenAIProviderSettings())
+        .environmentObject(InsightHistoryStore())
 }
 
 #Preview("Listening — empty") {
     RioView(controller: FakeSessionController(status: .listening))
         .environmentObject(OpenAIProviderSettings())
+        .environmentObject(InsightHistoryStore())
 }
 
 #Preview("Insight cards") {
@@ -1090,6 +1161,7 @@ extension InsightCard {
         )
     )
     .environmentObject(OpenAIProviderSettings())
+    .environmentObject(InsightHistoryStore())
 }
 
 #Preview("Unavailable") {
@@ -1101,6 +1173,7 @@ extension InsightCard {
         )
     )
     .environmentObject(OpenAIProviderSettings())
+    .environmentObject(InsightHistoryStore())
 }
 
 #Preview("Interrupted") {
@@ -1112,4 +1185,5 @@ extension InsightCard {
         )
     )
     .environmentObject(OpenAIProviderSettings())
+    .environmentObject(InsightHistoryStore())
 }

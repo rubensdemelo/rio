@@ -140,6 +140,50 @@ final class VerticalSliceIntegrationTests: XCTestCase {
         XCTAssertEqual(contextFactory.contexts().count, 2)
     }
 
+    func testVerticalSliceKeepsOnlyInsightCardsInRecentHistory() async throws {
+        let capture = TestSessionAudioCapture()
+        let speech = TestSessionSpeechRecognizer()
+        let generator = TestSessionInsightGenerator(
+            updates: [
+                InsightUpdate(
+                    stableKey: "decision-1",
+                    operation: .add,
+                    category: .decision,
+                    text: "Use the safe rollout",
+                    explicitOwner: nil
+                )
+            ]
+        )
+        let history = InsightHistoryStore(repository: TestVerticalSliceHistoryRepository())
+        let store = InMemoryInsightStore()
+        let lifecycle = SessionLifecycleCoordinator(
+            localeIdentifier: "en-US",
+            capture: capture,
+            speechRecognizer: speech,
+            contextFactory: TestMeetingContextFactory(),
+            insightGenerator: generator,
+            insightState: store
+        )
+        let controller = LiveSessionController(
+            lifecycle: lifecycle,
+            insightStore: store,
+            insightHistory: history
+        )
+
+        await controller.performPrimaryAction()
+        let speechStream = await speech.lastStream()
+        speechStream?.yield(makeSegment(sequence: 1, text: "synthetic meeting input"))
+
+        await waitUntil {
+            history.entries.map(\.text) == ["Use the safe rollout"]
+        }
+        await controller.performPrimaryAction()
+
+        XCTAssertEqual(history.entries.count, 1)
+        XCTAssertEqual(history.entries[0].text, "Use the safe rollout")
+        XCTAssertEqual(history.entries[0].card.explicitOwner, nil)
+    }
+
     private func waitUntil(
         _ condition: @escaping @MainActor () -> Bool
     ) async {
@@ -161,4 +205,9 @@ final class VerticalSliceIntegrationTests: XCTestCase {
             endOffset: .seconds(1)
         )
     }
+}
+
+private final class TestVerticalSliceHistoryRepository: InsightHistoryPersisting {
+    func load() throws -> [SavedInsight] { [] }
+    func save(_ entries: [SavedInsight]) throws {}
 }

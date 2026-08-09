@@ -14,6 +14,7 @@ Goal: prove the complete meeting-understanding loop with the smallest possible a
 - Let the user add their own OpenAI API key in Provider settings and check the stored Keychain credential before listening.
 - Generate JSON-Schema-constrained insight updates through OpenAI's Responses API.
 - Render simple insight cards without displaying transcript text.
+- Save only generated insight cards locally and prune them after two days.
 - Clear all audio, temporary text, model-session state, and insights when the session ends.
 - Add deterministic fixtures and unit tests for context limits and insight update behavior.
 
@@ -25,8 +26,8 @@ Verified on macOS 26.5.2:
 
 - 68 unit tests pass in both Debug and Release configurations.
 - Debug and Release builds pass with warnings treated as errors and Swift 6 complete strict-concurrency checking enabled.
-- Static privacy scans find no production logging or persistence APIs.
-- The built application launches and exits cleanly without creating meeting-content files; its inspected container contains only window-frame preferences.
+- Static privacy scans find no production logging or persistence APIs other than the bounded two-day insight history.
+- The built application launches and exits cleanly without creating audio or transcript files; its inspected container contains only app preferences and the bounded local insight-history file after cards are generated.
 
 Not yet verified:
 
@@ -78,17 +79,16 @@ Goal: ship a technical preview that behaves predictably for a full meeting.
 - Ensure cancellation and cleanup work from every state.
 - Run one-hour capture and insight-generation soak tests.
 - Verify bounded audio queues, text context, model context, and card count.
-- Confirm that no meeting content is written to logs, caches, crash annotations, or persistent storage.
+- Confirm that no audio or transcript is written to logs, caches, crash annotations, or persistent storage, and that insight history expires after two days.
 - Test missing and rejected OpenAI API keys, unavailable network/service responses, and bounded transcription backpressure.
 - Add accessibility, keyboard control, and basic VoiceOver coverage.
 - Sign, notarize, and package the macOS app.
 
-Exit criterion: a one-hour meeting completes without unbounded memory growth, silent capture loss, persistent meeting data, or manual recovery from ordinary interruptions.
+Exit criterion: a one-hour meeting completes without unbounded memory growth, silent capture loss, persistent audio or transcript data, or manual recovery from ordinary interruptions.
 
 ## Deferred until after the MVP
 
-- Saving or exporting insights.
-- Meeting history.
+- Insight export or history older than two days.
 - Alternative cloud or third-party model providers.
 - Audio or transcript storage.
 - Speaker identification and diarization.

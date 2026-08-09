@@ -15,15 +15,19 @@ final class LiveSessionController: SessionShellControlling {
 
     let lifecycle: SessionLifecycleCoordinator
     let insightStore: InMemoryInsightStore
+    private let insightHistory: InsightHistoryStore?
 
     private var monitoringTask: Task<Void, Never>?
+    private var insightHistorySessionID: UUID?
 
     init(
         lifecycle: SessionLifecycleCoordinator,
-        insightStore: InMemoryInsightStore
+        insightStore: InMemoryInsightStore,
+        insightHistory: InsightHistoryStore? = nil
     ) {
         self.lifecycle = lifecycle
         self.insightStore = insightStore
+        self.insightHistory = insightHistory
         observeInsightStore()
         status = lifecycle.status
         readiness = lifecycle.readiness
@@ -65,16 +69,21 @@ final class LiveSessionController: SessionShellControlling {
 
         switch lifecycle.status {
         case .listening, .processing:
+            persistCurrentInsights()
             await lifecycle.stop()
             stopMonitoring()
+            insightHistorySessionID = nil
         case .paused:
+            persistCurrentInsights()
             await lifecycle.stop()
             stopMonitoring()
+            insightHistorySessionID = nil
         case .stopped, .interrupted, .unavailable:
             failure = nil
             unavailableReason = nil
             do {
                 try await lifecycle.start()
+                insightHistorySessionID = UUID()
                 startMonitoring()
             } catch let startFailure {
                 apply(startFailure)
@@ -150,6 +159,16 @@ final class LiveSessionController: SessionShellControlling {
                 self?.observeInsightStore()
             }
         }
+        persist(cards: cards)
+    }
+
+    private func persistCurrentInsights() {
+        persist(cards: insightStore.cards)
+    }
+
+    private func persist(cards: [InsightCard]) {
+        guard let insightHistory, let insightHistorySessionID else { return }
+        insightHistory.record(cards: cards, sessionID: insightHistorySessionID)
     }
 
     private func apply(_ startFailure: PipelineFailure) {
@@ -168,7 +187,9 @@ final class LiveSessionController: SessionShellControlling {
 enum RioCompositionRoot {
     static let defaultLocaleIdentifier = "en-US"
 
-    static func makeLiveController() -> LiveSessionController {
+    static func makeLiveController(
+        insightHistory: InsightHistoryStore? = nil
+    ) -> LiveSessionController {
         let localeIdentifier = defaultLocaleIdentifier
         let capture = ScreenCaptureKitSystemAudioCapture()
         let speechRecognizer = OpenAITranscriptionAdapter()
@@ -197,7 +218,8 @@ enum RioCompositionRoot {
         )
         return LiveSessionController(
             lifecycle: lifecycle,
-            insightStore: insightStore
+            insightStore: insightStore,
+            insightHistory: insightHistory
         )
     }
 }

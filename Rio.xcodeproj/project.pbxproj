@@ -42,6 +42,9 @@
 		A10000010000000000000026 /* ScreenCaptureKit.framework in Test Frameworks */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001C /* ScreenCaptureKit.framework */; };
 		A10000010000000000000027 /* OpenAIKeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001D /* OpenAIKeychainStore.swift */; };
 		A10000010000000000000028 /* OpenAIKeychainStore.swift in Tests */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001D /* OpenAIKeychainStore.swift */; };
+		A10000010000000000000029 /* InsightHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001E /* InsightHistoryStore.swift */; };
+		A1000001000000000000002A /* InsightHistoryStore.swift in Tests */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001E /* InsightHistoryStore.swift */; };
+		A1000001000000000000002B /* InsightHistoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001F /* InsightHistoryStoreTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -72,6 +75,8 @@
 		A2000001000000000000001B /* SystemAudioCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemAudioCapture.swift; sourceTree = "<group>"; };
 		A2000001000000000000001C /* ScreenCaptureKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ScreenCaptureKit.framework; path = System/Library/Frameworks/ScreenCaptureKit.framework; sourceTree = SDKROOT; };
 		A2000001000000000000001D /* OpenAIKeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIKeychainStore.swift; sourceTree = "<group>"; };
+		A2000001000000000000001E /* InsightHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightHistoryStore.swift; sourceTree = "<group>"; };
+		A2000001000000000000001F /* InsightHistoryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightHistoryStoreTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -118,6 +123,7 @@
 				A20000010000000000000009 /* DeterministicDoubles.swift */,
 				A2000001000000000000000B /* OpenAIInsightAdapter.swift */,
 				A2000001000000000000001D /* OpenAIKeychainStore.swift */,
+				A2000001000000000000001E /* InsightHistoryStore.swift */,
 				A2000001000000000000000E /* ApplicationShell.swift */,
 				A20000010000000000000010 /* MicrophoneCapture.swift */,
 				A20000010000000000000013 /* OpenAITranscriptionAdapter.swift */,
@@ -140,6 +146,7 @@
 				A20000010000000000000015 /* OpenAITranscriptionAdapterTests.swift */,
 				A20000010000000000000017 /* SessionLifecycleTests.swift */,
 				A20000010000000000000019 /* VerticalSliceIntegrationTests.swift */,
+				A2000001000000000000001F /* InsightHistoryStoreTests.swift */,
 			);
 			path = RioTests;
 			sourceTree = "<group>";
@@ -255,6 +262,7 @@
 				A10000010000000000000004 /* CoreContracts.swift in Sources */,
 				A1000001000000000000000A /* OpenAIInsightAdapter.swift in Sources */,
 				A10000010000000000000027 /* OpenAIKeychainStore.swift in Sources */,
+				A10000010000000000000029 /* InsightHistoryStore.swift in Sources */,
 				A1000001000000000000000F /* ApplicationShell.swift in Sources */,
 				A10000010000000000000012 /* MicrophoneCapture.swift in Sources */,
 				A10000010000000000000017 /* OpenAITranscriptionAdapter.swift in Sources */,
@@ -275,6 +283,7 @@
 				A10000010000000000000009 /* DeterministicDoubles.swift in Tests */,
 				A1000001000000000000000B /* OpenAIInsightAdapter.swift in Tests */,
 				A10000010000000000000028 /* OpenAIKeychainStore.swift in Tests */,
+				A1000001000000000000002A /* InsightHistoryStore.swift in Tests */,
 				A1000001000000000000000E /* OpenAIInsightAdapterTests.swift in Sources */,
 				A10000010000000000000010 /* ApplicationShell.swift in Tests */,
 				A10000010000000000000011 /* ApplicationShellTests.swift in Sources */,
@@ -286,6 +295,7 @@
 				A1000001000000000000001E /* SessionLifecycleTests.swift in Sources */,
 				A10000010000000000000020 /* CompositionRoot.swift in Tests */,
 				A10000010000000000000021 /* VerticalSliceIntegrationTests.swift in Sources */,
+				A1000001000000000000002B /* InsightHistoryStoreTests.swift in Sources */,
 				A10000010000000000000025 /* SystemAudioCapture.swift in Tests */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

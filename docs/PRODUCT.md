@@ -21,7 +21,7 @@ menu-bar menu provides the same start/stop listening action as the main window,
 plus Open Rio and Quit Rio actions. Closing the main window does not quit Rio;
 the menu-bar item remains the way to reopen or quit the app.
 
-While listening, Rio shows a compact live microphone input level so the user can tell that capture is active without exposing a transcript. The main window has one primary action: start listening or stop listening and clear the session. A concise cue explains that processing is temporary and not retained by Rio.
+While listening, Rio shows a compact live microphone input level so the user can tell that capture is active without exposing a transcript. The main window has one primary action: start listening or stop listening and clear the active session. A Recent control opens the locally saved insight cards from the last two days. A concise cue explains that audio and temporary text are not retained by Rio.
 
 When the user starts listening:
 
@@ -68,16 +68,18 @@ Transcription is a cloud stage: Rio sends bounded in-memory WAV chunks to OpenAI
 - Bounded temporary meeting text is transmitted to OpenAI only to create current insight updates.
 - Old text is continuously discarded.
 - All temporary meeting text is discarded when listening stops.
-- Current insight cards are session-only and disappear when the session ends unless a later product decision adds explicit insight export.
+- Current insight cards disappear from the active session when it ends, but Rio stores the generated cards locally for up to two days so they remain available through Recent.
+- The two-day local history contains only card category, state, text, and save time; it does not contain audio, temporary transcript text, or action-owner metadata.
+- Entries older than two days are removed automatically, and the user can clear the local history at any time.
 - The user-provided OpenAI API key is retained separately in the macOS Keychain as configuration, not meeting data.
-- No audio, transcript text, insight text, or secrets may appear in logs.
+- No audio, transcript text, insight text outside the two-day local history, or secrets may appear in logs.
 
 ## Explicit exclusions
 
 - Visible live transcription or transcript editing.
 - Note-taking and document editing.
 - Audio recording, playback, or persistent audio storage.
-- Transcript export, automatic meeting history, or searchable archives.
+- Transcript export, searchable archives, or insight history older than two days.
 - Meeting bots or joining calls on the user's behalf.
 - Speaker identification, diarization, or guessed speaker ownership.
 - Apple Intelligence or another on-device language-model dependency.
@@ -97,4 +99,4 @@ The MVP is successful when:
 6. Stopping listening promptly releases capture resources and clears temporary audio and text.
 7. A one-hour meeting completes without deadlock, unrecovered capture failure, or unbounded memory growth.
 8. The app clearly reports a missing or rejected OpenAI API key, denied permission, transcription failure, and interrupted capture states.
-9. No meeting content is persisted or logged unintentionally.
+9. Only generated insight cards are persisted locally, automatically expire after two days, and never include audio or transcript text.

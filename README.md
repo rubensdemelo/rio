@@ -6,7 +6,7 @@ The insight stream is the product. Rio is not a transcription app, note-taking a
 
 ## Status
 
-Rio uses bounded in-memory OpenAI transcription, bounded context, OpenAI insight generation, in-memory cards, session cleanup, and a SwiftUI composition root. Automated checks cover the pipeline; direct hardware acceptance remains open.
+Rio uses bounded in-memory OpenAI transcription and context, OpenAI insight generation, a two-day local insight history, session cleanup, and a SwiftUI composition root. Automated checks cover the pipeline; direct hardware acceptance remains open.
 
 ## MVP experience
 
@@ -68,6 +68,7 @@ Meeting data is ephemeral in the MVP:
 - Only finalized transcription results enter the rolling insight context.
 - Old audio and text are continuously discarded.
 - Stopping a session clears remaining audio, temporary text, model-session state, and insight cards.
+- Generated insight cards are saved locally for up to two days, then removed automatically; audio and temporary text are never saved.
 - Meeting content and API keys must never appear in logs, analytics, crash annotations, or test fixtures.
 
 ## MVP exclusions

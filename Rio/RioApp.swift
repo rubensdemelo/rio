@@ -5,18 +5,22 @@ import SwiftUI
 struct RioApp: App {
     @StateObject private var sessionController: LiveSessionController
     @StateObject private var providerSettings: OpenAIProviderSettings
+    @StateObject private var insightHistory: InsightHistoryStore
 
     init() {
+        let insightHistory = InsightHistoryStore()
         _sessionController = StateObject(
-            wrappedValue: RioCompositionRoot.makeLiveController()
+            wrappedValue: RioCompositionRoot.makeLiveController(insightHistory: insightHistory)
         )
         _providerSettings = StateObject(wrappedValue: OpenAIProviderSettings())
+        _insightHistory = StateObject(wrappedValue: insightHistory)
     }
 
     var body: some Scene {
         Window("Rio", id: "main") {
             RioView(controller: sessionController)
                 .environmentObject(providerSettings)
+                .environmentObject(insightHistory)
         }
         .defaultSize(width: 560, height: 620)
 
