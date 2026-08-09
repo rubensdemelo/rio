@@ -701,6 +701,8 @@ private struct OpenAIProviderSetupView: View {
                     .foregroundStyle(.secondary)
             }
 
+            Divider()
+
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Open AI")
