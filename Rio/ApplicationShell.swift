@@ -671,32 +671,91 @@ private struct OpenAIProviderSetupCard: View {
 private struct OpenAIProviderSetupView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var providerSettings: OpenAIProviderSettings
+    @State private var isShowingKeyDetails = false
 
     let didChangeConfiguration: () -> Void
 
     var body: some View {
+        Group {
+            if isShowingKeyDetails {
+                OpenAIAPIKeyDetailsView(
+                    didChangeConfiguration: didChangeConfiguration,
+                    closeDetails: { isShowingKeyDetails = false }
+                )
+            } else {
+                keyOverview
+            }
+        }
+        .padding(24)
+        .frame(width: 440)
+    }
+
+    private var keyOverview: some View {
         VStack(alignment: .leading, spacing: 24) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Bring your own key")
+                Text("API Keys")
+                    .font(.title2.weight(.bold))
+                Text("Stored only in your login Keychain. They are never shown again.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("OpenAI API key")
+                        .font(.body.weight(.medium))
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(providerSettings.isConfigured ? Color.green : Color.secondary)
+                            .frame(width: 10, height: 10)
+                        Text(providerSettings.isConfigured ? "Configured" : "Not configured")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer(minLength: 16)
+
+                Button(providerSettings.isConfigured ? "Details…" : "Add key") {
+                    isShowingKeyDetails = true
+                }
+                .buttonStyle(.bordered)
+            }
+            .padding(18)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color(nsColor: .controlBackgroundColor))
+            )
+
+            HStack {
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+    }
+}
+
+private struct OpenAIAPIKeyDetailsView: View {
+    @EnvironmentObject private var providerSettings: OpenAIProviderSettings
+
+    let didChangeConfiguration: () -> Void
+    let closeDetails: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 24) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("OpenAI API key")
                     .font(.title2.weight(.bold))
                 Text("Stored only in your login Keychain. It is never shown again.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
 
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Provider")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .textCase(.uppercase)
-                Text("OpenAI")
-                    .font(.body.weight(.medium))
-            }
-
             VStack(alignment: .leading, spacing: 8) {
-                Text("OpenAI API key")
+                Text("API key")
                     .font(.headline)
-                SecureField("Paste your API key", text: $providerSettings.apiKey)
+                SecureField("Paste a new API key", text: $providerSettings.apiKey)
                     .textFieldStyle(.roundedBorder)
             }
 
@@ -711,24 +770,23 @@ private struct OpenAIProviderSetupView: View {
                     Button("Remove key", role: .destructive) {
                         providerSettings.remove()
                         didChangeConfiguration()
+                        closeDetails()
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
                 }
                 Spacer()
-                Button("Cancel") { dismiss() }
+                Button("Back", action: closeDetails)
                 Button("Save key") {
                     if providerSettings.save() {
                         didChangeConfiguration()
-                        dismiss()
+                        closeDetails()
                     }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(providerSettings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
-        .padding(24)
-        .frame(width: 440)
     }
 }
 
