@@ -844,12 +844,6 @@ private struct InsightCardView: View {
                 .font(.body)
                 .foregroundStyle(card.state == .resolved ? .secondary : .primary)
                 .fixedSize(horizontal: false, vertical: true)
-
-            if let owner = card.explicitOwner, !owner.isEmpty {
-                Text("Owner: \(owner)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
         }
         .padding(16)
         .background(
@@ -1095,13 +1089,9 @@ private extension InsightCardState {
     }
 }
 
-private extension InsightCard {
+extension InsightCard {
     var accessibilityDescription: String {
-        var components = [category.displayName, state.displayName, text]
-        if let explicitOwner, !explicitOwner.isEmpty {
-            components.append("Owner: \(explicitOwner)")
-        }
-        return components.joined(separator: ", ")
+        [category.displayName, state.displayName, text].joined(separator: ", ")
     }
 }
 

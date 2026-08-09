@@ -65,6 +65,19 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(controller.status, .listening)
     }
 
+    func testInsightAccessibilityDoesNotExposeAnOwner() {
+        let card = InsightCard(
+            stableKey: "synthetic-owner",
+            category: .action,
+            text: "Synthetic action",
+            explicitOwner: "Alex",
+            state: .new
+        )
+
+        XCTAssertFalse(card.accessibilityDescription.contains("Owner:"))
+        XCTAssertFalse(card.accessibilityDescription.contains("Alex"))
+    }
+
     func testUnavailableOutcomeNeverClaimsToBeListening() async {
         let reason = UnavailableReason.appleIntelligenceDisabled
         let controller = FakeSessionController(startOutcome: .unavailable(reason))

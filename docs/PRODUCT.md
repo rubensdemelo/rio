@@ -49,7 +49,7 @@ The MVP surfaces:
 
 Each card contains a concise statement, its category, and a simple state such as new, updated, or resolved. Evidence text and transcript navigation are not required for the MVP.
 
-Rio must not guess an action-item owner. It may include an owner only when the temporary meeting text explicitly names one; otherwise the owner remains unspecified.
+Rio must not guess an action-item owner. Owner attribution is validated only when the temporary meeting text explicitly names one, but it is not displayed on the compact MVP insight cards.
 
 ## Apple Intelligence
 
