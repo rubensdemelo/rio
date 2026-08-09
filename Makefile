@@ -25,4 +25,4 @@ final: clean
 		SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
 		build; \
 	fi
-	@open .build/Iteration/Build/Products/Debug/Rio.app
+	@.build/Iteration/Build/Products/Debug/Rio.app/Contents/MacOS/Rio >/dev/null 2>&1 &
