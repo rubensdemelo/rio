@@ -563,10 +563,10 @@ struct VoiceFeedbackPresentation: Equatable {
 
     private static func speechDetail(for count: Int) -> String {
         guard count > 0 else {
-            return "Speech recognition is active. Temporary speech input stays on this Mac."
+            return "Speech recognition is active. Collecting finalized message chunks for insights."
         }
-        let noun = count == 1 ? "segment" : "segments"
-        return "Speech recognition is active. \(count) finalized \(noun) are informing insights."
+        let noun = count == 1 ? "chunk" : "chunks"
+        return "Speech recognition is active. \(count) message \(noun) collected for insights."
     }
 
     var tint: Color {

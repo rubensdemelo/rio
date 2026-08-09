@@ -244,7 +244,7 @@ final class ApplicationShellTests: XCTestCase {
 
         XCTAssertEqual(presentation.condition, .live)
         XCTAssertEqual(presentation.title, "Meeting audio live")
-        XCTAssertTrue(presentation.detail.contains("3 finalized segments"))
+        XCTAssertTrue(presentation.detail.contains("3 message chunks collected"))
         XCTAssertFalse(presentation.detail.contains("transcript"))
     }
 
