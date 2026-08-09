@@ -296,10 +296,11 @@ struct RioView<Controller: SessionShellControlling>: View {
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(presentation.title)
-                        .font(.headline)
+                        .font(.body.weight(.semibold))
                     Text(presentation.detail)
-                        .font(.subheadline)
+                        .font(.callout)
                         .foregroundStyle(.secondary)
+                        .lineSpacing(1)
                 }
 
                 Spacer()
@@ -600,23 +601,24 @@ private struct PrerequisiteChecklistView: View {
     let report: SessionReadiness
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             Text("Before listening")
-                .font(.headline)
+                .font(.title3.weight(.semibold))
 
             ForEach(report.checks) { check in
                 let presentation = PrerequisiteCheckPresentation(check: check)
-                HStack(alignment: .top, spacing: 10) {
+                HStack(alignment: .top, spacing: 12) {
                     Image(systemName: presentation.symbolName)
                         .foregroundStyle(presentation.tint)
                         .frame(width: 18)
 
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 4) {
                         Text(presentation.title)
-                            .font(.subheadline.weight(.semibold))
+                            .font(.body.weight(.medium))
                         Text(presentation.detail)
-                            .font(.caption)
+                            .font(.callout)
                             .foregroundStyle(.secondary)
+                            .lineSpacing(1)
                             .fixedSize(horizontal: false, vertical: true)
 
                         if check.kind == .meetingAudio,
@@ -648,10 +650,11 @@ private struct OpenAIProviderSetupCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Connect OpenAI", systemImage: "key.fill")
-                .font(.headline)
+                .font(.title3.weight(.semibold))
             Text("Bring your own OpenAI API key to transcribe meeting audio and generate insights. The key stays in your Mac’s Keychain.")
-                .font(.subheadline)
+                .font(.callout)
                 .foregroundStyle(.secondary)
+                .lineSpacing(1)
                 .fixedSize(horizontal: false, vertical: true)
             Button("Add OpenAI API key", action: openSetup)
                 .buttonStyle(.borderedProminent)
