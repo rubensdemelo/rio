@@ -11,6 +11,14 @@ private final class SendableSampleBuffer: @unchecked Sendable {
     }
 }
 
+private final class SendableScreenStream: @unchecked Sendable {
+    let value: SCStream
+
+    init(_ value: SCStream) {
+        self.value = value
+    }
+}
+
 /// Decodes the linear PCM layouts ScreenCaptureKit can deliver without
 /// assuming that 32-bit samples are floating point.
 enum SystemAudioSampleDecoder {
@@ -65,8 +73,12 @@ actor ScreenCaptureKitSystemAudioCapture: NSObject, SessionAudioCapture {
     private var screenStream: SCStream?
     private var isStarting = false
     private var isRunning = false
+    private var isRecovering = false
     private var cancellationRequested = false
     private var sequenceNumber: UInt64 = 0
+    private var recoveryAttempts = 0
+
+    private let maximumRecoveryAttempts = 2
 
     init(
         queueCapacity: Int = 32,
@@ -96,6 +108,7 @@ actor ScreenCaptureKitSystemAudioCapture: NSObject, SessionAudioCapture {
         guard !isStarting else { throw .stage(.audioCapture, .invalidState) }
         isStarting = true
         cancellationRequested = false
+        recoveryAttempts = 0
         defer { isStarting = false }
 
         // This is the only point at which Rio requests Screen Recording access.
@@ -105,29 +118,7 @@ actor ScreenCaptureKitSystemAudioCapture: NSObject, SessionAudioCapture {
         guard !Task.isCancelled, !cancellationRequested else { throw .cancelled }
 
         do {
-            let content = try await SCShareableContent.current
-            guard let display = content.displays.first(where: { $0.displayID == CGMainDisplayID() })
-                ?? content.displays.first else {
-                throw PipelineFailure.unavailable(.systemAudioUnavailable)
-            }
-
-            let rioApplications = content.applications.filter {
-                $0.processID == getpid()
-            }
-            let filter = SCContentFilter(
-                display: display,
-                excludingApplications: rioApplications,
-                exceptingWindows: []
-            )
-            let configuration = SCStreamConfiguration()
-            configuration.capturesAudio = true
-            configuration.excludesCurrentProcessAudio = true
-            configuration.sampleRate = 48_000
-            configuration.channelCount = 2
-            configuration.queueDepth = 3
-
-            let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
-            try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: outputQueue)
+            let stream = try await makeScreenStream()
 
             let queue = BoundedAudioQueue(capacity: queueCapacity)
             let audioStream = queue.makeStream(
@@ -169,6 +160,73 @@ actor ScreenCaptureKitSystemAudioCapture: NSObject, SessionAudioCapture {
         inputLevelMonitor.reset()
         if let stream {
             try? await stream.stopCapture()
+        }
+    }
+
+    private func makeScreenStream() async throws(PipelineFailure) -> SCStream {
+        do {
+            let content = try await SCShareableContent.current
+            guard let display = content.displays.first(where: { $0.displayID == CGMainDisplayID() })
+                ?? content.displays.first else {
+                throw PipelineFailure.unavailable(.systemAudioUnavailable)
+            }
+
+            let rioApplications = content.applications.filter { $0.processID == getpid() }
+            let filter = SCContentFilter(
+                display: display,
+                excludingApplications: rioApplications,
+                exceptingWindows: []
+            )
+            let configuration = SCStreamConfiguration()
+            configuration.capturesAudio = true
+            configuration.excludesCurrentProcessAudio = true
+            configuration.sampleRate = 48_000
+            configuration.channelCount = 2
+            configuration.queueDepth = 3
+
+            let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
+            try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: outputQueue)
+            return stream
+        } catch let failure as PipelineFailure {
+            throw failure
+        } catch {
+            throw .stage(.audioCapture, .failed)
+        }
+    }
+
+    private func recover(from stoppedStream: SCStream) async {
+        guard screenStream === stoppedStream,
+              isRunning,
+              !isRecovering else {
+            return
+        }
+        guard recoveryAttempts < maximumRecoveryAttempts else {
+            await finish(throwing: .stage(.audioCapture, .interrupted))
+            return
+        }
+
+        isRecovering = true
+        isRunning = false
+        recoveryAttempts += 1
+        defer { isRecovering = false }
+
+        do {
+            try await Task.sleep(for: .seconds(1))
+            guard !Task.isCancelled,
+                  !cancellationRequested,
+                  screenStream === stoppedStream else {
+                return
+            }
+            let replacement = try await makeScreenStream()
+            screenStream = replacement
+            try await replacement.startCapture()
+            guard !Task.isCancelled, !cancellationRequested else {
+                await finish(throwing: .cancelled)
+                return
+            }
+            isRunning = true
+        } catch {
+            await finish(throwing: .stage(.audioCapture, .interrupted))
         }
     }
 
@@ -251,9 +309,11 @@ extension ScreenCaptureKitSystemAudioCapture: SCStreamOutput, SCStreamDelegate {
     }
 
     nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
-        // ScreenCaptureKit ended an active capture. Preserve it as an
-        // interruption so the session can distinguish it from a permission or
-        // setup problem and offer a meaningful retry.
-        Task { await finish(throwing: .stage(.audioCapture, .interrupted)) }
+        // Recreate transiently interrupted streams without ending the active
+        // in-memory meeting session. Exhaustion is surfaced as interruption.
+        let stoppedStream = SendableScreenStream(stream)
+        Task { [weak self, stoppedStream] in
+            await self?.recover(from: stoppedStream.value)
+        }
     }
 }
