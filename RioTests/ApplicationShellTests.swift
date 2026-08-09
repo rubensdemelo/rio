@@ -133,6 +133,17 @@ final class ApplicationShellTests: XCTestCase {
         )
     }
 
+    func testGenericUnavailableFailureDoesNotClaimSetupIsRequired() {
+        let presentation = EmptyStatePresentation(
+            status: .unavailable,
+            statusDetail: "Rio could not start listening.",
+            hasUnavailablePrerequisite: false
+        )
+
+        XCTAssertEqual(presentation.title, "Couldn’t restart listening")
+        XCTAssertEqual(presentation.detail, "Try Start Listening again.")
+    }
+
     func testPrerequisitePresentationExplainsLanguageAndOrganizationBlockers() {
         let presentation = PrerequisiteCheckPresentation(
             check: PrerequisiteCheck(

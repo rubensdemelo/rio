@@ -332,6 +332,10 @@ struct RioView<Controller: SessionShellControlling>: View {
         return false
     }
 
+    private var hasUnavailablePrerequisite: Bool {
+        controller.unavailableReason != nil || controller.readiness?.isReady == false
+    }
+
     @ViewBuilder
     private var content: some View {
         if controller.cards.isEmpty {
@@ -347,7 +351,8 @@ struct RioView<Controller: SessionShellControlling>: View {
                                     status: controller.status,
                                     unavailableReason: controller.unavailableReason,
                                     failure: controller.failure
-                                ).detail
+                                ).detail,
+                                hasUnavailablePrerequisite: hasUnavailablePrerequisite
                             )
                         )
                     }
@@ -939,7 +944,11 @@ struct EmptyStatePresentation: Equatable {
     let detail: String
     let symbolName: String
 
-    init(status: SessionStatus, statusDetail: String) {
+    init(
+        status: SessionStatus,
+        statusDetail: String,
+        hasUnavailablePrerequisite: Bool = true
+    ) {
         switch status {
         case .stopped:
             title = "Ready to listen"
@@ -966,8 +975,13 @@ struct EmptyStatePresentation: Equatable {
             detail = "Start listening to try again."
             symbolName = "exclamationmark.circle"
         case .unavailable:
-            title = "Rio needs setup"
-            detail = "Resolve the unavailable prerequisite above, then try again."
+            if hasUnavailablePrerequisite {
+                title = "Rio needs setup"
+                detail = "Resolve the unavailable prerequisite above, then try again."
+            } else {
+                title = "Couldn’t restart listening"
+                detail = "Try Start Listening again."
+            }
             symbolName = "xmark.circle"
         }
     }
