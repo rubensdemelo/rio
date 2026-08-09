@@ -118,7 +118,7 @@ actor ScreenCaptureKitSystemAudioCapture: NSObject, SessionAudioCapture {
         guard !Task.isCancelled, !cancellationRequested else { throw .cancelled }
 
         do {
-            let stream = try await makeScreenStream()
+            let stream = try await startScreenStream()
 
             let queue = BoundedAudioQueue(capacity: queueCapacity)
             let audioStream = queue.makeStream(
@@ -130,7 +130,6 @@ actor ScreenCaptureKitSystemAudioCapture: NSObject, SessionAudioCapture {
             screenStream = stream
             sequenceNumber = 0
 
-            try await stream.startCapture()
             guard !Task.isCancelled, !cancellationRequested else {
                 await finish(throwing: .cancelled)
                 throw PipelineFailure.cancelled
@@ -194,6 +193,31 @@ actor ScreenCaptureKitSystemAudioCapture: NSObject, SessionAudioCapture {
         }
     }
 
+    private func startScreenStream() async throws(PipelineFailure) -> SCStream {
+        for attempt in 0..<2 {
+            let stream = try await makeScreenStream()
+            do {
+                try await stream.startCapture()
+                return stream
+            } catch is CancellationError {
+                try? await stream.stopCapture()
+                throw .cancelled
+            } catch {
+                try? await stream.stopCapture()
+                guard attempt == 0 else {
+                    throw .stage(.audioCapture, .failed)
+                }
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                } catch {
+                    throw .cancelled
+                }
+            }
+        }
+
+        throw .stage(.audioCapture, .failed)
+    }
+
     private func recover(from stoppedStream: SCStream) async {
         guard screenStream === stoppedStream,
               isRunning,
@@ -217,9 +241,8 @@ actor ScreenCaptureKitSystemAudioCapture: NSObject, SessionAudioCapture {
                   screenStream === stoppedStream else {
                 return
             }
-            let replacement = try await makeScreenStream()
+            let replacement = try await startScreenStream()
             screenStream = replacement
-            try await replacement.startCapture()
             guard !Task.isCancelled, !cancellationRequested else {
                 await finish(throwing: .cancelled)
                 return
