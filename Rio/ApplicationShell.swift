@@ -1022,6 +1022,12 @@ private extension PipelineFailure {
         switch self {
         case .unavailable(let reason):
             reason.guidanceMessage
+        case .stage(.audioCapture, .failed):
+            "System audio capture stopped unexpectedly. Rio will retry when it can; otherwise start listening again."
+        case .stage(.speechRecognition, .failed):
+            "Speech recognition stopped unexpectedly. Start listening again."
+        case .stage(.insightGeneration, .failed):
+            "Insight generation stopped unexpectedly. Start listening again."
         case .stage(_, .interrupted):
             "Listening was interrupted."
         case .stage(_, .overloaded):

@@ -399,6 +399,18 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertEqual(captureCancellations, 1)
     }
 
+    func testUnexpectedCaptureCancellationPropagatesAsInterrupted() async throws {
+        let capture = TestSessionAudioCapture()
+        let coordinator = makeCoordinator(capture: capture)
+
+        try await coordinator.start()
+        let audioStream = await capture.lastStream()
+        audioStream?.finish(throwing: PipelineFailure.cancelled)
+        await waitUntil { coordinator.status == .interrupted }
+
+        XCTAssertEqual(coordinator.failure, .stage(.audioCapture, .interrupted))
+    }
+
     func testRapidStartStopRestartUsesIsolatedSessionAndRejectsStaleResults() async throws {
         let speech = TestSessionSpeechRecognizer()
         let generator = TestSessionInsightGenerator(

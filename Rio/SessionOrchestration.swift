@@ -408,10 +408,15 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
                 }
                 continuation?.finish()
             } catch let failure as PipelineFailure {
-                continuation?.finish(throwing: failure)
-                await self?.fail(failure, sessionID: sessionID)
+                let reportedFailure: PipelineFailure = failure == .cancelled
+                    ? .stage(.audioCapture, .interrupted)
+                    : failure
+                continuation?.finish(throwing: reportedFailure)
+                await self?.fail(reportedFailure, sessionID: sessionID)
             } catch is CancellationError {
-                continuation?.finish(throwing: PipelineFailure.cancelled)
+                let reportedFailure = PipelineFailure.stage(.audioCapture, .interrupted)
+                continuation?.finish(throwing: reportedFailure)
+                await self?.fail(reportedFailure, sessionID: sessionID)
             } catch {
                 let failure = PipelineFailure.stage(.audioCapture, .failed)
                 continuation?.finish(throwing: failure)

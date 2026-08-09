@@ -113,6 +113,13 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(interrupted.title, "Interrupted")
         XCTAssertEqual(unavailable.title, "Unavailable")
         XCTAssertEqual(
+            SessionStatusPresentation(
+                status: .unavailable,
+                failure: .stage(.speechRecognition, .failed)
+            ).detail,
+            "Speech recognition stopped unexpectedly. Start listening again."
+        )
+        XCTAssertEqual(
             EmptyStatePresentation(status: .stopped, statusDetail: stopped.detail).title,
             "Ready to listen"
         )
