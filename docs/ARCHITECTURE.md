@@ -38,9 +38,9 @@ Stopping the session clears all remaining meeting data.
 
 ### Audio capture
 
-Use ScreenCaptureKit to capture meeting/system audio and microphone audio. Exclude Rio's own process audio where supported so app sounds do not re-enter the pipeline.
+Use ScreenCaptureKit to capture meeting/system audio. The current composition captures system audio only because the insight stream is grounded in the meeting, not Rio user's local speech. Exclude Rio's own process audio so app sounds do not re-enter the pipeline.
 
-The app requests the required microphone and screen-capture permissions and makes their status visible. The capture layer must handle device removal, output changes, sleep and wake, permission revocation, and the selected meeting source disappearing.
+The app requests Screen & System Audio Recording permission and makes its status visible. The capture layer must handle output changes, sleep and wake, permission revocation, and the selected meeting source disappearing.
 
 Development builds use a persistent Apple Development code-signing identity configured through the ignored `Config/Development.xcconfig`, so macOS privacy grants survive ordinary source rebuilds. The identity is managed by Xcode and is not stored in the repository. A changed bundle identifier, signing authority, or user privacy decision remains a legitimate reason for macOS to request access again.
 

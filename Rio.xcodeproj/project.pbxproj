@@ -40,6 +40,10 @@
 		A10000010000000000000020 /* CompositionRoot.swift in Tests */ = {isa = PBXBuildFile; fileRef = A20000010000000000000018 /* CompositionRoot.swift */; };
 		A10000010000000000000021 /* VerticalSliceIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000019 /* VerticalSliceIntegrationTests.swift */; };
 		A10000010000000000000022 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001A /* Assets.xcassets */; };
+		A10000010000000000000023 /* SystemAudioCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001B /* SystemAudioCapture.swift */; };
+		A10000010000000000000024 /* ScreenCaptureKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001C /* ScreenCaptureKit.framework */; };
+		A10000010000000000000025 /* SystemAudioCapture.swift in Tests */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001B /* SystemAudioCapture.swift */; };
+		A10000010000000000000026 /* ScreenCaptureKit.framework in Test Frameworks */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001C /* ScreenCaptureKit.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -69,6 +73,8 @@
 		A20000010000000000000018 /* CompositionRoot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompositionRoot.swift; sourceTree = "<group>"; };
 		A20000010000000000000019 /* VerticalSliceIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerticalSliceIntegrationTests.swift; sourceTree = "<group>"; };
 		A2000001000000000000001A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A2000001000000000000001B /* SystemAudioCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemAudioCapture.swift; sourceTree = "<group>"; };
+		A2000001000000000000001C /* ScreenCaptureKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ScreenCaptureKit.framework; path = System/Library/Frameworks/ScreenCaptureKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -76,6 +82,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000010000000000000024 /* ScreenCaptureKit.framework in Frameworks */,
 				A1000001000000000000000C /* FoundationModels.framework in Frameworks */,
 				A10000010000000000000013 /* AVFAudio.framework in Frameworks */,
 				A10000010000000000000018 /* Speech.framework in Frameworks */,
@@ -86,6 +93,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000010000000000000026 /* ScreenCaptureKit.framework in Test Frameworks */,
 				A1000001000000000000000D /* FoundationModels.framework in Test Frameworks */,
 				A10000010000000000000014 /* AVFAudio.framework in Test Frameworks */,
 				A10000010000000000000019 /* Speech.framework in Test Frameworks */,
@@ -104,6 +112,7 @@
 				A2000001000000000000000C /* FoundationModels.framework */,
 				A20000010000000000000011 /* AVFAudio.framework */,
 				A20000010000000000000014 /* Speech.framework */,
+				A2000001000000000000001C /* ScreenCaptureKit.framework */,
 			);
 			sourceTree = "<group>";
 		};
@@ -123,6 +132,7 @@
 				A20000010000000000000016 /* SessionOrchestration.swift */,
 				A20000010000000000000018 /* CompositionRoot.swift */,
 				A2000001000000000000001A /* Assets.xcassets */,
+				A2000001000000000000001B /* SystemAudioCapture.swift */,
 			);
 			path = Rio;
 			sourceTree = "<group>";
@@ -257,6 +267,7 @@
 				A10000010000000000000017 /* SpeechRecognitionAdapter.swift in Sources */,
 				A1000001000000000000001C /* SessionOrchestration.swift in Sources */,
 				A1000001000000000000001F /* CompositionRoot.swift in Sources */,
+				A10000010000000000000023 /* SystemAudioCapture.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -281,6 +292,7 @@
 				A1000001000000000000001E /* SessionLifecycleTests.swift in Sources */,
 				A10000010000000000000020 /* CompositionRoot.swift in Tests */,
 				A10000010000000000000021 /* VerticalSliceIntegrationTests.swift in Sources */,
+				A10000010000000000000025 /* SystemAudioCapture.swift in Tests */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

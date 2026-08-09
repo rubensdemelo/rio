@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Rio is a macOS meeting assistant for IBM employees. Bob helps with coding; Rio helps with meetings by listening to microphone and meeting audio and surfacing the technical information a support engineer is likely to need while a client troubleshooting call is still happening.
+Rio is a macOS meeting assistant for IBM employees. Bob helps with coding; Rio helps with meetings by listening to browser and system meeting audio and surfacing the technical information a support engineer is likely to need while a client troubleshooting call is still happening.
 
 The insight stream is the product. Audio capture and speech-to-text are temporary implementation stages, not user-facing features.
 
@@ -25,7 +25,7 @@ While listening, Rio shows a compact live microphone input level so the user can
 
 When the user starts listening:
 
-1. Rio captures system/meeting audio and microphone audio.
+1. Rio captures system/meeting audio, including browser-based calls.
 2. Apple's Speech framework converts the live audio into temporary finalized text.
 3. A bounded rolling text window is sent to Apple's on-device system language model.
 4. The model returns structured incident-signal and insight updates.
@@ -55,7 +55,7 @@ Rio must not guess an action-item owner. It may include an owner only when the t
 
 The MVP uses the Foundation Models framework to access the on-device system language model that powers Apple Intelligence. Insight responses use guided generation to produce typed Swift values rather than free-form text that the app must parse.
 
-When the app loads and before listening begins, Rio checks microphone access, speech recognition and its required assets, Apple Intelligence, and locale support. It shows all unavailable prerequisites together with the macOS action needed to resolve each one, so the user can fix the setup before trying again. Foundation Models reports Apple Intelligence as unavailable but does not disclose whether language alignment or organization policy is the cause. Rio therefore asks the user to review the compatibility message in System Settings rather than inferring a Mac or Siri language from the system locale; it does not change a system setting itself. The confirmation action opens the Apple Intelligence & Siri pane directly, falling back to System Settings if macOS declines that route. Apple Intelligence may be unavailable because the Mac is ineligible, the feature is disabled, required assets are not ready, the Mac and Siri languages do not match, organization policy restricts access, or the locale is unsupported. The MVP explains the condition and does not offer a cloud-model fallback.
+When the app loads and before listening begins, Rio checks Screen & System Audio Recording access, speech recognition and its required assets, Apple Intelligence, and locale support. It shows all unavailable prerequisites together with the macOS action needed to resolve each one, including a button that opens the Screen & System Audio Recording privacy pane directly. Foundation Models reports Apple Intelligence as unavailable but does not disclose whether language alignment or organization policy is the cause. Rio therefore asks the user to review the compatibility message in System Settings rather than inferring a Mac or Siri language from the system locale; it does not change a system setting itself. The confirmation action opens the Apple Intelligence & Siri pane directly, falling back to System Settings if macOS declines that route. Apple Intelligence may be unavailable because the Mac is ineligible, the feature is disabled, required assets are not ready, the Mac and Siri languages do not match, organization policy restricts access, or the locale is unsupported. The MVP explains the condition and does not offer a cloud-model fallback.
 
 When Foundation Models reports that Apple Intelligence is disabled, Rio shows a one-time, non-blocking notice explaining that enabling it downloads on-device models and requires several gigabytes of free disk space. Unsupported devices and models that are still downloading use their existing unavailable-state guidance instead.
 

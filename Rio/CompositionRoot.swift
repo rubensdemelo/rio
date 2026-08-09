@@ -170,7 +170,7 @@ enum RioCompositionRoot {
 
     static func makeLiveController() -> LiveSessionController {
         let localeIdentifier = defaultLocaleIdentifier
-        let capture = AVAudioEngineMicrophoneCapture()
+        let capture = ScreenCaptureKitSystemAudioCapture()
         let speechRecognizer = SpeechAnalyzerTranscriberAdapter(
             localeIdentifier: localeIdentifier
         )

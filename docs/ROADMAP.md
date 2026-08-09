@@ -51,6 +51,8 @@ Goal: make the vertical slice work with actual remote meetings.
 
 Exit criterion: Rio can listen to both sides of a meeting in common conferencing apps and maintain an accurate listening state.
 
+Implementation status: system audio capture is wired through ScreenCaptureKit with Rio's own process audio excluded. It still requires live permission, browser-meeting, interruption, and long-running validation before this milestone can be marked complete.
+
 ## Milestone 3: Useful live insights
 
 Goal: make the insight stream consistently useful instead of merely functional.

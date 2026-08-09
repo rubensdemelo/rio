@@ -6,9 +6,22 @@ enum SystemSettingsOpener {
     static let appleIntelligenceAndSiriURL = URL(
         string: "x-apple.systempreferences:com.apple.Siri-Settings.extension"
     )!
+    static let screenAndSystemAudioRecordingURL = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+    )!
 
     static func openAppleIntelligenceAndSiri() {
         guard !NSWorkspace.shared.open(appleIntelligenceAndSiriURL) else {
+            return
+        }
+
+        NSWorkspace.shared.open(
+            URL(fileURLWithPath: "/System/Applications/System Settings.app")
+        )
+    }
+
+    static func openScreenAndSystemAudioRecording() {
+        guard !NSWorkspace.shared.open(screenAndSystemAudioRecordingURL) else {
             return
         }
 
@@ -517,32 +530,32 @@ struct VoiceFeedbackPresentation: Equatable {
 
         if isAudioFailure {
             condition = .connectionError
-            title = "Microphone connection error"
+            title = "Meeting audio connection error"
             detail = "Audio input stopped. Stop and start listening again."
             symbolName = "mic.slash.fill"
             tintName = .unavailable
         } else if status == .paused {
             condition = .paused
             title = "Listening paused"
-            detail = "Microphone input and speech recognition are paused."
+            detail = "Meeting audio and speech recognition are paused."
             symbolName = "pause.circle.fill"
             tintName = .warning
         } else if feedback.audioInput.isMuted {
             condition = .muted
-            title = "Microphone may be muted"
-            detail = "No input detected. Check the microphone mute button or input source."
+            title = "Meeting audio is silent"
+            detail = "No meeting audio detected. Check the browser call and its output device."
             symbolName = "mic.slash"
             tintName = .warning
         } else if feedback.audioInput.hasReceivedAudio {
             condition = .live
-            title = "Audio input live"
+            title = "Meeting audio live"
             detail = Self.speechDetail(for: feedback.finalizedSpeechSegmentCount)
             symbolName = "mic.fill"
             tintName = .active
         } else {
             condition = .waiting
             title = "Listening for speech"
-            detail = "Microphone input is ready. Speak to generate live insights."
+            detail = "Meeting audio is ready. Rio will generate insights from the call."
             symbolName = "mic"
             tintName = .active
         }
@@ -707,6 +720,14 @@ private struct PrerequisiteChecklistView: View {
                         if check.kind == .appleIntelligence,
                            check.reason == .appleIntelligenceDisabled {
                             AppleIntelligenceLanguageAction()
+                        }
+
+                        if check.kind == .meetingAudio,
+                           check.reason == .systemAudioPermissionDenied {
+                            Button("Open Screen & System Audio Recording") {
+                                SystemSettingsOpener.openScreenAndSystemAudioRecording()
+                            }
+                            .controlSize(.small)
                         }
                     }
                 }
@@ -954,8 +975,8 @@ struct EmptyStatePresentation: Equatable {
 private extension PrerequisiteKind {
     var title: String {
         switch self {
-        case .microphone:
-            "Microphone access"
+        case .meetingAudio:
+            "Meeting audio access"
         case .speechRecognition:
             "Speech recognition"
         case .appleIntelligence:
@@ -973,6 +994,10 @@ private extension UnavailableReason {
             "Open System Settings → Privacy & Security → Microphone and enable Rio."
         case .audioInputUnavailable:
             "Connect or enable a microphone, then try again."
+        case .systemAudioPermissionDenied:
+            "Click Start Listening to let macOS request access. Then enable Rio here if it appears."
+        case .systemAudioUnavailable:
+            "Rio could not find a display to capture meeting audio from. Connect or enable a display, then try again."
         case .speechRecognitionUnavailable:
             "This Mac cannot use on-device speech recognition. Use a supported macOS 26+ Mac."
         case .speechLocaleUnsupported(let identifier):

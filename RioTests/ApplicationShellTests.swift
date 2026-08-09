@@ -170,6 +170,13 @@ final class ApplicationShellTests: XCTestCase {
         )
     }
 
+    func testMeetingAudioActionTargetsTheScreenRecordingPrivacyPane() {
+        XCTAssertEqual(
+            SystemSettingsOpener.screenAndSystemAudioRecordingURL.absoluteString,
+            "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+        )
+    }
+
     func testAppleIntelligenceDisabledNoticeIsShownOnceAndOnlyForDisabledState() {
         let suiteName = "RioTests.Notice.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -229,7 +236,7 @@ final class ApplicationShellTests: XCTestCase {
         )
 
         XCTAssertEqual(presentation.condition, .live)
-        XCTAssertEqual(presentation.title, "Audio input live")
+        XCTAssertEqual(presentation.title, "Meeting audio live")
         XCTAssertTrue(presentation.detail.contains("3 finalized segments"))
         XCTAssertFalse(presentation.detail.contains("transcript"))
     }

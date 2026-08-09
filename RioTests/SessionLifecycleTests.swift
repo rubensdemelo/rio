@@ -189,12 +189,25 @@ final class SessionLifecycleTests: XCTestCase {
 
         XCTAssertEqual(
             report.checks.map(\.kind),
-            [.microphone, .speechRecognition, .appleIntelligence]
+            [.meetingAudio, .speechRecognition, .appleIntelligence]
         )
         XCTAssertEqual(report.checks[0].reason, .microphonePermissionDenied)
         XCTAssertEqual(report.checks[1].reason, .speechRecognitionUnavailable)
         XCTAssertEqual(report.checks[2].reason, .appleIntelligenceDisabled)
         XCTAssertFalse(report.isReady)
+    }
+
+    func testSystemAudioPermissionRemainsStartableSoMacOSCanPrompt() {
+        let readiness = SessionReadiness(
+            checks: [
+                PrerequisiteCheck(
+                    kind: .meetingAudio,
+                    reason: .systemAudioPermissionDenied
+                )
+            ]
+        )
+
+        XCTAssertNil(readiness.blockingReason)
     }
 
     func testCaptureStartFailureCleansPartialStartup() async throws {

@@ -99,18 +99,11 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     }
 
     func checkReadiness() async -> SessionReadiness {
-        let permission = await capture.permission()
         let captureAvailability = await capture.checkAvailability()
 
-        let microphoneReason: UnavailableReason? = {
-            if permission == .denied {
-                return .microphonePermissionDenied
-            }
+        let meetingAudioReason: UnavailableReason? = {
             if case .unavailable(let reason) = captureAvailability {
                 return reason
-            }
-            if permission == .undetermined {
-                return .microphonePermissionUndetermined
             }
             return nil
         }()
@@ -152,7 +145,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
 
         let report = SessionReadiness(
             checks: [
-                PrerequisiteCheck(kind: .microphone, reason: microphoneReason),
+                PrerequisiteCheck(kind: .meetingAudio, reason: meetingAudioReason),
                 PrerequisiteCheck(kind: .speechRecognition, reason: speechReason),
                 PrerequisiteCheck(kind: .appleIntelligence, reason: modelReason),
             ]

@@ -127,6 +127,8 @@ enum UnavailableReason: Sendable, Equatable {
     case microphonePermissionUndetermined
     case microphonePermissionDenied
     case audioInputUnavailable
+    case systemAudioPermissionDenied
+    case systemAudioUnavailable
     case speechRecognitionUnavailable
     case speechLocaleUnsupported(identifier: String)
     case speechAssetsNotReady
@@ -137,7 +139,7 @@ enum UnavailableReason: Sendable, Equatable {
 }
 
 enum PrerequisiteKind: Sendable, Equatable, CaseIterable {
-    case microphone
+    case meetingAudio
     case speechRecognition
     case appleIntelligence
 }
@@ -160,7 +162,10 @@ struct SessionReadiness: Sendable, Equatable {
     var blockingReason: UnavailableReason? {
         checks
             .compactMap(\.reason)
-            .first { $0 != .microphonePermissionUndetermined }
+            .first {
+                $0 != .microphonePermissionUndetermined
+                    && $0 != .systemAudioPermissionDenied
+            }
     }
 }
 
