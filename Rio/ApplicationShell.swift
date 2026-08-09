@@ -6,6 +6,7 @@ import SwiftUI
 final class RioPanelRouter: ObservableObject {
     enum Panel: String, Identifiable {
         case recentInsights
+        case provider
 
         var id: String { rawValue }
     }
@@ -14,6 +15,10 @@ final class RioPanelRouter: ObservableObject {
 
     func showRecentInsights() {
         presentedPanel = .recentInsights
+    }
+
+    func showProvider() {
+        presentedPanel = .provider
     }
 
 }
@@ -233,7 +238,6 @@ struct RioView<Controller: SessionShellControlling>: View {
     @EnvironmentObject private var providerSettings: OpenAIProviderSettings
     @EnvironmentObject private var insightHistory: InsightHistoryStore
     @EnvironmentObject private var panelRouter: RioPanelRouter
-    @Environment(\.openWindow) private var openWindow
 
     init(controller: Controller) {
         self.controller = controller
@@ -266,6 +270,10 @@ struct RioView<Controller: SessionShellControlling>: View {
         }
         .sheet(item: $panelRouter.presentedPanel) { panel in
             switch panel {
+            case .provider:
+                OpenAIProviderSetupView {
+                    Task { await controller.checkReadiness() }
+                }
             case .recentInsights:
                 RecentInsightsView()
             }
@@ -334,9 +342,9 @@ struct RioView<Controller: SessionShellControlling>: View {
     @ViewBuilder
     private var content: some View {
         if !providerSettings.isConfigured {
-                        OpenAIProviderSetupCard {
-                            openProviderWindow()
-                        }
+            OpenAIProviderSetupCard {
+                panelRouter.showProvider()
+            }
         }
 
         if let readiness = controller.readiness, !readiness.isReady {
@@ -359,11 +367,6 @@ struct RioView<Controller: SessionShellControlling>: View {
             primaryAction
             Spacer()
         }
-    }
-
-    private func openProviderWindow() {
-        openWindow(id: "api-keys")
-        NSApp.activate(ignoringOtherApps: true)
     }
 
     private var primaryAction: some View {
@@ -666,7 +669,8 @@ private struct OpenAIProviderSetupCard: View {
     }
 }
 
-struct OpenAIProviderSetupView: View {
+private struct OpenAIProviderSetupView: View {
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var providerSettings: OpenAIProviderSettings
     @State private var isShowingKeyDetails = false
 
@@ -728,6 +732,11 @@ struct OpenAIProviderSetupView: View {
                 }
             }
 
+            HStack {
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
         }
     }
 }

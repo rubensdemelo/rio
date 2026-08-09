@@ -2,11 +2,14 @@ import XCTest
 
 @MainActor
 final class ApplicationShellTests: XCTestCase {
-    func testPanelRouterSelectsRecentInsights() {
+    func testPanelRouterSelectsRecentInsightsAndProvider() {
         let router = RioPanelRouter()
 
         router.showRecentInsights()
         XCTAssertEqual(router.presentedPanel, .recentInsights)
+
+        router.showProvider()
+        XCTAssertEqual(router.presentedPanel, .provider)
     }
 
     func testLiveCompositionUsesFixedEnglishUSLocale() {

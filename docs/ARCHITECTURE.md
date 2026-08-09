@@ -127,13 +127,11 @@ The user-provided API key is held by the macOS Keychain rather than the meeting-
 
 ### Application shell
 
-The app exposes a native `MenuBarExtra` alongside the main listening `Window`
-and a separate API Keys `Window`. The menu-bar scene shares the main
-actor-isolated `LiveSessionController`, so its
+The app exposes a native `MenuBarExtra` alongside the single main `Window`. The
+menu-bar scene shares the main actor-isolated `LiveSessionController`, so its
 start/stop action cannot create a second listening session or a separate insight
-store. The app-scoped panel router opens Recent Insights in the main window;
-Provider & API Key opens the native API Keys window, whose traffic-light close
-control dismisses it without a custom Done action. Open Rio targets the main
+store. The app-scoped panel router lets Recent Insights and Provider & API Key
+open the same sheets from the main window. Open Rio targets the main
 window scene by ID; Quit Rio terminates the application. The menu-bar scene has
 no meeting-data state of its own.
 

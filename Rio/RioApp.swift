@@ -28,15 +28,6 @@ struct RioApp: App {
         .defaultSize(width: 560, height: 96)
         .windowResizability(.contentSize)
 
-        Window("API Keys", id: "api-keys") {
-            OpenAIProviderSetupView {
-                Task { await sessionController.checkReadiness() }
-            }
-            .environmentObject(providerSettings)
-        }
-        .defaultSize(width: 440, height: 280)
-        .windowResizability(.contentSize)
-
         MenuBarExtra("Rio", image: "RioMenuBarIcon") {
             RioMenuBarMenu(controller: sessionController)
                 .environmentObject(panelRouter)
@@ -78,8 +69,9 @@ private struct RioMenuBarMenu<Controller: SessionShellControlling>: View {
         }
 
         Button("Provider & API Key") {
-            openWindow(id: "api-keys")
+            openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
+            panelRouter.showProvider()
         }
 
         Divider()
@@ -88,6 +80,8 @@ private struct RioMenuBarMenu<Controller: SessionShellControlling>: View {
             openWindow(id: "main")
             NSApp.activate(ignoringOtherApps: true)
         }
+
+        Divider()
 
         Button("Quit Rio") {
             NSApplication.shared.terminate(nil)
