@@ -102,7 +102,7 @@ On first launch, use **Provider** to add your own OpenAI API key. Rio stores it 
 make final
 ```
 
-`make final` clears the generated `.build/` directory before building, and `make clean` can be used to clear it without rebuilding.
+`make final` stops any running Rio instance, runs the complete test suite, reuses the generated `.build/` directory, builds the Debug application with warnings treated as errors, and launches the app executable directly. Use `make clean` when a fully clean rebuild is needed.
 
 ```sh
 xcodebuild \
