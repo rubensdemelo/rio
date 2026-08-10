@@ -178,6 +178,11 @@ enum PipelineFailureReason: Sendable, Equatable {
     case interrupted
     case overloaded
     case invalidState
+    case network
+    case rateLimited
+    case serviceUnavailable
+    case requestRejected(statusCode: Int)
+    case responseInvalid
 }
 
 enum PipelineFailure: Error, Sendable, Equatable {

@@ -1146,6 +1146,16 @@ private extension PipelineFailure {
             "System audio capture stopped unexpectedly. Rio will retry when it can; otherwise start listening again."
         case .stage(.speechRecognition, .failed):
             "Meeting transcription stopped unexpectedly. Start listening again."
+        case .stage(.insightGeneration, .network):
+            "Rio could not reach OpenAI for insights. Check your internet connection, then start listening again."
+        case .stage(.insightGeneration, .rateLimited):
+            "OpenAI rate-limited or quota-limited the insight request. Check your OpenAI project usage, then try again."
+        case .stage(.insightGeneration, .serviceUnavailable):
+            "OpenAI is temporarily unavailable for insights. Try starting listening again in a moment."
+        case .stage(.insightGeneration, .requestRejected(let statusCode)):
+            "OpenAI rejected the insight request (HTTP \(statusCode)). Check your project access and try again."
+        case .stage(.insightGeneration, .responseInvalid):
+            "OpenAI returned an unexpected insight response. Start listening again; if it repeats, check the configured model."
         case .stage(.insightGeneration, .failed):
             "Insight generation stopped unexpectedly. Start listening again."
         case .stage(_, .interrupted):

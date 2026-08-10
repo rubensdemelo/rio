@@ -156,6 +156,20 @@ final class ApplicationShellTests: XCTestCase {
         )
     }
 
+    func testInsightFailuresExplainActionableRecovery() {
+        let rateLimited = SessionStatusPresentation(
+            status: .unavailable,
+            failure: .stage(.insightGeneration, .rateLimited)
+        )
+        XCTAssertTrue(rateLimited.detail.contains("rate-limited"))
+
+        let rejected = SessionStatusPresentation(
+            status: .unavailable,
+            failure: .stage(.insightGeneration, .requestRejected(statusCode: 400))
+        )
+        XCTAssertTrue(rejected.detail.contains("HTTP 400"))
+    }
+
     func testGenericUnavailableFailureDoesNotClaimSetupIsRequired() {
         let presentation = EmptyStatePresentation(
             status: .unavailable,

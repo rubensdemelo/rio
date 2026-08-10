@@ -106,6 +106,44 @@ final class OpenAIInsightAdapterTests: XCTestCase {
         }
     }
 
+    func testRateLimitBecomesAnActionableInsightFailure() async throws {
+        let client = RecordingOpenAIHTTPClient(statusCode: 429, responseData: Data())
+        let generator = OpenAIInsightGenerator(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client
+        )
+
+        try await generator.startSession(localeIdentifier: "en-US")
+        do {
+            _ = try await generator.generate(from: makeBatch(text: "Synthetic meeting text"))
+            XCTFail("A rate-limited response must fail")
+        } catch let failure {
+            XCTAssertEqual(
+                failure,
+                .stage(.insightGeneration, .rateLimited)
+            )
+        }
+    }
+
+    func testRejectedRequestPreservesTheHTTPStatusCategory() async throws {
+        let client = RecordingOpenAIHTTPClient(statusCode: 400, responseData: Data())
+        let generator = OpenAIInsightGenerator(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client
+        )
+
+        try await generator.startSession(localeIdentifier: "en-US")
+        do {
+            _ = try await generator.generate(from: makeBatch(text: "Synthetic meeting text"))
+            XCTFail("A rejected response must fail")
+        } catch let failure {
+            XCTAssertEqual(
+                failure,
+                .stage(.insightGeneration, .requestRejected(statusCode: 400))
+            )
+        }
+    }
+
     func testMalformedGeneratedOutputIsRejected() async throws {
         let client = RecordingOpenAIHTTPClient(
             responseData: makeAPIResponseData(
@@ -128,7 +166,7 @@ final class OpenAIInsightAdapterTests: XCTestCase {
             _ = try await generator.generate(from: makeBatch(text: "Synthetic meeting text"))
             XCTFail("Malformed output must be rejected")
         } catch let failure {
-            XCTAssertEqual(failure, .stage(.insightGeneration, .invalidState))
+            XCTAssertEqual(failure, .stage(.insightGeneration, .responseInvalid))
         }
     }
 

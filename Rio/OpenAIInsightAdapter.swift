@@ -50,6 +50,7 @@ struct URLSessionOpenAIHTTPClient: OpenAIHTTPClient {
 
 enum OpenAIHTTPError: Error, Sendable {
     case invalidResponse
+    case malformedResponse
     case unexpectedStatus(Int)
     case missingOutputText
 }
@@ -199,7 +200,7 @@ private enum OpenAIInsightTranslator {
         from batch: MeetingContextBatch
     ) throws(PipelineFailure) -> [InsightUpdate] {
         guard response.updates.count <= maximumUpdateCount else {
-            throw .stage(.insightGeneration, .invalidState)
+            throw .stage(.insightGeneration, .responseInvalid)
         }
 
         let meetingText = batch.segments.map(\.text).joined(separator: "\n")
@@ -216,7 +217,7 @@ private enum OpenAIInsightTranslator {
                   stableKeys.insert(stableKey).inserted,
                   !text.isEmpty,
                   text.count <= maximumTextLength else {
-                throw .stage(.insightGeneration, .invalidState)
+                throw .stage(.insightGeneration, .responseInvalid)
             }
 
             let category = generated.category.domainValue
@@ -415,14 +416,24 @@ actor OpenAIInsightGenerator: SessionInsightGenerator {
                 guard (200...299).contains(response.statusCode) else {
                     throw OpenAIHTTPError.unexpectedStatus(response.statusCode)
                 }
-                let result = try JSONDecoder().decode(OpenAIResponsesResponse.self, from: data)
+                let result: OpenAIResponsesResponse
+                do {
+                    result = try JSONDecoder().decode(OpenAIResponsesResponse.self, from: data)
+                } catch {
+                    throw OpenAIHTTPError.malformedResponse
+                }
                 guard let outputText = result.outputText else {
                     throw OpenAIHTTPError.missingOutputText
                 }
-                let generated = try JSONDecoder().decode(
-                    OpenAIInsightResponse.self,
-                    from: Data(outputText.utf8)
-                )
+                let generated: OpenAIInsightResponse
+                do {
+                    generated = try JSONDecoder().decode(
+                        OpenAIInsightResponse.self,
+                        from: Data(outputText.utf8)
+                    )
+                } catch {
+                    throw OpenAIHTTPError.malformedResponse
+                }
                 try Task.checkCancellation()
                 let updates = try OpenAIInsightTranslator.translate(generated, from: batch)
                 await generationGate.release()
@@ -470,10 +481,37 @@ actor OpenAIInsightGenerator: SessionInsightGenerator {
         if error is CancellationError {
             return .cancelled
         }
+        if let error = error as? URLError {
+            return error.code == .cancelled
+                ? .cancelled
+                : .stage(.insightGeneration, .network)
+        }
         if let error = error as? OpenAIHTTPError,
-           case .unexpectedStatus(let status) = error,
-           status == 401 || status == 403 {
-            return .unavailable(.openAIAPIKeyInvalid)
+           case .invalidResponse = error {
+            return .stage(.insightGeneration, .network)
+        }
+        if let error = error as? OpenAIHTTPError,
+           case .unexpectedStatus(let status) = error {
+            switch status {
+            case 401, 403:
+                return .unavailable(.openAIAPIKeyInvalid)
+            case 429:
+                return .stage(.insightGeneration, .rateLimited)
+            case 500...599:
+                return .stage(.insightGeneration, .serviceUnavailable)
+            case 400...499:
+                return .stage(.insightGeneration, .requestRejected(statusCode: status))
+            default:
+                return .stage(.insightGeneration, .failed)
+            }
+        }
+        if let error = error as? OpenAIHTTPError,
+           case .malformedResponse = error {
+            return .stage(.insightGeneration, .responseInvalid)
+        }
+        if let error = error as? OpenAIHTTPError,
+           case .missingOutputText = error {
+            return .stage(.insightGeneration, .responseInvalid)
         }
         if let failure = error as? PipelineFailure {
             return failure
