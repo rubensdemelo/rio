@@ -16,6 +16,7 @@ final class LiveSessionController: SessionShellControlling {
     let lifecycle: SessionLifecycleCoordinator
     let insightStore: InMemoryInsightStore
     private let insightHistory: InsightHistoryStore?
+    private let listeningCadenceSettings: ListeningCadenceSettings?
 
     private var monitoringTask: Task<Void, Never>?
     private var insightHistorySessionID: UUID?
@@ -23,11 +24,13 @@ final class LiveSessionController: SessionShellControlling {
     init(
         lifecycle: SessionLifecycleCoordinator,
         insightStore: InMemoryInsightStore,
-        insightHistory: InsightHistoryStore? = nil
+        insightHistory: InsightHistoryStore? = nil,
+        listeningCadenceSettings: ListeningCadenceSettings? = nil
     ) {
         self.lifecycle = lifecycle
         self.insightStore = insightStore
         self.insightHistory = insightHistory
+        self.listeningCadenceSettings = listeningCadenceSettings
         observeInsightStore()
         status = lifecycle.status
         readiness = lifecycle.readiness
@@ -82,6 +85,9 @@ final class LiveSessionController: SessionShellControlling {
             failure = nil
             unavailableReason = nil
             do {
+                await lifecycle.configure(
+                    cadence: listeningCadenceSettings?.selection ?? .fifteenSeconds
+                )
                 try await lifecycle.start()
                 insightHistorySessionID = UUID()
                 startMonitoring()
@@ -188,11 +194,15 @@ enum RioCompositionRoot {
     static let defaultLocaleIdentifier = "en-US"
 
     static func makeLiveController(
-        insightHistory: InsightHistoryStore? = nil
+        insightHistory: InsightHistoryStore? = nil,
+        listeningCadenceSettings: ListeningCadenceSettings? = nil
     ) -> LiveSessionController {
         let localeIdentifier = defaultLocaleIdentifier
         let capture = ScreenCaptureKitSystemAudioCapture()
-        let speechRecognizer = OpenAITranscriptionAdapter()
+        let speechRecognizer = OpenAITranscriptionAdapter(
+            batchDuration: listeningCadenceSettings?.selection.audioBatchDuration
+                ?? ListeningCadence.fifteenSeconds.audioBatchDuration
+        )
         let contextFactory = BoundedMeetingContextFactory(
             configuration: MeetingContextConfiguration(
                 maximumAge: .seconds(180),
@@ -219,7 +229,8 @@ enum RioCompositionRoot {
         return LiveSessionController(
             lifecycle: lifecycle,
             insightStore: insightStore,
-            insightHistory: insightHistory
+            insightHistory: insightHistory,
+            listeningCadenceSettings: listeningCadenceSettings
         )
     }
 }

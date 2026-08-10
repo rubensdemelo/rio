@@ -7,15 +7,21 @@ struct RioApp: App {
     @StateObject private var providerSettings: OpenAIProviderSettings
     @StateObject private var insightHistory: InsightHistoryStore
     @StateObject private var panelRouter: RioPanelRouter
+    @StateObject private var listeningCadenceSettings: ListeningCadenceSettings
 
     init() {
         let insightHistory = InsightHistoryStore()
+        let listeningCadenceSettings = ListeningCadenceSettings()
         _sessionController = StateObject(
-            wrappedValue: RioCompositionRoot.makeLiveController(insightHistory: insightHistory)
+            wrappedValue: RioCompositionRoot.makeLiveController(
+                insightHistory: insightHistory,
+                listeningCadenceSettings: listeningCadenceSettings
+            )
         )
         _providerSettings = StateObject(wrappedValue: OpenAIProviderSettings())
         _insightHistory = StateObject(wrappedValue: insightHistory)
         _panelRouter = StateObject(wrappedValue: RioPanelRouter())
+        _listeningCadenceSettings = StateObject(wrappedValue: listeningCadenceSettings)
     }
 
     var body: some Scene {
@@ -24,7 +30,9 @@ struct RioApp: App {
                 .environmentObject(providerSettings)
                 .environmentObject(insightHistory)
                 .environmentObject(panelRouter)
+                .environmentObject(listeningCadenceSettings)
         }
+        .defaultLaunchBehavior(.suppressed)
         .defaultSize(width: 560, height: 96)
         .windowResizability(.contentSize)
 
@@ -32,6 +40,7 @@ struct RioApp: App {
             RioMenuBarMenu(controller: sessionController)
                 .environmentObject(panelRouter)
                 .environmentObject(providerSettings)
+                .environmentObject(listeningCadenceSettings)
         }
         .menuBarExtraStyle(.menu)
     }

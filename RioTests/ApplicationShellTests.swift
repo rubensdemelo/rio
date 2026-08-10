@@ -16,6 +16,22 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(RioCompositionRoot.defaultLocaleIdentifier, "en-US")
     }
 
+    func testListeningCadencePersistsAndExplainsItsTradeoff() {
+        let suiteName = "RioTests.ListeningCadence.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = ListeningCadenceSettings(defaults: defaults)
+        XCTAssertEqual(settings.selection, .fifteenSeconds)
+        XCTAssertEqual(settings.selection.title, "15 seconds")
+
+        settings.selection = .fortyFiveSeconds
+
+        let reloadedSettings = ListeningCadenceSettings(defaults: defaults)
+        XCTAssertEqual(reloadedSettings.selection, .fortyFiveSeconds)
+        XCTAssertTrue(reloadedSettings.selection.detail.contains("Fewer requests"))
+    }
+
     func testPrimaryActionStartsAndStopsExactlyOnce() async {
         let card = InsightCard(
             stableKey: "synthetic-card",

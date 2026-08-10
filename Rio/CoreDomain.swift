@@ -1,4 +1,51 @@
+import Combine
 import Foundation
+
+enum ListeningCadence: Int, CaseIterable, Hashable, Identifiable, Sendable {
+    case fifteenSeconds = 15
+    case thirtySeconds = 30
+    case fortyFiveSeconds = 45
+
+    var id: Int { rawValue }
+
+    var title: String {
+        "\(rawValue) seconds"
+    }
+
+    var audioBatchDuration: Duration {
+        .seconds(Double(rawValue))
+    }
+
+    var detail: String {
+        switch self {
+        case .fifteenSeconds:
+            "Quicker updates with smaller audio batches. Rio uses more requests and less context per update."
+        case .thirtySeconds:
+            "A balanced pace with more context per update and fewer requests."
+        case .fortyFiveSeconds:
+            "Fewer requests and fuller context, but insights arrive later and cover larger time windows."
+        }
+    }
+}
+
+@MainActor
+final class ListeningCadenceSettings: ObservableObject {
+    private static let storageKey = "listeningCadenceSeconds"
+
+    @Published var selection: ListeningCadence {
+        didSet {
+            defaults.set(selection.rawValue, forKey: Self.storageKey)
+        }
+    }
+
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        let storedSeconds = defaults.integer(forKey: Self.storageKey)
+        selection = ListeningCadence(rawValue: storedSeconds) ?? .fifteenSeconds
+    }
+}
 
 struct SessionID: Hashable, Sendable, Equatable {
     let rawValue: UInt64

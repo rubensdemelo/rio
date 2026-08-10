@@ -9,6 +9,7 @@ protocol SessionAudioCapture: AudioCapture {
 protocol SessionSpeechRecognizer: TemporarySpeechRecognizer {
     func availability() async -> Availability
     func prepare() async throws(PipelineFailure)
+    func configure(batchDuration: Duration) async
 }
 
 protocol SessionInsightGenerator: InsightGenerator {
@@ -96,6 +97,11 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
             return .available
         }
         return .unavailable(reason)
+    }
+
+    func configure(cadence: ListeningCadence) async {
+        guard activeSessionID == nil else { return }
+        await speechRecognizer.configure(batchDuration: cadence.audioBatchDuration)
     }
 
     func checkReadiness() async -> SessionReadiness {

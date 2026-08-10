@@ -53,6 +53,46 @@ final class OpenAITranscriptionAdapterTests: XCTestCase {
         }
     }
 
+    func testBatchDurationCanBeConfiguredBeforeTheNextRequest() async throws {
+        let client = RecordingTranscriptionHTTPClient(text: "configured")
+        let adapter = OpenAITranscriptionAdapter(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client,
+            batchDuration: .seconds(1)
+        )
+        await adapter.configure(batchDuration: .seconds(2))
+
+        let stream = try await adapter.recognize(audio: AudioStream { continuation in
+            continuation.yield(
+                AudioChunk(
+                    sequenceNumber: 0,
+                    duration: .seconds(1),
+                    sampleRate: 16_000,
+                    channelCount: 1,
+                    samples: Array(repeating: 0.1, count: 16_000)
+                )
+            )
+            continuation.yield(
+                AudioChunk(
+                    sequenceNumber: 1,
+                    duration: .seconds(1),
+                    sampleRate: 16_000,
+                    channelCount: 1,
+                    samples: Array(repeating: 0.1, count: 16_000)
+                )
+            )
+            continuation.finish()
+        })
+
+        for try await _ in stream {}
+
+        let recordedRequest = await client.request()
+        let request = try XCTUnwrap(recordedRequest)
+        let body = try XCTUnwrap(request.httpBody)
+        XCTAssertNotNil(body.range(of: Data("RIFF".utf8)))
+        XCTAssertGreaterThan(body.count, 64_000)
+    }
+
     private func audioStream() -> AudioStream {
         AudioStream { continuation in
             continuation.yield(

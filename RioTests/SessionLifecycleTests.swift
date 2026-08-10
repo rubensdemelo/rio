@@ -3,6 +3,16 @@ import XCTest
 
 @MainActor
 final class SessionLifecycleTests: XCTestCase {
+    func testCadenceIsConfiguredBeforeAListeningSessionStarts() async throws {
+        let speech = TestSessionSpeechRecognizer()
+        let coordinator = makeCoordinator(speech: speech)
+
+        await coordinator.configure(cadence: .thirtySeconds)
+
+        let configuredBatchDuration = await speech.batchDuration()
+        XCTAssertEqual(configuredBatchDuration, .seconds(30))
+    }
+
     func testPermissionDeniedStopsBeforeStartingPipeline() async throws {
         let capture = TestSessionAudioCapture(
             permission: .denied,
@@ -697,6 +707,7 @@ actor TestSessionSpeechRecognizer: SessionSpeechRecognizer {
     private var currentStream: TestStream<FinalizedSpeechSegment>?
     private var stops = 0
     private var cancellations = 0
+    private var configuredBatchDuration: Duration?
 
     init(
         availability: Availability = .available,
@@ -714,6 +725,10 @@ actor TestSessionSpeechRecognizer: SessionSpeechRecognizer {
         if case .unavailable(let reason) = configuredAvailability {
             throw .unavailable(reason)
         }
+    }
+
+    func configure(batchDuration: Duration) async {
+        configuredBatchDuration = batchDuration
     }
 
     func recognize(audio: AudioStream) async throws(PipelineFailure) -> FinalizedSpeechStream {
@@ -740,6 +755,7 @@ actor TestSessionSpeechRecognizer: SessionSpeechRecognizer {
     func stopCount() -> Int { stops }
     func cancelCount() -> Int { cancellations }
     func lastStream() -> TestStream<FinalizedSpeechSegment>? { currentStream }
+    func batchDuration() -> Duration? { configuredBatchDuration }
 }
 
 final class TestMeetingContextFactory: MeetingContextFactory, @unchecked Sendable {

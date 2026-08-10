@@ -699,6 +699,7 @@ private struct OpenAIProviderSetupCard: View {
 private struct OpenAIProviderSetupView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var providerSettings: OpenAIProviderSettings
+    @EnvironmentObject private var listeningCadenceSettings: ListeningCadenceSettings
     @State private var isShowingKeyDetails = false
     @State private var isConfirmingDeletion = false
 
@@ -776,11 +777,42 @@ private struct OpenAIProviderSetupView: View {
                 }
             }
 
+            Divider()
+
+            listeningCadenceSection
+
             HStack {
                 Spacer()
                 Button("Done") { dismiss() }
                     .keyboardShortcut(.defaultAction)
             }
+        }
+    }
+
+    private var listeningCadenceSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Insight pace")
+                .font(.headline)
+            Text("Choose how much meeting audio Rio groups before asking OpenAI for an update. Longer choices use fewer requests and more context, but insights arrive later.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Picker("Audio batch", selection: $listeningCadenceSettings.selection) {
+                ForEach(ListeningCadence.allCases) { cadence in
+                    Text(cadence.title).tag(cadence)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Text(listeningCadenceSettings.selection.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("This takes effect the next time you start listening.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
     }
 }

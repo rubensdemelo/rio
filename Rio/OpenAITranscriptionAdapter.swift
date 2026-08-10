@@ -209,7 +209,7 @@ private actor OpenAITranscriptionQueue {
 actor OpenAITranscriptionAdapter: SessionSpeechRecognizer {
     private let configurationProvider: @Sendable () -> OpenAIAPIConfiguration?
     private let client: any OpenAIHTTPClient
-    private let batchDuration: Duration
+    private var batchDuration: Duration
     private var processingTask: Task<Void, Never>?
     private var queue: OpenAITranscriptionQueue?
 
@@ -219,10 +219,15 @@ actor OpenAITranscriptionAdapter: SessionSpeechRecognizer {
             OpenAIAPIConfiguration.stored()
         },
         client: any OpenAIHTTPClient = URLSessionOpenAIHTTPClient(),
-        batchDuration: Duration = .seconds(3)
+        batchDuration: Duration = .seconds(15)
     ) {
         self.configurationProvider = { configuration ?? configurationProvider() }
         self.client = client
+        self.batchDuration = batchDuration
+    }
+
+    func configure(batchDuration: Duration) async {
+        guard batchDuration > .zero, processingTask == nil, queue == nil else { return }
         self.batchDuration = batchDuration
     }
 

@@ -21,10 +21,20 @@ and insight cards appear below that action only when they are useful.
 Rio also remains available from the macOS menu bar while the app is running. The
 menu-bar menu provides the same start/stop listening action as the main window,
 along with Recent Insights, Provider & API Key, Open Rio, and Quit Rio actions.
+When Rio launches, it keeps the main window suppressed so a ready setup starts
+with only the menu-bar item visible. Open Rio remains available whenever the
+full interface or setup guidance is needed. Rio is a menu-bar utility rather
+than a foreground app, so it does not appear in the Dock or app switcher.
 Closing the main window does not quit Rio; the menu-bar item remains the way to
 reopen the app or access those controls.
 
 While listening, Rio shows a compact live microphone input level so the user can tell that capture is active without exposing a transcript. The main window has one primary action: start listening or stop listening and clear the active session. A Recent control opens the locally saved insight cards from the last two days. A concise cue explains that audio and temporary text are not retained by Rio.
+
+Provider settings also include an Insight pace choice of 15, 30, or 45 seconds.
+This controls how much live meeting audio Rio groups before sending it for
+temporary transcription. Shorter choices produce quicker updates with more
+requests; longer choices use fewer requests and more context but make insights
+arrive later. A changed choice applies to the next listening session.
 
 When the user starts listening:
 

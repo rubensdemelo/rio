@@ -60,6 +60,12 @@ Use OpenAI's `gpt-4o-transcribe` through `POST /v1/audio/transcriptions`. The ad
 
 The collector keeps accepting capture chunks while a single request is in flight. Its pending request queue is bounded to two batches; when the service cannot keep up, it drops the oldest pending audio rather than accumulating memory or blocking capture. This is intentional: Rio is a live insight stream, not a recording or transcript archive.
 
+The transcription batch duration is selected from the persisted `ListeningCadence`
+preference: 15, 30, or 45 seconds. The setting is applied before a new session
+starts and is not changed during an active session. Larger batches reduce request
+frequency and increase the amount of temporary in-memory audio held before a
+request, while delaying finalized text and insight generation.
+
 The API key is the preflight requirement. A rejected key is unavailable; transient network and service failures are explicit transcription failures. TTS is not part of the pipeline.
 
 The capture layer may expose bounded, content-free input telemetry: a normalized level, whether audio buffers have arrived, and whether sustained silence suggests a muted input. It must not expose audio samples or temporary speech text to the UI. Pausing cancels the active capture and speech tasks while retaining the in-memory session context; resuming creates fresh capture and speech tasks. Stopping still clears all session data.
@@ -132,8 +138,11 @@ menu-bar scene shares the main actor-isolated `LiveSessionController`, so its
 start/stop action cannot create a second listening session or a separate insight
 store. The app-scoped panel router lets Recent Insights and Provider & API Key
 open the same sheets from the main window. Open Rio targets the main
-window scene by ID; Quit Rio terminates the application. The menu-bar scene has
-no meeting-data state of its own.
+window scene by ID; Quit Rio terminates the application. The main window uses a
+suppressed default launch behavior, so a ready app starts as a menu-bar-only
+experience and the window is opened only through an explicit menu action. The
+application-agent configuration keeps Rio out of the Dock and app switcher.
+The menu-bar scene has no meeting-data state of its own.
 
 The main window uses its content size rather than a fixed idle canvas. Its
 single listening action is always first; status feedback, setup guidance, and
