@@ -57,6 +57,10 @@ final class LiveSessionController: SessionShellControlling {
         status == .paused ? "Resume Listening" : "Pause Listening"
     }
 
+    var isReadyToStartListening: Bool {
+        readiness?.isReady == true
+    }
+
     func checkReadiness() async {
         _ = await lifecycle.checkReadiness()
         await refreshSnapshot()
@@ -82,6 +86,12 @@ final class LiveSessionController: SessionShellControlling {
             stopMonitoring()
             insightHistorySessionID = nil
         case .stopped, .interrupted, .unavailable:
+            if !isReadyToStartListening {
+                await checkReadiness()
+            }
+            guard isReadyToStartListening else {
+                return
+            }
             failure = nil
             unavailableReason = nil
             do {

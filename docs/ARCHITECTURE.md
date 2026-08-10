@@ -88,7 +88,13 @@ The first implementation should trigger insight analysis on a small batch of new
 
 Use OpenAI's Responses API with `gpt-5-mini` by default. OpenAI is the default and only MVP provider. The user supplies their own API key in Provider settings; Rio stores it only in the macOS Keychain and never in the bundle, source tree, diagnostics, app preferences, or an environment variable. Transcription uses `gpt-4o-transcribe` by default.
 
-When the app window loads and before starting a session, inspect all session prerequisites and retain a combined readiness report for the UI. Preflight checks capture availability, transcription configuration, and a stored API key. A missing or rejected API key is an explicit unavailable state; transient network or service errors are explicit transient failures, not a permissions issue.
+When the application launches and before starting a session, inspect all session
+prerequisites and retain a combined readiness report for the UI. Preflight
+checks capture availability, transcription configuration, and a stored API key.
+The start action remains disabled until the readiness report confirms every
+prerequisite. A missing or rejected API key is an explicit unavailable state;
+transient network or service errors are explicit transient failures, not a
+permissions issue.
 
 Each request has stable developer-authored instructions and one untrusted meeting-text input. The request asks the API for strict JSON Schema output; meeting text never enters instructions. A conceptual result is:
 

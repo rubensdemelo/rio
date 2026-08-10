@@ -189,7 +189,7 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertFalse(report.isReady)
     }
 
-    func testSystemAudioPermissionRemainsStartableSoMacOSCanPrompt() {
+    func testSystemAudioPermissionDoesNotReportAsBlockingAvailability() {
         let readiness = SessionReadiness(
             checks: [
                 PrerequisiteCheck(
@@ -200,6 +200,7 @@ final class SessionLifecycleTests: XCTestCase {
         )
 
         XCTAssertNil(readiness.blockingReason)
+        XCTAssertFalse(readiness.isReady)
     }
 
     func testCaptureStartFailureCleansPartialStartup() async throws {

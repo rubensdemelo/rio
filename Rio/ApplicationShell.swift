@@ -56,6 +56,7 @@ protocol SessionShellControlling: ObservableObject {
     var failure: PipelineFailure? { get }
     var isPerformingPrimaryAction: Bool { get }
     var isPerformingPauseAction: Bool { get }
+    var isReadyToStartListening: Bool { get }
     var primaryActionTitle: String { get }
     var pauseActionTitle: String { get }
 
@@ -116,6 +117,10 @@ final class FakeSessionController: SessionShellControlling {
 
     var pauseActionTitle: String {
         status == .paused ? "Resume Listening" : "Pause Listening"
+    }
+
+    var isReadyToStartListening: Bool {
+        readiness?.isReady == true
     }
 
     func checkReadiness() async {
@@ -396,7 +401,10 @@ struct RioView<Controller: SessionShellControlling>: View {
     private var isPrimaryActionDisabled: Bool {
         controller.isPerformingPrimaryAction
             || controller.isPerformingPauseAction
-            || (isStartAction && !providerSettings.isConfigured)
+            || (isStartAction && (
+                !providerSettings.isConfigured
+                    || !controller.isReadyToStartListening
+            ))
     }
 
     private var isStartAction: Bool {
@@ -424,6 +432,14 @@ struct RioView<Controller: SessionShellControlling>: View {
     private var primaryActionHint: String {
         if isStartAction && !providerSettings.isConfigured {
             return "Add an OpenAI API key in Provider settings before starting listening."
+        }
+
+        if isStartAction && controller.readiness == nil {
+            return "Rio is checking whether listening can begin."
+        }
+
+        if isStartAction && !controller.isReadyToStartListening {
+            return "Complete the listening prerequisites above before starting."
         }
 
         switch controller.status {

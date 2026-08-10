@@ -28,6 +28,11 @@ than a foreground app, so it does not appear in the Dock or app switcher.
 Closing the main window does not quit Rio; the menu-bar item remains the way to
 reopen the app or access those controls.
 
+The start listening action remains disabled until Rio has confirmed that meeting
+audio access, transcription, and OpenAI configuration are ready. If setup is
+incomplete, the main window shows the prerequisite guidance and the menu-bar
+action stays unavailable until the checks pass.
+
 While listening, Rio shows a compact live microphone input level so the user can tell that capture is active without exposing a transcript. The main window has one primary action: start listening or stop listening and clear the active session. A Recent control opens the locally saved insight cards from the last two days. A concise cue explains that audio and temporary text are not retained by Rio.
 
 Provider settings also include an Insight pace choice of 15, 30, or 45 seconds.

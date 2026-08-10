@@ -12,16 +12,19 @@ struct RioApp: App {
     init() {
         let insightHistory = InsightHistoryStore()
         let listeningCadenceSettings = ListeningCadenceSettings()
-        _sessionController = StateObject(
-            wrappedValue: RioCompositionRoot.makeLiveController(
-                insightHistory: insightHistory,
-                listeningCadenceSettings: listeningCadenceSettings
-            )
+        let sessionController = RioCompositionRoot.makeLiveController(
+            insightHistory: insightHistory,
+            listeningCadenceSettings: listeningCadenceSettings
         )
+        _sessionController = StateObject(wrappedValue: sessionController)
         _providerSettings = StateObject(wrappedValue: OpenAIProviderSettings())
         _insightHistory = StateObject(wrappedValue: insightHistory)
         _panelRouter = StateObject(wrappedValue: RioPanelRouter())
         _listeningCadenceSettings = StateObject(wrappedValue: listeningCadenceSettings)
+
+        Task { @MainActor in
+            await sessionController.checkReadiness()
+        }
     }
 
     var body: some Scene {
@@ -70,7 +73,10 @@ private struct RioMenuBarMenu<Controller: SessionShellControlling>: View {
         .disabled(
             controller.isPerformingPrimaryAction
                 || controller.status == .checkingAvailability
-                || (isStartAction && !providerSettings.isConfigured)
+                || (isStartAction && (
+                    !providerSettings.isConfigured
+                        || !controller.isReadyToStartListening
+                ))
         )
 
         Divider()

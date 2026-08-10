@@ -32,6 +32,37 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertTrue(reloadedSettings.selection.detail.contains("Fewer requests"))
     }
 
+    func testStartListeningRequiresCompletedReadinessChecks() {
+        let controller = FakeSessionController()
+
+        XCTAssertFalse(controller.isReadyToStartListening)
+
+        controller.inject(
+            status: .stopped,
+            readiness: SessionReadiness(
+                checks: PrerequisiteKind.allCases.map {
+                    PrerequisiteCheck(kind: $0, reason: nil)
+                }
+            )
+        )
+
+        XCTAssertTrue(controller.isReadyToStartListening)
+
+        controller.inject(
+            status: .stopped,
+            readiness: SessionReadiness(
+                checks: [
+                    PrerequisiteCheck(
+                        kind: .meetingAudio,
+                        reason: .systemAudioPermissionDenied
+                    )
+                ]
+            )
+        )
+
+        XCTAssertFalse(controller.isReadyToStartListening)
+    }
+
     func testPrimaryActionStartsAndStopsExactlyOnce() async {
         let card = InsightCard(
             stableKey: "synthetic-card",
