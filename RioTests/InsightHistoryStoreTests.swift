@@ -27,6 +27,61 @@ final class InsightHistoryStoreTests: XCTestCase {
         XCTAssertEqual(repository.entries, history.entries)
     }
 
+    func testRecordingAnUnchangedCardDoesNotRefreshItsSavedAt() {
+        let repository = TestInsightHistoryRepository()
+        let history = InsightHistoryStore(repository: repository)
+        let sessionID = UUID()
+        let firstSavedAt = Date()
+        let laterSavedAt = firstSavedAt.addingTimeInterval(60)
+        let unchangedCard = card(text: "Unchanged decision", state: .new)
+
+        history.record(cards: [unchangedCard], sessionID: sessionID, now: firstSavedAt)
+        history.record(cards: [unchangedCard], sessionID: sessionID, now: laterSavedAt)
+
+        XCTAssertEqual(history.entries.count, 1)
+        XCTAssertEqual(history.entries[0].savedAt, firstSavedAt)
+    }
+
+    func testRecordingTheFullCardListOnlyRefreshesChangedCards() {
+        let repository = TestInsightHistoryRepository()
+        let history = InsightHistoryStore(repository: repository)
+        let sessionID = UUID()
+        let firstSavedAt = Date()
+        let laterSavedAt = firstSavedAt.addingTimeInterval(60)
+        let unchangedCard = card(
+            stableKey: "decision-1",
+            text: "Unchanged decision",
+            state: .new
+        )
+        let secondCard = card(
+            stableKey: "risk-1",
+            text: "Initial risk",
+            state: .new
+        )
+        let updatedSecondCard = card(
+            stableKey: "risk-1",
+            text: "Updated risk",
+            state: .updated
+        )
+
+        history.record(
+            cards: [unchangedCard, secondCard],
+            sessionID: sessionID,
+            now: firstSavedAt
+        )
+        history.record(
+            cards: [unchangedCard, updatedSecondCard],
+            sessionID: sessionID,
+            now: laterSavedAt
+        )
+
+        let entriesByStableKey = Dictionary(
+            uniqueKeysWithValues: history.entries.map { ($0.stableKey, $0) }
+        )
+        XCTAssertEqual(entriesByStableKey["decision-1"]?.savedAt, firstSavedAt)
+        XCTAssertEqual(entriesByStableKey["risk-1"]?.savedAt, laterSavedAt)
+    }
+
     func testPrunesEntriesOlderThanTwoDaysOnLoad() {
         let now = Date()
         let repository = TestInsightHistoryRepository(entries: [
@@ -59,9 +114,13 @@ final class InsightHistoryStoreTests: XCTestCase {
         XCTAssertTrue(repository.entries.isEmpty)
     }
 
-    private func card(text: String, state: InsightCardState) -> InsightCard {
+    private func card(
+        stableKey: String = "decision-1",
+        text: String,
+        state: InsightCardState
+    ) -> InsightCard {
         InsightCard(
-            stableKey: "decision-1",
+            stableKey: stableKey,
             category: .decision,
             text: text,
             explicitOwner: nil,

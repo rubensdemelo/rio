@@ -937,7 +937,7 @@ private struct RecentInsightsView: View {
                         ForEach(insightHistory.entries) { entry in
                             VStack(alignment: .leading, spacing: 6) {
                                 InsightCardView(card: entry.card)
-                                Text(entry.savedAt, format: .dateTime.month().day().hour().minute())
+                                Text(entry.savedAt, format: .dateTime.month().day().hour().minute().second())
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                     .padding(.leading, 4)

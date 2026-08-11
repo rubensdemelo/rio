@@ -146,8 +146,15 @@ final class InsightHistoryStore: ObservableObject {
             if let index = updatedEntries.firstIndex(where: {
                 $0.sessionID == sessionID && $0.stableKey == card.stableKey
             }) {
+                let existingEntry = updatedEntries[index]
+                guard existingEntry.category.domainValue != card.category
+                    || existingEntry.text != card.text
+                    || existingEntry.state.domainValue != card.state else {
+                    continue
+                }
+
                 updatedEntries[index] = SavedInsight(
-                    id: updatedEntries[index].id,
+                    id: existingEntry.id,
                     sessionID: sessionID,
                     card: card,
                     savedAt: now
