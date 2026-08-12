@@ -334,6 +334,32 @@ final class SessionLifecycleTests: XCTestCase {
         await coordinator.stop()
     }
 
+    func testTransientInvalidInsightResponseRestartsTheModelAndRetriesTheBatch() async throws {
+        let speech = TestSessionSpeechRecognizer()
+        let generator = TestSessionInsightGenerator(
+            updates: [makeUpdate(text: "recovered after an invalid response")],
+            generateFailure: .stage(.insightGeneration, .responseInvalid)
+        )
+        let state = TestSessionInsightState()
+        let coordinator = makeCoordinator(
+            speech: speech,
+            generator: generator,
+            state: state
+        )
+
+        try await coordinator.start()
+        let speechStream = await speech.lastStream()
+        speechStream?.yield(makeSegment(sequence: 1, text: "synthetic invalid response"))
+        await waitUntil { state.appliedContexts.count == 1 }
+
+        XCTAssertEqual(coordinator.status, SessionStatus.listening)
+        let modelStops = await generator.stopCount()
+        let modelStarts = await generator.startSessionCount()
+        XCTAssertEqual(modelStops, 1)
+        XCTAssertEqual(modelStarts, 2)
+        await coordinator.stop()
+    }
+
     func testStopWhileProcessingCancelsGenerationAndClearsState() async throws {
         let speech = TestSessionSpeechRecognizer()
         let generator = TestSessionInsightGenerator(

@@ -382,7 +382,8 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     ) async throws(PipelineFailure) -> [InsightUpdate] {
         do {
             return try await insightGenerator.generate(from: batch)
-        } catch let failure where failure == .stage(.insightGeneration, .failed) {
+        } catch let failure where failure == .stage(.insightGeneration, .failed)
+            || failure == .stage(.insightGeneration, .responseInvalid) {
             // A single API request may fail transiently. Rebuild the ephemeral
             // request state and retry the same bounded batch once.
             await insightGenerator.stop()

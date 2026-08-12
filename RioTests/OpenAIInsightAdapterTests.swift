@@ -188,6 +188,42 @@ final class OpenAIInsightAdapterTests: XCTestCase {
         }
     }
 
+    func testRefusalResponseCanBeRetried() async throws {
+        let client = RecordingOpenAIHTTPClient(
+            responseData: makeRefusalAPIResponseData()
+        )
+        let generator = OpenAIInsightGenerator(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client
+        )
+
+        try await generator.startSession(localeIdentifier: "en-US")
+        do {
+            _ = try await generator.generate(from: makeBatch(text: "Synthetic meeting text"))
+            XCTFail("A refusal response must be exposed as a retryable failure")
+        } catch let failure {
+            XCTAssertEqual(failure, .stage(.insightGeneration, .failed))
+        }
+    }
+
+    func testUnknownResponseStatusCanBeRetried() async throws {
+        let client = RecordingOpenAIHTTPClient(
+            responseData: makeAPIResponseData(status: "cancelled")
+        )
+        let generator = OpenAIInsightGenerator(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client
+        )
+
+        try await generator.startSession(localeIdentifier: "en-US")
+        do {
+            _ = try await generator.generate(from: makeBatch(text: "Synthetic meeting text"))
+            XCTFail("An unrecognized response status must be exposed as a retryable failure")
+        } catch let failure {
+            XCTAssertEqual(failure, .stage(.insightGeneration, .failed))
+        }
+    }
+
     private func makeBatch(text: String) -> MeetingContextBatch {
         MeetingContextBatch(
             segments: [
@@ -202,22 +238,25 @@ final class OpenAIInsightAdapterTests: XCTestCase {
     }
 
     private func makeAPIResponseData(
-        updates: [[String: String]] = []
+        updates: [[String: String]] = [],
+        status: String? = nil
     ) -> Data {
         let structuredOutput = try! JSONSerialization.data(
             withJSONObject: ["updates": updates]
         )
         let outputText = String(decoding: structuredOutput, as: UTF8.self)
-        return try! JSONSerialization.data(
-            withJSONObject: [
-                "output": [[
-                    "content": [[
-                        "type": "output_text",
-                        "text": outputText,
-                    ]],
+        var response: [String: Any] = [
+            "output": [[
+                "content": [[
+                    "type": "output_text",
+                    "text": outputText,
                 ]],
-            ]
-        )
+            ]],
+        ]
+        if let status {
+            response["status"] = status
+        }
+        return try! JSONSerialization.data(withJSONObject: response)
     }
 
     private func makeIncompleteAPIResponseData() -> Data {
@@ -226,6 +265,20 @@ final class OpenAIInsightAdapterTests: XCTestCase {
                 "status": "incomplete",
                 "incomplete_details": ["reason": "max_output_tokens"],
                 "output": [],
+            ]
+        )
+    }
+
+    private func makeRefusalAPIResponseData() -> Data {
+        try! JSONSerialization.data(
+            withJSONObject: [
+                "status": "completed",
+                "output": [[
+                    "content": [[
+                        "type": "refusal",
+                        "refusal": "Synthetic refusal",
+                    ]],
+                ]],
             ]
         )
     }

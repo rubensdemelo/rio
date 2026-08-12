@@ -53,6 +53,7 @@ enum OpenAIHTTPError: Error, Sendable {
     case malformedResponse
     case unexpectedStatus(Int)
     case incompleteResponse
+    case refusedResponse
     case missingOutputText
 }
 
@@ -141,7 +142,7 @@ enum OpenAIInsightPrompt {
         Do not return an empty response when the batch contains a factual statement,
         decision, question, risk, or proposed next step. Return one concise, cautious
         insight in the fitting category instead. Omit only social filler, silence, or
-        repeated content with no new meeting signal.
+        repeated content with no new meeting signal. Return at most four updates.
         """
     }
 }
@@ -190,17 +191,19 @@ private struct OpenAIInsightUpdate: Decodable, Sendable {
     let explicitOwner: String
 }
 
-private enum OpenAIInsightTranslator {
+private enum OpenAIInsightLimits {
     static let maximumUpdateCount = 8
     static let maximumStableKeyLength = 128
     static let maximumTextLength = 500
     static let maximumOwnerLength = 120
+}
 
+private enum OpenAIInsightTranslator {
     static func translate(
         _ response: OpenAIInsightResponse,
         from batch: MeetingContextBatch
     ) throws(PipelineFailure) -> [InsightUpdate] {
-        guard response.updates.count <= maximumUpdateCount else {
+        guard response.updates.count <= OpenAIInsightLimits.maximumUpdateCount else {
             throw .stage(.insightGeneration, .responseInvalid)
         }
 
@@ -214,10 +217,10 @@ private enum OpenAIInsightTranslator {
             let text = generated.text.trimmingCharacters(in: .whitespacesAndNewlines)
 
             guard !stableKey.isEmpty,
-                  stableKey.count <= maximumStableKeyLength,
+                  stableKey.count <= OpenAIInsightLimits.maximumStableKeyLength,
                   stableKeys.insert(stableKey).inserted,
                   !text.isEmpty,
-                  text.count <= maximumTextLength else {
+                  text.count <= OpenAIInsightLimits.maximumTextLength else {
                 throw .stage(.insightGeneration, .responseInvalid)
             }
 
@@ -251,7 +254,7 @@ private enum OpenAIInsightTranslator {
 
         let normalizedOwner = owner.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedOwner.isEmpty,
-              normalizedOwner.count <= maximumOwnerLength,
+              normalizedOwner.count <= OpenAIInsightLimits.maximumOwnerLength,
               meetingText.range(of: normalizedOwner, options: .caseInsensitive) != nil else {
             return nil
         }
@@ -260,10 +263,21 @@ private enum OpenAIInsightTranslator {
 }
 
 private struct OpenAIResponsesResponse: Decodable, Sendable {
-    enum Status: String, Decodable, Sendable {
+    enum Status: Decodable, Sendable, Equatable {
         case completed
         case incomplete
         case failed
+        case other
+
+        init(from decoder: Decoder) throws {
+            let value = try decoder.singleValueContainer().decode(String.self)
+            switch value {
+            case "completed": self = .completed
+            case "incomplete": self = .incomplete
+            case "failed": self = .failed
+            default: self = .other
+            }
+        }
     }
 
     let status: Status?
@@ -286,6 +300,12 @@ private struct OpenAIResponsesResponse: Decodable, Sendable {
             .joined()
         return text.isEmpty ? nil : text
     }
+
+    var containsRefusal: Bool {
+        output
+            .flatMap { $0.content ?? [] }
+            .contains { $0.type == "refusal" }
+    }
 }
 
 private enum OpenAIResponsesRequest {
@@ -307,7 +327,10 @@ private enum OpenAIResponsesRequest {
                 "model": configuration.model,
                 "instructions": instructions,
                 "input": input,
-                "max_output_tokens": 1_200,
+                "max_output_tokens": 2_000,
+                "reasoning": [
+                    "effort": "low",
+                ],
                 "text": [
                     "format": [
                         "type": "json_schema",
@@ -433,6 +456,9 @@ actor OpenAIInsightGenerator: SessionInsightGenerator {
                 guard result.status == nil || result.status == .completed else {
                     throw OpenAIHTTPError.incompleteResponse
                 }
+                if result.containsRefusal {
+                    throw OpenAIHTTPError.refusedResponse
+                }
                 guard let outputText = result.outputText else {
                     throw OpenAIHTTPError.missingOutputText
                 }
@@ -522,6 +548,10 @@ actor OpenAIInsightGenerator: SessionInsightGenerator {
         }
         if let error = error as? OpenAIHTTPError,
            case .incompleteResponse = error {
+            return .stage(.insightGeneration, .failed)
+        }
+        if let error = error as? OpenAIHTTPError,
+           case .refusedResponse = error {
             return .stage(.insightGeneration, .failed)
         }
         if let error = error as? OpenAIHTTPError,
