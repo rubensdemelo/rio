@@ -140,11 +140,12 @@ The user-provided API key is held by the macOS Keychain rather than the meeting-
 ### Application shell
 
 The app exposes a native `MenuBarExtra` alongside the main `Window` and a
-separate movable Recent Insights `Window`. The menu-bar scene shares the main
+separate movable, floating Recent Insights `Window`. The menu-bar scene shares the main
 actor-isolated `LiveSessionController`, so its start/stop action cannot create a
 second listening session or a separate insight store. Provider & API Key uses a
-sheet from the main window; Recent Insights is its own window so it can be moved
-and positioned independently while the live insight stream remains visible.
+sheet from the main window; Recent Insights is its own floating window so it can
+stay above normal app windows and be moved independently while the live insight
+stream remains visible.
 Open Rio targets the main window scene by ID, Recent Insights targets its own
 scene by ID, and Quit Rio terminates the application. The main window uses a
 suppressed default launch behavior, so a ready app starts as a menu-bar-only

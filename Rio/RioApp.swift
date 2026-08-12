@@ -39,11 +39,12 @@ struct RioApp: App {
         .defaultSize(width: 560, height: 96)
         .windowResizability(.contentSize)
 
-        Window("Recent Insights", id: "recent-insights") {
+        Window("Rio", id: "recent-insights") {
             RecentInsightsView()
                 .environmentObject(insightHistory)
+                .background(FloatingWindowBehavior())
         }
-        .defaultSize(width: 540, height: 560)
+        .defaultSize(width: 360, height: 580)
         .windowResizability(.contentSize)
 
         MenuBarExtra("Rio", image: "RioMenuBarIcon") {
@@ -53,6 +54,27 @@ struct RioApp: App {
                 .environmentObject(listeningCadenceSettings)
         }
         .menuBarExtraStyle(.menu)
+    }
+}
+
+/// Makes the insights companion behave like a floating meeting companion window.
+private struct FloatingWindowBehavior: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        NSView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        configure(nsView.window)
+        DispatchQueue.main.async {
+            configure(nsView.window)
+        }
+    }
+
+    private func configure(_ window: NSWindow?) {
+        guard let window else { return }
+        window.level = .floating
+        window.isMovableByWindowBackground = true
+        window.collectionBehavior.insert(.fullScreenAuxiliary)
     }
 }
 
