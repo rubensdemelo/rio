@@ -52,6 +52,7 @@ enum OpenAIHTTPError: Error, Sendable {
     case invalidResponse
     case malformedResponse
     case unexpectedStatus(Int)
+    case incompleteResponse
     case missingOutputText
 }
 
@@ -259,6 +260,13 @@ private enum OpenAIInsightTranslator {
 }
 
 private struct OpenAIResponsesResponse: Decodable, Sendable {
+    enum Status: String, Decodable, Sendable {
+        case completed
+        case incomplete
+        case failed
+    }
+
+    let status: Status?
     let output: [OutputItem]
 
     struct OutputItem: Decodable, Sendable {
@@ -422,6 +430,9 @@ actor OpenAIInsightGenerator: SessionInsightGenerator {
                 } catch {
                     throw OpenAIHTTPError.malformedResponse
                 }
+                guard result.status == nil || result.status == .completed else {
+                    throw OpenAIHTTPError.incompleteResponse
+                }
                 guard let outputText = result.outputText else {
                     throw OpenAIHTTPError.missingOutputText
                 }
@@ -508,6 +519,10 @@ actor OpenAIInsightGenerator: SessionInsightGenerator {
         if let error = error as? OpenAIHTTPError,
            case .malformedResponse = error {
             return .stage(.insightGeneration, .responseInvalid)
+        }
+        if let error = error as? OpenAIHTTPError,
+           case .incompleteResponse = error {
+            return .stage(.insightGeneration, .failed)
         }
         if let error = error as? OpenAIHTTPError,
            case .missingOutputText = error {

@@ -170,6 +170,24 @@ final class OpenAIInsightAdapterTests: XCTestCase {
         }
     }
 
+    func testIncompleteResponsesResultCanBeRetried() async throws {
+        let client = RecordingOpenAIHTTPClient(
+            responseData: makeIncompleteAPIResponseData()
+        )
+        let generator = OpenAIInsightGenerator(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client
+        )
+
+        try await generator.startSession(localeIdentifier: "en-US")
+        do {
+            _ = try await generator.generate(from: makeBatch(text: "Synthetic meeting text"))
+            XCTFail("An incomplete response must be exposed as a retryable failure")
+        } catch let failure {
+            XCTAssertEqual(failure, .stage(.insightGeneration, .failed))
+        }
+    }
+
     private func makeBatch(text: String) -> MeetingContextBatch {
         MeetingContextBatch(
             segments: [
@@ -198,6 +216,16 @@ final class OpenAIInsightAdapterTests: XCTestCase {
                         "text": outputText,
                     ]],
                 ]],
+            ]
+        )
+    }
+
+    private func makeIncompleteAPIResponseData() -> Data {
+        try! JSONSerialization.data(
+            withJSONObject: [
+                "status": "incomplete",
+                "incomplete_details": ["reason": "max_output_tokens"],
+                "output": [],
             ]
         )
     }
