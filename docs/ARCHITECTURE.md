@@ -44,15 +44,26 @@ Stopping the session clears all remaining temporary meeting data.
 
 ### Audio capture
 
-Use ScreenCaptureKit to capture meeting/system audio. The current composition captures system audio only because the insight stream is grounded in the meeting, not Rio user's local speech. Exclude Rio's own process audio so app sounds do not re-enter the pipeline.
+Use macOS Core Audio taps to capture meeting/system audio without creating a
+display-capture stream. The current composition captures system audio only
+because the insight stream is grounded in the meeting, not Rio user's local
+speech. Exclude Rio's own process audio so app sounds do not re-enter the
+pipeline. Core Audio creates a private aggregate device containing a stereo
+global tap; the aggregate is destroyed when listening stops.
 
-The app requests Screen & System Audio Recording permission and makes its status visible. The capture layer must handle output changes, sleep and wake, permission revocation, and the selected meeting source disappearing.
+The app requests the macOS System Audio Recording permission using
+`NSAudioCaptureUsageDescription` and makes its status visible. The capture layer
+must handle output changes, sleep and wake, permission revocation, and the
+selected meeting source disappearing.
 
 Development builds use a persistent Apple Development code-signing identity configured through the ignored `Config/Development.xcconfig`, so macOS privacy grants survive ordinary source rebuilds. The identity is managed by Xcode and is not stored in the repository. A changed bundle identifier, signing authority, or user privacy decision remains a legitimate reason for macOS to request access again.
 
 The MVP does not save audio or create a recording output. Capture callbacks perform minimal work and hand bounded buffers to the transcription pipeline without file I/O, model requests, or blocking UI work.
 
-If one ScreenCaptureKit stream cannot provide the required microphone and system-audio behavior on the minimum supported macOS release, use AVAudioEngine for the microphone while keeping the same downstream interface.
+If the Core Audio tap cannot provide the required system-audio behavior on the
+minimum supported macOS release, keep the capture interface stable and report
+the system-audio capability as unavailable rather than falling back to a
+display-capture API.
 
 ### Temporary speech-to-text
 

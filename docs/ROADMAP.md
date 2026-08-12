@@ -42,17 +42,17 @@ The Milestone 1 exit criterion is not marked complete until the not-yet-verified
 
 Goal: make the vertical slice work with actual remote meetings.
 
-- Add system/meeting audio capture with ScreenCaptureKit.
+- Add system/meeting audio capture with Core Audio taps.
 - Capture or combine microphone audio without recording either source.
 - Exclude Rio's own process audio.
-- Add microphone and screen-capture permission onboarding.
+- Add microphone and system-audio permission onboarding.
 - Add source and input-level status without exposing transcript text.
 - Handle device changes, selected-source loss, sleep and wake, and permission revocation.
 - Test speaker-output duplication and document headphone expectations or add mitigation if needed.
 
 Exit criterion: Rio can listen to both sides of a meeting in common conferencing apps and maintain an accurate listening state.
 
-Implementation status: system audio capture is wired through ScreenCaptureKit with Rio's own process audio excluded. It still requires live permission, browser-meeting, interruption, and long-running validation before this milestone can be marked complete.
+Implementation status: system audio capture is wired through a private Core Audio tap with Rio's own process audio excluded. It still requires live permission, browser-meeting, interruption, and long-running validation before this milestone can be marked complete.
 
 ## Milestone 3: Useful live insights
 

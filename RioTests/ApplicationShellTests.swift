@@ -271,7 +271,7 @@ final class ApplicationShellTests: XCTestCase {
 
     func testMeetingAudioActionTargetsTheScreenRecordingPrivacyPane() {
         XCTAssertEqual(
-            SystemSettingsOpener.screenAndSystemAudioRecordingURL.absoluteString,
+            SystemSettingsOpener.systemAudioRecordingURL.absoluteString,
             "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
         )
     }

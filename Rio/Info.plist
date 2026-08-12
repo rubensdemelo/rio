@@ -20,5 +20,7 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Rio needs microphone access to process meeting audio temporarily for live insights.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>Rio needs system audio access to process meeting audio temporarily for live insights.</string>
 </dict>
 </plist>

@@ -1,26 +1,8 @@
-import CoreMedia
-import CoreGraphics
+import CoreAudio
 import Foundation
-import ScreenCaptureKit
 
-private final class SendableSampleBuffer: @unchecked Sendable {
-    let value: CMSampleBuffer
-
-    init(_ value: CMSampleBuffer) {
-        self.value = value
-    }
-}
-
-private final class SendableScreenStream: @unchecked Sendable {
-    let value: SCStream
-
-    init(_ value: SCStream) {
-        self.value = value
-    }
-}
-
-/// Decodes the linear PCM layouts ScreenCaptureKit can deliver without
-/// assuming that 32-bit samples are floating point.
+/// Decodes the linear PCM layouts Core Audio taps can deliver without assuming
+/// that 32-bit samples are floating point.
 enum SystemAudioSampleDecoder {
     static func decode(
         bytes: UnsafeRawBufferPointer,
@@ -58,27 +40,165 @@ enum SystemAudioSampleDecoder {
     }
 }
 
-/// Captures the Mac's meeting/system audio without recording pixels or audio files.
-///
-/// ScreenCaptureKit's display filter is required to receive system audio, but this
-/// stream registers only an audio output. Rio's own audio is excluded so UI sounds
-/// cannot enter the meeting-understanding pipeline.
-actor ScreenCaptureKitSystemAudioCapture: NSObject, SessionAudioCapture {
+private enum CoreAudioSampleChunkDecoder {
+    static func chunk(
+        from inputData: UnsafePointer<AudioBufferList>,
+        format: AudioStreamBasicDescription,
+        sequenceNumber: UInt64
+    ) -> AudioChunk? {
+        let buffers = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: inputData))
+        guard !buffers.isEmpty,
+              format.mChannelsPerFrame > 0,
+              format.mSampleRate > 0 else {
+            return nil
+        }
+
+        let channelCount = Int(format.mChannelsPerFrame)
+        let isNonInterleaved = format.mFormatFlags & kAudioFormatFlagIsNonInterleaved != 0
+        let decodedBuffers = buffers.compactMap { buffer -> [Float]? in
+            guard let data = buffer.mData,
+                  buffer.mDataByteSize > 0 else {
+                return nil
+            }
+            let bytes = UnsafeRawBufferPointer(
+                start: data,
+                count: Int(buffer.mDataByteSize)
+            )
+            return SystemAudioSampleDecoder.decode(
+                bytes: bytes,
+                bitsPerChannel: format.mBitsPerChannel,
+                formatFlags: format.mFormatFlags
+            )
+        }
+        guard !decodedBuffers.isEmpty else { return nil }
+
+        let samples: [Float]
+        let frameCount: Int
+        if isNonInterleaved {
+            guard decodedBuffers.count >= channelCount else { return nil }
+            frameCount = decodedBuffers
+                .prefix(channelCount)
+                .map { $0.count }
+                .min() ?? 0
+            guard frameCount > 0 else { return nil }
+
+            var interleaved = [Float](repeating: 0, count: frameCount * channelCount)
+            for frame in 0..<frameCount {
+                for channel in 0..<channelCount {
+                    interleaved[(frame * channelCount) + channel] = decodedBuffers[channel][frame]
+                }
+            }
+            samples = interleaved
+        } else {
+            let decoded = decodedBuffers[0]
+            frameCount = decoded.count / channelCount
+            guard frameCount > 0 else { return nil }
+            samples = Array(decoded.prefix(frameCount * channelCount))
+        }
+
+        let meanSquare = samples.reduce(into: Float.zero) { result, sample in
+            result += sample * sample
+        } / Float(samples.count)
+
+        return AudioChunk(
+            sequenceNumber: sequenceNumber,
+            duration: .seconds(Double(frameCount) / format.mSampleRate),
+            sampleRate: format.mSampleRate,
+            channelCount: channelCount,
+            samples: samples,
+            inputLevel: min(1, max(0, sqrt(meanSquare) * 4))
+        )
+    }
+}
+
+private final class CoreAudioCaptureCallbackState: @unchecked Sendable {
+    let queue: BoundedAudioQueue
+    let inputLevelMonitor: AudioInputLevelMonitor
+    let format: AudioStreamBasicDescription
+
+    private let sequenceLock = NSLock()
+    private var sequenceNumber: UInt64 = 0
+
+    init(
+        queue: BoundedAudioQueue,
+        inputLevelMonitor: AudioInputLevelMonitor,
+        format: AudioStreamBasicDescription
+    ) {
+        self.queue = queue
+        self.inputLevelMonitor = inputLevelMonitor
+        self.format = format
+    }
+
+    func receive(_ inputData: UnsafePointer<AudioBufferList>) {
+        let sequenceNumber = sequenceLock.withLock {
+            defer { self.sequenceNumber &+= 1 }
+            return self.sequenceNumber
+        }
+        guard let chunk = CoreAudioSampleChunkDecoder.chunk(
+            from: inputData,
+            format: format,
+            sequenceNumber: sequenceNumber
+        ) else {
+            return
+        }
+
+        inputLevelMonitor.update(level: chunk.inputLevel)
+        _ = queue.enqueue(chunk)
+    }
+}
+
+private final class CoreAudioCaptureResources: @unchecked Sendable {
+    let system: AudioHardwareSystem
+    let tap: AudioHardwareTap
+    let aggregate: AudioHardwareAggregateDevice
+    var ioProcID: AudioDeviceIOProcID?
+
+    init(
+        system: AudioHardwareSystem,
+        tap: AudioHardwareTap,
+        aggregate: AudioHardwareAggregateDevice,
+        ioProcID: AudioDeviceIOProcID?
+    ) {
+        self.system = system
+        self.tap = tap
+        self.aggregate = aggregate
+        self.ioProcID = ioProcID
+    }
+
+    func stop() {
+        if let ioProcID {
+            _ = AudioDeviceStop(aggregate.id, ioProcID)
+            _ = AudioDeviceDestroyIOProcID(aggregate.id, ioProcID)
+            self.ioProcID = nil
+        }
+        try? system.destroyAggregateDevice(aggregate)
+        try? system.destroyProcessTap(tap)
+    }
+}
+
+private enum CoreAudioCaptureError: Error {
+    case noOutputDevice
+    case noCurrentProcess
+    case tapCreationFailed
+    case aggregateCreationFailed
+    case ioProcCreationFailed
+    case startFailed
+}
+
+/// Captures system/meeting audio with Core Audio taps without creating a
+/// display-capture stream or receiving screen pixels.
+actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
     private let outputQueue = DispatchQueue(label: "app.rio.system-audio", qos: .userInitiated)
     private let queueCapacity: Int
     private let inputLevelMonitor: AudioInputLevelMonitor
 
     private var queue: BoundedAudioQueue?
     private var activeStream: AudioStream?
-    private var screenStream: SCStream?
+    private var resources: CoreAudioCaptureResources?
+    private var callbackState: CoreAudioCaptureCallbackState?
     private var isStarting = false
     private var isRunning = false
-    private var isRecovering = false
     private var cancellationRequested = false
-    private var sequenceNumber: UInt64 = 0
-    private var recoveryAttempts = 0
-
-    private let maximumRecoveryAttempts = 2
 
     init(
         queueCapacity: Int = 32,
@@ -90,13 +210,19 @@ actor ScreenCaptureKitSystemAudioCapture: NSObject, SessionAudioCapture {
     }
 
     func permission() async -> MicrophonePermission {
-        CGPreflightScreenCaptureAccess() ? .granted : .denied
+        // Core Audio taps request their dedicated permission when the aggregate
+        // device is first started; macOS exposes no preflight API for this grant.
+        .granted
     }
 
     func checkAvailability() async -> Availability {
-        CGPreflightScreenCaptureAccess()
-            ? .available
-            : .unavailable(.systemAudioPermissionDenied)
+        do {
+            return try AudioHardwareSystem.shared.defaultOutputDevice == nil
+                ? .unavailable(.systemAudioUnavailable)
+                : .available
+        } catch {
+            return .unavailable(.systemAudioUnavailable)
+        }
     }
 
     func inputSnapshot() async -> AudioInputSnapshot {
@@ -108,235 +234,156 @@ actor ScreenCaptureKitSystemAudioCapture: NSObject, SessionAudioCapture {
         guard !isStarting else { throw .stage(.audioCapture, .invalidState) }
         isStarting = true
         cancellationRequested = false
-        recoveryAttempts = 0
         defer { isStarting = false }
 
-        // This is the only point at which Rio requests Screen Recording access.
-        guard CGPreflightScreenCaptureAccess() || CGRequestScreenCaptureAccess() else {
-            throw .unavailable(.systemAudioPermissionDenied)
-        }
-        guard !Task.isCancelled, !cancellationRequested else { throw .cancelled }
+        guard !Task.isCancelled else { throw .cancelled }
+
+        let queue = BoundedAudioQueue(capacity: queueCapacity)
+        let audioStream = queue.makeStream(
+            onOutputDrop: {},
+            onTermination: { [weak self] in
+                Task { await self?.cancel() }
+            }
+        )
 
         do {
-            let stream = try await startScreenStream()
-
-            let queue = BoundedAudioQueue(capacity: queueCapacity)
-            let audioStream = queue.makeStream(
-                onOutputDrop: {},
-                onTermination: { [weak self] in Task { await self?.cancel() } }
-            )
+            let resources = try makeResources(queue: queue)
             self.queue = queue
             activeStream = audioStream
-            screenStream = stream
-            sequenceNumber = 0
+            self.resources = resources
+            isRunning = true
 
             guard !Task.isCancelled, !cancellationRequested else {
                 await finish(throwing: .cancelled)
                 throw PipelineFailure.cancelled
             }
-            isRunning = true
             return audioStream
+        } catch is CancellationError {
+            await finish(throwing: .cancelled)
+            throw .cancelled
         } catch let failure as PipelineFailure {
             await finish(throwing: failure)
             throw failure
+        } catch let error as CoreAudioCaptureError {
+            await finish(throwing: .unavailable(.systemAudioPermissionDenied))
+            switch error {
+            case .noOutputDevice:
+                throw .unavailable(.systemAudioUnavailable)
+            case .noCurrentProcess, .tapCreationFailed, .aggregateCreationFailed,
+                 .ioProcCreationFailed, .startFailed:
+                throw .unavailable(.systemAudioPermissionDenied)
+            }
         } catch {
             await finish(throwing: .stage(.audioCapture, .failed))
             throw .stage(.audioCapture, .failed)
         }
     }
 
-    func stop() async { await finish(throwing: nil) }
-    func cancel() async { await finish(throwing: .cancelled) }
+    func stop() async {
+        await finish(throwing: nil)
+    }
+
+    func cancel() async {
+        await finish(throwing: .cancelled)
+    }
+
+    private func makeResources(queue: BoundedAudioQueue) throws -> CoreAudioCaptureResources {
+        let system = AudioHardwareSystem.shared
+        guard try system.defaultOutputDevice != nil else {
+            throw CoreAudioCaptureError.noOutputDevice
+        }
+        guard let currentProcess = try? system.process(for: getpid()) else {
+            throw CoreAudioCaptureError.noCurrentProcess
+        }
+
+        let tapDescription = CATapDescription(
+            stereoGlobalTapButExcludeProcesses: [currentProcess.id]
+        )
+        tapDescription.name = "Rio System Audio"
+        tapDescription.isPrivate = true
+        tapDescription.muteBehavior = .unmuted
+
+        var tap: AudioHardwareTap?
+        var aggregate: AudioHardwareAggregateDevice?
+        do {
+            guard let createdTap = try system.makeProcessTap(description: tapDescription) else {
+                throw CoreAudioCaptureError.tapCreationFailed
+            }
+            tap = createdTap
+
+            guard let createdAggregate = try system.makeAggregateDevice(description: [
+                kAudioAggregateDeviceNameKey: "Rio System Audio",
+                kAudioAggregateDeviceUIDKey: "app.rio.system-audio.\(UUID().uuidString)",
+                kAudioAggregateDeviceIsPrivateKey: true,
+            ]) else {
+                throw CoreAudioCaptureError.aggregateCreationFailed
+            }
+            aggregate = createdAggregate
+            try createdAggregate.setSubtaps([createdTap])
+
+            let callbackState = CoreAudioCaptureCallbackState(
+                queue: queue,
+                inputLevelMonitor: inputLevelMonitor,
+                format: try createdTap.format
+            )
+            self.callbackState = callbackState
+
+            var ioProcID: AudioDeviceIOProcID?
+            let ioStatus = AudioDeviceCreateIOProcIDWithBlock(
+                &ioProcID,
+                createdAggregate.id,
+                outputQueue
+            ) { [callbackState] _, inputData, _, _, _ in
+                callbackState.receive(inputData)
+            }
+            guard ioStatus == kAudioHardwareNoError, let ioProcID else {
+                throw CoreAudioCaptureError.ioProcCreationFailed
+            }
+
+            let startStatus = AudioDeviceStart(createdAggregate.id, ioProcID)
+            guard startStatus == kAudioHardwareNoError else {
+                _ = AudioDeviceDestroyIOProcID(createdAggregate.id, ioProcID)
+                throw CoreAudioCaptureError.startFailed
+            }
+
+            return CoreAudioCaptureResources(
+                system: system,
+                tap: createdTap,
+                aggregate: createdAggregate,
+                ioProcID: ioProcID
+            )
+        } catch {
+            if let aggregate {
+                try? system.destroyAggregateDevice(aggregate)
+            }
+            if let tap {
+                try? system.destroyProcessTap(tap)
+            }
+            throw error
+        }
+    }
 
     private func finish(throwing failure: PipelineFailure?) async {
-        if isStarting { cancellationRequested = true }
-        let stream = screenStream
-        screenStream = nil
+        if isStarting {
+            cancellationRequested = true
+        }
+
+        let resources = self.resources
+        self.resources = nil
+        callbackState = nil
         activeStream = nil
         isRunning = false
+        inputLevelMonitor.reset()
         queue?.finish(throwing: failure)
         queue = nil
-        inputLevelMonitor.reset()
-        if let stream {
-            try? await stream.stopCapture()
-        }
-    }
-
-    private func makeScreenStream() async throws(PipelineFailure) -> SCStream {
-        do {
-            let content = try await SCShareableContent.current
-            guard let display = content.displays.first(where: { $0.displayID == CGMainDisplayID() })
-                ?? content.displays.first else {
-                throw PipelineFailure.unavailable(.systemAudioUnavailable)
-            }
-
-            let rioApplications = content.applications.filter { $0.processID == getpid() }
-            let filter = SCContentFilter(
-                display: display,
-                excludingApplications: rioApplications,
-                exceptingWindows: []
-            )
-            let configuration = SCStreamConfiguration()
-            configuration.capturesAudio = true
-            configuration.excludesCurrentProcessAudio = true
-            configuration.sampleRate = 48_000
-            configuration.channelCount = 2
-            configuration.queueDepth = 3
-
-            let stream = SCStream(filter: filter, configuration: configuration, delegate: self)
-            try stream.addStreamOutput(self, type: .audio, sampleHandlerQueue: outputQueue)
-            return stream
-        } catch let failure as PipelineFailure {
-            throw failure
-        } catch {
-            throw .stage(.audioCapture, .failed)
-        }
-    }
-
-    private func startScreenStream() async throws(PipelineFailure) -> SCStream {
-        for attempt in 0..<2 {
-            let stream = try await makeScreenStream()
-            do {
-                try await stream.startCapture()
-                return stream
-            } catch is CancellationError {
-                try? await stream.stopCapture()
-                throw .cancelled
-            } catch {
-                try? await stream.stopCapture()
-                guard attempt == 0 else {
-                    throw .stage(.audioCapture, .failed)
-                }
-                do {
-                    try await Task.sleep(for: .seconds(1))
-                } catch {
-                    throw .cancelled
-                }
-            }
-        }
-
-        throw .stage(.audioCapture, .failed)
-    }
-
-    private func recover(from stoppedStream: SCStream) async {
-        guard screenStream === stoppedStream,
-              isRunning,
-              !isRecovering else {
-            return
-        }
-        guard recoveryAttempts < maximumRecoveryAttempts else {
-            await finish(throwing: .stage(.audioCapture, .interrupted))
-            return
-        }
-
-        isRecovering = true
-        isRunning = false
-        recoveryAttempts += 1
-        defer { isRecovering = false }
-
-        do {
-            try await Task.sleep(for: .seconds(1))
-            guard !Task.isCancelled,
-                  !cancellationRequested,
-                  screenStream === stoppedStream else {
-                return
-            }
-            let replacement = try await startScreenStream()
-            screenStream = replacement
-            guard !Task.isCancelled, !cancellationRequested else {
-                await finish(throwing: .cancelled)
-                return
-            }
-            isRunning = true
-        } catch {
-            await finish(throwing: .stage(.audioCapture, .interrupted))
-        }
-    }
-
-    private func receive(_ sampleBuffer: CMSampleBuffer) {
-        guard isRunning || (queue != nil && isStarting), let queue,
-              let chunk = Self.chunk(from: sampleBuffer, sequenceNumber: sequenceNumber) else { return }
-        sequenceNumber &+= 1
-        inputLevelMonitor.update(level: chunk.inputLevel)
-        _ = queue.enqueue(chunk)
-    }
-
-    private static func chunk(from sampleBuffer: CMSampleBuffer, sequenceNumber: UInt64) -> AudioChunk? {
-        guard let formatDescription = CMSampleBufferGetFormatDescription(sampleBuffer),
-              let description = CMAudioFormatDescriptionGetStreamBasicDescription(formatDescription)?.pointee,
-              description.mFormatID == kAudioFormatLinearPCM,
-              description.mBitsPerChannel == 32 else { return nil }
-        let frameCount = CMSampleBufferGetNumSamples(sampleBuffer)
-        guard frameCount > 0, description.mSampleRate > 0, description.mChannelsPerFrame > 0 else { return nil }
-
-        var sizeNeeded = 0
-        var blockBuffer: CMBlockBuffer?
-        CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
-            sampleBuffer, bufferListSizeNeededOut: &sizeNeeded, bufferListOut: nil,
-            bufferListSize: 0, blockBufferAllocator: kCFAllocatorDefault,
-            blockBufferMemoryAllocator: kCFAllocatorDefault, flags: 0, blockBufferOut: &blockBuffer
-        )
-        guard sizeNeeded >= MemoryLayout<AudioBufferList>.size else { return nil }
-        let rawList = UnsafeMutableRawPointer.allocate(byteCount: sizeNeeded, alignment: MemoryLayout<AudioBufferList>.alignment)
-        defer { rawList.deallocate() }
-        let list = rawList.assumingMemoryBound(to: AudioBufferList.self)
-        let status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
-            sampleBuffer, bufferListSizeNeededOut: nil, bufferListOut: list,
-            bufferListSize: sizeNeeded, blockBufferAllocator: kCFAllocatorDefault,
-            blockBufferMemoryAllocator: kCFAllocatorDefault, flags: 0, blockBufferOut: &blockBuffer
-        )
-        guard status == noErr else { return nil }
-
-        let channelCount = Int(description.mChannelsPerFrame)
-        let requiredSampleCount = frameCount * channelCount
-        var samples = [Float](repeating: 0, count: requiredSampleCount)
-        let buffers = UnsafeMutableAudioBufferListPointer(list)
-        if buffers.count == 1, let data = buffers[0].mData {
-            let source = UnsafeRawBufferPointer(
-                start: data,
-                count: Int(buffers[0].mDataByteSize)
-            )
-            guard let decoded = SystemAudioSampleDecoder.decode(
-                bytes: source,
-                bitsPerChannel: description.mBitsPerChannel,
-                formatFlags: description.mFormatFlags
-            ), decoded.count >= requiredSampleCount else { return nil }
-            samples = Array(decoded.prefix(requiredSampleCount))
-        } else {
-            guard buffers.count >= channelCount else { return nil }
-            for channel in 0..<channelCount {
-                guard let data = buffers[channel].mData else { return nil }
-                let source = UnsafeRawBufferPointer(
-                    start: data,
-                    count: Int(buffers[channel].mDataByteSize)
-                )
-                guard let decoded = SystemAudioSampleDecoder.decode(
-                    bytes: source,
-                    bitsPerChannel: description.mBitsPerChannel,
-                    formatFlags: description.mFormatFlags
-                ), decoded.count >= frameCount else { return nil }
-                for frame in 0..<frameCount {
-                    samples[(frame * channelCount) + channel] = decoded[frame]
-                }
-            }
-        }
-        return AudioChunk(sequenceNumber: sequenceNumber, duration: .seconds(Double(frameCount) / description.mSampleRate), sampleRate: description.mSampleRate, channelCount: channelCount, samples: samples)
+        resources?.stop()
     }
 }
 
-extension ScreenCaptureKitSystemAudioCapture: SCStreamOutput, SCStreamDelegate {
-    nonisolated func stream(_ stream: SCStream, didOutputSampleBuffer sampleBuffer: CMSampleBuffer, of outputType: SCStreamOutputType) {
-        guard outputType == .audio else { return }
-        let buffer = SendableSampleBuffer(sampleBuffer)
-        Task { [weak self, buffer] in await self?.receive(buffer.value) }
-    }
-
-    nonisolated func stream(_ stream: SCStream, didStopWithError error: Error) {
-        // Recreate transiently interrupted streams without ending the active
-        // in-memory meeting session. Exhaustion is surfaced as interruption.
-        let stoppedStream = SendableScreenStream(stream)
-        Task { [weak self, stoppedStream] in
-            await self?.recover(from: stoppedStream.value)
-        }
+private extension NSLock {
+    func withLock<T>(_ body: () -> T) -> T {
+        lock()
+        defer { unlock() }
+        return body()
     }
 }

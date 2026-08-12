@@ -37,9 +37,9 @@
 		A10000010000000000000021 /* VerticalSliceIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000019 /* VerticalSliceIntegrationTests.swift */; };
 		A10000010000000000000022 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001A /* Assets.xcassets */; };
 		A10000010000000000000023 /* SystemAudioCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001B /* SystemAudioCapture.swift */; };
-		A10000010000000000000024 /* ScreenCaptureKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001C /* ScreenCaptureKit.framework */; };
+		A10000010000000000000024 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000010000000000000020 /* CoreAudio.framework */; };
 		A10000010000000000000025 /* SystemAudioCapture.swift in Tests */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001B /* SystemAudioCapture.swift */; };
-		A10000010000000000000026 /* ScreenCaptureKit.framework in Test Frameworks */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001C /* ScreenCaptureKit.framework */; };
+		A10000010000000000000026 /* CoreAudio.framework in Test Frameworks */ = {isa = PBXBuildFile; fileRef = A20000010000000000000020 /* CoreAudio.framework */; };
 		A10000010000000000000027 /* OpenAIKeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001D /* OpenAIKeychainStore.swift */; };
 		A10000010000000000000028 /* OpenAIKeychainStore.swift in Tests */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001D /* OpenAIKeychainStore.swift */; };
 		A10000010000000000000029 /* InsightHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001E /* InsightHistoryStore.swift */; };
@@ -73,7 +73,7 @@
 		A20000010000000000000019 /* VerticalSliceIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerticalSliceIntegrationTests.swift; sourceTree = "<group>"; };
 		A2000001000000000000001A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A2000001000000000000001B /* SystemAudioCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemAudioCapture.swift; sourceTree = "<group>"; };
-		A2000001000000000000001C /* ScreenCaptureKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ScreenCaptureKit.framework; path = System/Library/Frameworks/ScreenCaptureKit.framework; sourceTree = SDKROOT; };
+		A20000010000000000000020 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
 		A2000001000000000000001D /* OpenAIKeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIKeychainStore.swift; sourceTree = "<group>"; };
 		A2000001000000000000001E /* InsightHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightHistoryStore.swift; sourceTree = "<group>"; };
 		A2000001000000000000001F /* InsightHistoryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightHistoryStoreTests.swift; sourceTree = "<group>"; };
@@ -84,7 +84,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000010000000000000024 /* ScreenCaptureKit.framework in Frameworks */,
+				A10000010000000000000024 /* CoreAudio.framework in Frameworks */,
 				A10000010000000000000013 /* AVFAudio.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -93,7 +93,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000010000000000000026 /* ScreenCaptureKit.framework in Test Frameworks */,
+				A10000010000000000000026 /* CoreAudio.framework in Test Frameworks */,
 				A10000010000000000000014 /* AVFAudio.framework in Test Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -108,7 +108,7 @@
 				A40000010000000000000003 /* RioTests */,
 				A40000010000000000000004 /* Products */,
 				A20000010000000000000011 /* AVFAudio.framework */,
-				A2000001000000000000001C /* ScreenCaptureKit.framework */,
+				A20000010000000000000020 /* CoreAudio.framework */,
 			);
 			sourceTree = "<group>";
 		};

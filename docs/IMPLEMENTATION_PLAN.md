@@ -82,7 +82,7 @@ A task is complete only when:
 - Add a shared scheme.
 - Add reproducible build and test commands to `README.md`.
 
-Do not add ScreenCaptureKit permissions or system-audio behavior yet.
+Do not add system-audio behavior yet.
 
 #### Test
 
@@ -444,9 +444,9 @@ Avoid concurrent edits to the Xcode project file, application entry point, or se
 
 ### Milestone 2: Real meeting audio
 
-- Add ScreenCaptureKit system-audio capture behind the existing capture interface.
+- Add Core Audio tap system-audio capture behind the existing capture interface.
 - Compose microphone and system sources without recording either source.
-- Add screen-capture permission onboarding and source status.
+- Add system-audio permission onboarding and source status.
 - Handle source loss, device changes, permission revocation, sleep, and wake.
 - Validate common conferencing applications, speaker-output duplication, and headphone behavior.
 

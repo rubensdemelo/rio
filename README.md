@@ -28,7 +28,7 @@ Rio does not display a live transcript. Audio and temporary speech-to-text outpu
 Microphone + meeting/system audio
                  │
                  v
-        ScreenCaptureKit
+       Core Audio tap
                  │
                  v
 OpenAI audio transcription
@@ -45,7 +45,7 @@ OpenAI audio transcription
 The current M1 vertical slice uses:
 
 - Swift and SwiftUI for the application and interface.
-- ScreenCaptureKit for meeting/system audio capture.
+- Core Audio taps for meeting/system audio capture without screen capture.
 - OpenAI's `gpt-4o-transcribe` for temporary cloud speech-to-text from bounded in-memory WAV chunks.
 - OpenAI's Responses API with strict JSON Schema output for insight updates.
 
@@ -54,7 +54,7 @@ The current M1 vertical slice uses:
 The first release targets:
 
 - macOS 26 or later.
-- Screen & System Audio Recording permission.
+- System Audio Recording permission.
 - An OpenAI API key, added in Rio's Provider settings.
 
 Rio checks these capabilities at runtime and explains unavailable states. OpenAI is the default provider. Rio sends bounded temporary meeting-audio chunks to OpenAI for transcription and bounded temporary text for insight cards; it does not store either locally.

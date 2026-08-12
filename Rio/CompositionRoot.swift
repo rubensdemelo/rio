@@ -208,7 +208,7 @@ enum RioCompositionRoot {
         listeningCadenceSettings: ListeningCadenceSettings? = nil
     ) -> LiveSessionController {
         let localeIdentifier = defaultLocaleIdentifier
-        let capture = ScreenCaptureKitSystemAudioCapture()
+        let capture = CoreAudioSystemAudioCapture()
         let speechRecognizer = OpenAITranscriptionAdapter(
             batchDuration: listeningCadenceSettings?.selection.audioBatchDuration
                 ?? ListeningCadence.fifteenSeconds.audioBatchDuration

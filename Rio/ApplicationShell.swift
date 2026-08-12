@@ -19,12 +19,12 @@ final class RioPanelRouter: ObservableObject {
 }
 
 enum SystemSettingsOpener {
-    static let screenAndSystemAudioRecordingURL = URL(
+    static let systemAudioRecordingURL = URL(
         string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
     )!
 
-    static func openScreenAndSystemAudioRecording() {
-        guard !NSWorkspace.shared.open(screenAndSystemAudioRecordingURL) else {
+    static func openSystemAudioRecording() {
+        guard !NSWorkspace.shared.open(systemAudioRecordingURL) else {
             return
         }
 
@@ -656,8 +656,8 @@ private struct PrerequisiteChecklistView: View {
 
                         if check.kind == .meetingAudio,
                            check.reason == .systemAudioPermissionDenied {
-                            Button("Open Screen & System Audio Recording") {
-                                SystemSettingsOpener.openScreenAndSystemAudioRecording()
+                            Button("Open System Audio Recording") {
+                                SystemSettingsOpener.openSystemAudioRecording()
                             }
                             .controlSize(.small)
                         }
@@ -1168,7 +1168,7 @@ private extension UnavailableReason {
         case .systemAudioPermissionDenied:
             "Click Start Listening to let macOS request access. Then enable Rio here if it appears."
         case .systemAudioUnavailable:
-            "Rio could not find a display to capture meeting audio from. Connect or enable a display, then try again."
+            "Rio could not find an available system audio output. Connect or enable an audio output, then try again."
         case .openAIAPIKeyMissing:
             "Add your OpenAI API key in Rio’s Provider settings. Rio sends bounded, temporary meeting-audio chunks to OpenAI for transcription and temporary meeting text for insights."
         case .openAIAPIKeyInvalid:
