@@ -2,11 +2,11 @@
 
 Rio is a deliberately simple macOS meeting assistant for IBM employees. Bob helps with coding; Rio helps with meetings by showing useful insights while the conversation is still happening.
 
-The insight stream is the product. Rio is not a transcription app, note-taking app, meeting recorder, or meeting archive.
+The insight stream is the primary live experience. Completed meetings also have a read-only transcript available locally for two days. Rio is not a meeting recorder or note-taking app.
 
 ## Status
 
-Rio uses bounded in-memory OpenAI transcription and context, OpenAI insight generation, a two-day local insight history, session cleanup, and a SwiftUI composition root. Automated checks cover the pipeline; direct hardware acceptance remains open.
+Rio uses bounded in-memory OpenAI transcription and context, OpenAI insight generation, a two-day local meeting history containing finalized transcripts and insights, session cleanup, and a SwiftUI composition root. Automated checks cover the pipeline; direct hardware acceptance remains open.
 
 ## MVP experience
 
@@ -20,7 +20,7 @@ The app has one primary action: start or stop listening. During a meeting, it su
 
 Insights update or replace stale cards instead of accumulating duplicates. Rio never guesses an action-item owner; it includes one only when the meeting explicitly names that person.
 
-Rio does not display a live transcript. Audio and temporary speech-to-text output are discarded continuously and cleared when listening stops.
+Rio does not display a live transcript. Audio and temporary speech-to-text context are discarded continuously; finalized transcript segments are saved only in the bounded two-day local meeting history when listening stops.
 
 ## Meeting pipeline
 
@@ -57,26 +57,26 @@ The first release targets:
 - System Audio Recording permission.
 - An OpenAI API key, added in Rio's Provider settings.
 
-Rio checks these capabilities at runtime and explains unavailable states. OpenAI is the default provider. Rio sends bounded temporary meeting-audio chunks to OpenAI for transcription and bounded temporary text for insight cards; it does not store either locally.
+Rio checks these capabilities at runtime and explains unavailable states. OpenAI is the default provider. Rio sends bounded temporary meeting-audio chunks to OpenAI for transcription and bounded temporary text for insight cards; it never stores audio locally and saves only finalized transcript text in the two-day meeting history.
 
 ## Data lifecycle
 
-Meeting data is ephemeral in the MVP:
+Meeting data is ephemeral except for the bounded two-day local meeting history:
 
 - Audio is processed as a live stream and is not intentionally written to disk.
 - Audio queues and temporary text buffers are bounded.
 - Only finalized transcription results enter the rolling insight context.
 - Old audio and text are continuously discarded.
 - Stopping a session clears remaining audio, temporary text, model-session state, and insight cards.
-- Generated insight cards are saved locally for up to two days, then removed automatically; audio and temporary text are never saved.
+- Finalized transcript segments and generated insight cards are saved locally for up to two days, then removed automatically; audio and rolling temporary text are never saved.
 - Meeting content and API keys must never appear in logs, analytics, crash annotations, or test fixtures.
 
 ## MVP exclusions
 
-- Visible transcription or transcript editing.
+- Visible live transcription, transcript editing, or speaker labels.
 - Note-taking and document editing.
 - Audio recording or playback.
-- Transcript export, meeting history, or a database.
+- Transcript export, AI transcript search, or history older than two days.
 - Meeting bots, speaker identification, or diarization.
 - Accounts, calendar integrations, team workspaces, or cloud synchronization.
 - Apple Intelligence or another on-device language-model dependency.

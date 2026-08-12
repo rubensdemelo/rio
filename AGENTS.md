@@ -4,7 +4,7 @@
 
 Rio is a deliberately simple macOS app that listens to meetings and shows useful live insights. The insight stream is the product.
 
-Audio capture and speech-to-text are temporary implementation stages. Rio is not a transcription app, note-taking app, meeting recorder, or meeting archive.
+Audio capture and rolling speech-to-text are implementation stages for the live insight stream. Rio is not a note-taking app or meeting recorder; it does retain a read-only finalized transcript with each meeting for two days.
 
 Read these documents before changing product behavior or architecture:
 
@@ -21,15 +21,15 @@ The first MVP:
 
 - Targets macOS 26+.
 - Uses native Swift and SwiftUI.
-- Uses ScreenCaptureKit for meeting/system audio and microphone capture where supported.
+- Uses native Core Audio for system/meeting audio capture.
 - Sends bounded in-memory meeting-audio chunks to OpenAI's transcription API.
 - Uses OpenAI's Responses API for meeting understanding from bounded temporary text.
 - Shows concise live insight cards.
-- Keeps audio, temporary text, and model sessions in memory only for the active session; retains generated insight cards locally for no more than two days.
+- Keeps audio, rolling temporary text, and model sessions in memory only for the active session; retains finalized transcript segments and generated insight cards locally for no more than two days.
 
 Do not add the following without an explicit product decision and matching documentation update:
 
-- A visible transcript or transcript editor.
+- A live transcript, transcript editor, transcript export, or speaker labels.
 - Note-taking features.
 - Audio recording, playback, or persistent audio storage.
 - Transcript export, insight history older than two days, or a database.
@@ -48,7 +48,7 @@ Keep the interaction small and obvious:
 - Insight cards for important points, decisions, actions, questions, and risks.
 - Existing cards update or resolve instead of accumulating duplicates.
 - Never infer an action-item owner. Include an owner only when the temporary meeting text explicitly names one.
-- Do not expose temporary transcript text in the interface.
+- Do not expose live temporary transcript text in the interface; expose saved transcript text only through the read-only Recent Meetings view.
 
 Prefer removing complexity over adding configuration. New controls and settings need a concrete MVP requirement.
 
@@ -68,7 +68,7 @@ Prefer removing complexity over adding configuration. New controls and settings 
 
 ## Data lifecycle and privacy
 
-All meeting data is ephemeral for the MVP:
+Meeting data is ephemeral except for the bounded two-day local meeting history:
 
 - Never intentionally write audio to disk.
 - Keep audio queues bounded by duration or frame count.
@@ -77,7 +77,7 @@ All meeting data is ephemeral for the MVP:
 - Bound the number of active insight cards.
 - Clear capture buffers, temporary text, in-flight API requests, and insight state when listening stops.
 - Perform the same cleanup after errors and cancellation.
-- Persist only generated insight cards (category, state, text, and save time) in a bounded local history that expires after two days; never persist audio, temporary text, or owner metadata.
+- Persist only finalized transcript segments and generated insight cards (category, state, text, and save time) in a bounded local history that expires after two days; never persist audio, rolling temporary text, or guessed owner metadata.
 - Store a user-provided API key only in the macOS Keychain; never use app preferences, source, an app bundle, logs, or an environment-variable runtime dependency for credentials.
 - Never include audio, transcript text, prompts containing meeting content, secrets, or insight text outside the approved two-day local history in logs, analytics, crash annotations, fixtures, or snapshots.
 
@@ -110,7 +110,7 @@ Before considering a milestone complete:
 - Run relevant unit and integration tests.
 - Build the macOS target with warnings treated seriously.
 - Exercise start, stop, restart, denial, interruption, and model-unavailable paths.
-- Confirm that no audio or temporary transcript content was persisted or logged, and that the only persisted meeting-derived content is the bounded two-day insight history.
+- Confirm that no audio or rolling temporary transcript content was persisted or logged, and that the only persisted meeting-derived content is the bounded two-day meeting history.
 - Update `docs/ROADMAP.md` to reflect verified work only.
 
 Hardware-dependent capture and one-hour soak tests must be identified clearly when they cannot run in automated environments.
@@ -121,7 +121,7 @@ Hardware-dependent capture and one-hour soak tests must be identified clearly wh
 - Do not claim unimplemented or unverified work as complete.
 - Preserve the simple product boundary when proposing abstractions or future-proofing.
 - Add comments for non-obvious constraints and decisions, not line-by-line narration.
-- Keep user-facing language concise and avoid calling the temporary speech-to-text pipeline a product feature.
+- Keep user-facing language concise and distinguish the live temporary speech-to-text pipeline from the completed read-only transcript history.
 - After every implementation change, run `make final`.
 - Do not report the change complete if `make final` fails.
 

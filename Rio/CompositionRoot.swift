@@ -205,6 +205,7 @@ enum RioCompositionRoot {
 
     static func makeLiveController(
         insightHistory: InsightHistoryStore? = nil,
+        meetingHistory: MeetingHistoryStore? = nil,
         listeningCadenceSettings: ListeningCadenceSettings? = nil
     ) -> LiveSessionController {
         let localeIdentifier = defaultLocaleIdentifier
@@ -228,13 +229,17 @@ enum RioCompositionRoot {
         )
         let insightStore = InMemoryInsightStore()
         let insightGenerator: any SessionInsightGenerator = OpenAIInsightGenerator()
+        let historyRecorder: any MeetingHistoryRecording = meetingHistory.map {
+            MeetingHistoryStoreRecorder(store: $0)
+        } ?? NoopMeetingHistoryRecorder()
         let lifecycle = SessionLifecycleCoordinator(
             localeIdentifier: localeIdentifier,
             capture: capture,
             speechRecognizer: speechRecognizer,
             contextFactory: contextFactory,
             insightGenerator: insightGenerator,
-            insightState: insightStore
+            insightState: insightStore,
+            historyRecorder: historyRecorder
         )
         return LiveSessionController(
             lifecycle: lifecycle,
@@ -242,5 +247,47 @@ enum RioCompositionRoot {
             insightHistory: insightHistory,
             listeningCadenceSettings: listeningCadenceSettings
         )
+    }
+}
+
+@MainActor
+private final class MeetingHistoryStoreRecorder: MeetingHistoryRecording {
+    private let store: MeetingHistoryStore
+
+    init(store: MeetingHistoryStore) {
+        self.store = store
+    }
+
+    func record(_ meeting: MeetingHistoryRecord) {
+        let savedMeeting = SavedMeeting(
+            id: meeting.meetingID,
+            startedAt: meeting.startedAt,
+            endedAt: meeting.endedAt,
+            transcriptSegments: meeting.transcript.map { segment in
+                SavedTranscriptSegment(
+                    sequenceNumber: segment.sequenceNumber,
+                    startOffset: segment.startOffset.timeInterval,
+                    endOffset: segment.endOffset.timeInterval,
+                    text: segment.text
+                )
+            },
+            insights: meeting.insights.map { card in
+                SavedInsight(
+                    sessionID: meeting.meetingID,
+                    card: card,
+                    savedAt: meeting.endedAt
+                )
+            },
+            incompleteTranscript: meeting.incompleteTranscript
+        )
+        store.record(savedMeeting, now: meeting.endedAt)
+    }
+}
+
+private extension Duration {
+    var timeInterval: TimeInterval {
+        let components = self.components
+        return TimeInterval(components.seconds)
+            + TimeInterval(components.attoseconds) / 1_000_000_000_000_000_000
     }
 }

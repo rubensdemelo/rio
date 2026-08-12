@@ -457,6 +457,52 @@ protocol InsightGenerator: Sendable {
     func cancel() async
 }
 
+struct MeetingHistoryRecord: Sendable, Equatable {
+    let meetingID: UUID
+    let startedAt: Date
+    let endedAt: Date
+    let transcript: [FinalizedSpeechSegment]
+    let insights: [InsightCard]
+    let incompleteTranscript: Bool
+}
+
+@MainActor
+protocol TranscriptCollecting: AnyObject {
+    func append(_ segment: FinalizedSpeechSegment)
+    func snapshot() -> [FinalizedSpeechSegment]
+    func reset()
+}
+
+@MainActor
+final class InMemoryTranscriptCollector: TranscriptCollecting {
+    private(set) var segments: [FinalizedSpeechSegment] = []
+
+    func append(_ segment: FinalizedSpeechSegment) {
+        guard !segments.contains(where: { $0.sequenceNumber == segment.sequenceNumber }) else {
+            return
+        }
+        segments.append(segment)
+    }
+
+    func snapshot() -> [FinalizedSpeechSegment] {
+        segments
+    }
+
+    func reset() {
+        segments.removeAll(keepingCapacity: false)
+    }
+}
+
+@MainActor
+protocol MeetingHistoryRecording: AnyObject {
+    func record(_ meeting: MeetingHistoryRecord)
+}
+
+@MainActor
+final class NoopMeetingHistoryRecorder: MeetingHistoryRecording {
+    func record(_ meeting: MeetingHistoryRecord) {}
+}
+
 @MainActor
 protocol InsightState: AnyObject {
     var cards: [InsightCard] { get }

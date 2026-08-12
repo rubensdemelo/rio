@@ -13,6 +13,91 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertEqual(configuredBatchDuration, .seconds(30))
     }
 
+    func testAcceptedFinalizedSpeechSegmentsAreForwardedExactlyOnce() async throws {
+        let speech = TestSessionSpeechRecognizer()
+        let transcriptCollector = TestTranscriptCollector()
+        let coordinator = makeCoordinator(
+            speech: speech,
+            transcriptCollector: transcriptCollector
+        )
+
+        try await coordinator.start()
+        let speechStream = await speech.lastStream()
+        let firstSegment = makeSegment(sequence: 1, text: "first finalized segment")
+        let secondSegment = FinalizedSpeechSegment(
+            sequenceNumber: 2,
+            text: "second finalized segment",
+            startOffset: .seconds(1),
+            endOffset: .seconds(2)
+        )
+        speechStream?.yield(firstSegment)
+        speechStream?.yield(secondSegment)
+
+        await waitUntil {
+            transcriptCollector.segments == [firstSegment, secondSegment]
+        }
+
+        XCTAssertEqual(transcriptCollector.segments, [firstSegment, secondSegment])
+        await coordinator.stop()
+    }
+
+    func testNormalStopRecordsMeetingSnapshotWithTranscriptAndCurrentInsights() async throws {
+        let speech = TestSessionSpeechRecognizer()
+        let generator = TestSessionInsightGenerator(
+            updates: [makeUpdate(text: "captured insight")]
+        )
+        let state = TestSessionInsightState()
+        let transcriptCollector = TestTranscriptCollector()
+        let historyRecorder = TestMeetingHistoryRecorder()
+        let coordinator = makeCoordinator(
+            speech: speech,
+            generator: generator,
+            state: state,
+            transcriptCollector: transcriptCollector,
+            historyRecorder: historyRecorder
+        )
+
+        try await coordinator.start()
+        let segment = makeSegment(sequence: 1, text: "the meeting transcript")
+        let speechStream = await speech.lastStream()
+        speechStream?.yield(segment)
+        await waitUntil { state.cards.count == 1 }
+        let expectedInsights = state.cards
+
+        await coordinator.stop()
+
+        let records = historyRecorder.records()
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records[0].transcript, [segment])
+        XCTAssertEqual(records[0].insights, expectedInsights)
+        XCTAssertFalse(records[0].incompleteTranscript)
+        XCTAssertLessThanOrEqual(records[0].startedAt, records[0].endedAt)
+    }
+
+    func testTranscriptionFailureSavesTheAvailableTranscriptAsIncomplete() async throws {
+        let speech = TestSessionSpeechRecognizer()
+        let transcriptCollector = TestTranscriptCollector()
+        let historyRecorder = TestMeetingHistoryRecorder()
+        let coordinator = makeCoordinator(
+            speech: speech,
+            transcriptCollector: transcriptCollector,
+            historyRecorder: historyRecorder
+        )
+
+        try await coordinator.start()
+        let segment = makeSegment(sequence: 1, text: "available before interruption")
+        let speechStream = await speech.lastStream()
+        speechStream?.yield(segment)
+        await waitUntil { transcriptCollector.segments == [segment] }
+        speechStream?.finish(throwing: PipelineFailure.stage(.speechRecognition, .failed))
+        await waitUntil { coordinator.status == .unavailable }
+
+        let records = historyRecorder.records()
+        XCTAssertEqual(records.count, 1)
+        XCTAssertEqual(records[0].transcript, [segment])
+        XCTAssertTrue(records[0].incompleteTranscript)
+    }
+
     func testPermissionDeniedStopsBeforeStartingPipeline() async throws {
         let capture = TestSessionAudioCapture(
             permission: .denied,
@@ -595,7 +680,9 @@ final class SessionLifecycleTests: XCTestCase {
         speech: TestSessionSpeechRecognizer = TestSessionSpeechRecognizer(),
         generator: TestSessionInsightGenerator = TestSessionInsightGenerator(),
         contextFactory: TestMeetingContextFactory = TestMeetingContextFactory(),
-        state: TestSessionInsightState = TestSessionInsightState()
+        state: TestSessionInsightState = TestSessionInsightState(),
+        transcriptCollector: any TranscriptCollecting = TestTranscriptCollector(),
+        historyRecorder: any MeetingHistoryRecording = TestMeetingHistoryRecorder()
     ) -> SessionLifecycleCoordinator {
         SessionLifecycleCoordinator(
             localeIdentifier: "en-US",
@@ -603,7 +690,9 @@ final class SessionLifecycleTests: XCTestCase {
             speechRecognizer: speech,
             contextFactory: contextFactory,
             insightGenerator: generator,
-            insightState: state
+            insightState: state,
+            transcriptCollector: transcriptCollector,
+            historyRecorder: historyRecorder
         )
     }
 
@@ -1008,5 +1097,35 @@ final class TestSessionInsightState: InsightState {
         resetCount += 1
         cards.removeAll()
         appliedContexts.removeAll()
+    }
+}
+
+@MainActor
+final class TestTranscriptCollector: TranscriptCollecting {
+    private(set) var segments: [FinalizedSpeechSegment] = []
+
+    func append(_ segment: FinalizedSpeechSegment) {
+        segments.append(segment)
+    }
+
+    func snapshot() -> [FinalizedSpeechSegment] {
+        segments
+    }
+
+    func reset() {
+        segments.removeAll()
+    }
+}
+
+@MainActor
+final class TestMeetingHistoryRecorder: MeetingHistoryRecording {
+    private var recordedMeetings: [MeetingHistoryRecord] = []
+
+    func record(_ meeting: MeetingHistoryRecord) {
+        recordedMeetings.append(meeting)
+    }
+
+    func records() -> [MeetingHistoryRecord] {
+        recordedMeetings
     }
 }

@@ -5,20 +5,20 @@ import SwiftUI
 struct RioApp: App {
     @StateObject private var sessionController: LiveSessionController
     @StateObject private var providerSettings: OpenAIProviderSettings
-    @StateObject private var insightHistory: InsightHistoryStore
+    @StateObject private var meetingHistory: MeetingHistoryStore
     @StateObject private var panelRouter: RioPanelRouter
     @StateObject private var listeningCadenceSettings: ListeningCadenceSettings
 
     init() {
-        let insightHistory = InsightHistoryStore()
+        let meetingHistory = MeetingHistoryStore()
         let listeningCadenceSettings = ListeningCadenceSettings()
         let sessionController = RioCompositionRoot.makeLiveController(
-            insightHistory: insightHistory,
+            meetingHistory: meetingHistory,
             listeningCadenceSettings: listeningCadenceSettings
         )
         _sessionController = StateObject(wrappedValue: sessionController)
         _providerSettings = StateObject(wrappedValue: OpenAIProviderSettings())
-        _insightHistory = StateObject(wrappedValue: insightHistory)
+        _meetingHistory = StateObject(wrappedValue: meetingHistory)
         _panelRouter = StateObject(wrappedValue: RioPanelRouter())
         _listeningCadenceSettings = StateObject(wrappedValue: listeningCadenceSettings)
 
@@ -31,7 +31,6 @@ struct RioApp: App {
         Window("Rio", id: "main") {
             RioView(controller: sessionController)
                 .environmentObject(providerSettings)
-                .environmentObject(insightHistory)
                 .environmentObject(panelRouter)
                 .environmentObject(listeningCadenceSettings)
         }
@@ -39,12 +38,12 @@ struct RioApp: App {
         .defaultSize(width: 560, height: 96)
         .windowResizability(.contentSize)
 
-        Window("Rio", id: "recent-insights") {
-            RecentInsightsView()
-                .environmentObject(insightHistory)
+        Window("Recent Meetings", id: "recent-meetings") {
+            RecentMeetingsView()
+                .environmentObject(meetingHistory)
                 .background(FloatingWindowBehavior())
         }
-        .defaultSize(width: 360, height: 580)
+        .defaultSize(width: 760, height: 620)
         .windowResizability(.contentSize)
 
         MenuBarExtra("Rio", image: "RioMenuBarIcon") {
@@ -57,7 +56,7 @@ struct RioApp: App {
     }
 }
 
-/// Makes the insights companion behave like a floating meeting companion window.
+/// Makes the recent-meetings companion behave like a floating meeting window.
 private struct FloatingWindowBehavior: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         NSView()
@@ -110,8 +109,8 @@ private struct RioMenuBarMenu<Controller: SessionShellControlling>: View {
 
         Divider()
 
-        Button("Recent Insights") {
-            openWindow(id: "recent-insights")
+        Button("Recent Meetings") {
+            openWindow(id: "recent-meetings")
             NSApp.activate(ignoringOtherApps: true)
         }
 

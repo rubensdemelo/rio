@@ -236,7 +236,6 @@ final class FakeSessionController: SessionShellControlling {
 struct RioView<Controller: SessionShellControlling>: View {
     @ObservedObject private var controller: Controller
     @EnvironmentObject private var providerSettings: OpenAIProviderSettings
-    @EnvironmentObject private var insightHistory: InsightHistoryStore
     @EnvironmentObject private var panelRouter: RioPanelRouter
 
     init(controller: Controller) {
@@ -895,60 +894,306 @@ private struct OpenAIAPIKeyDetailsView: View {
     }
 }
 
-struct RecentInsightsView: View {
+enum RecentMeetingDetailSection: String, CaseIterable, Identifiable {
+    case insights
+    case transcript
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .insights: "Insights"
+        case .transcript: "Transcript"
+        }
+    }
+}
+
+struct RecentTranscriptSegment: Equatable, Identifiable {
+    let sequenceNumber: UInt64
+    let text: String
+
+    var id: UInt64 { sequenceNumber }
+}
+
+struct RecentMeetingDetailPresentation: Equatable {
+    let insights: [InsightCard]
+    let transcriptSegments: [RecentTranscriptSegment]
+
+    var transcriptText: String {
+        transcriptSegments
+            .sorted { $0.sequenceNumber < $1.sequenceNumber }
+            .map(\.text)
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .joined(separator: "\n")
+    }
+}
+
+/// The meeting history UI expects the history agent to provide:
+/// `MeetingHistoryStore.meetings`, `MeetingHistoryStore.clear(meetingID:)`,
+/// `MeetingHistoryStore.clearAll()`, and `SavedMeeting` values with `id`,
+/// `startedAt`, `endedAt`, `insights`, and `transcriptSegments`. Transcript
+/// segments expose `sequenceNumber` and `text`.
+struct RecentMeetingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var insightHistory: InsightHistoryStore
+    @EnvironmentObject private var meetingHistory: MeetingHistoryStore
+    @State private var selectedMeetingID: UUID?
+    @State private var selectedSection: RecentMeetingDetailSection = .insights
+    @State private var meetingPendingDeletion: SavedMeeting?
+    @State private var isConfirmingClear = false
+
+    private var meetings: [SavedMeeting] {
+        meetingHistory.meetings.sorted { $0.startedAt > $1.startedAt }
+    }
+
+    private var selectedMeeting: SavedMeeting? {
+        guard let selectedMeetingID else { return meetings.first }
+        return meetings.first { $0.id == selectedMeetingID } ?? meetings.first
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Recent insights")
-                        .font(.title2.weight(.semibold))
-                    Text("Only insight cards from the last two days are kept on this Mac.")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                if !insightHistory.entries.isEmpty {
-                    Button("Clear", role: .destructive) {
-                        insightHistory.clear()
+        HStack(spacing: 0) {
+            meetingList
+
+            Divider()
+
+            if let selectedMeeting {
+                meetingDetail(selectedMeeting)
+            } else {
+                ContentUnavailableView(
+                    "No recent meetings",
+                    systemImage: "clock",
+                    description: Text("Completed meetings are kept on this Mac for two days.")
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+        }
+        .frame(minWidth: 680, idealWidth: 760, minHeight: 500, idealHeight: 620)
+        .onAppear {
+            selectFirstMeetingIfNeeded()
+        }
+        .onChange(of: meetingHistory.meetings) { _, _ in
+            selectFirstMeetingIfNeeded()
+        }
+        .confirmationDialog(
+            "Delete this meeting?",
+            isPresented: Binding(
+                get: { meetingPendingDeletion != nil },
+                set: { if !$0 { meetingPendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Delete", role: .destructive) {
+                if let meetingPendingDeletion {
+                    let deletedID = meetingPendingDeletion.id
+                    meetingHistory.clear(meetingID: meetingPendingDeletion.id)
+                    if selectedMeetingID == deletedID {
+                        selectedMeetingID = nil
                     }
                 }
+                meetingPendingDeletion = nil
             }
+            Button("Cancel", role: .cancel) {
+                meetingPendingDeletion = nil
+            }
+        }
+        .confirmationDialog(
+            "Clear all recent meetings?",
+            isPresented: $isConfirmingClear,
+            titleVisibility: .visible
+        ) {
+            Button("Clear All", role: .destructive) {
+                meetingHistory.clearAll()
+                selectedMeetingID = nil
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes the saved transcripts and insights from this Mac.")
+        }
+    }
 
-            if insightHistory.entries.isEmpty {
+    private var meetingList: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Recent meetings")
+                    .font(.headline)
+                Spacer()
+                if !meetings.isEmpty {
+                    Button("Clear All", role: .destructive) {
+                        isConfirmingClear = true
+                    }
+                    .font(.caption)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+
+            if meetings.isEmpty {
                 ContentUnavailableView(
-                    "No recent insights",
+                    "No meetings",
                     systemImage: "clock",
-                    description: Text("Insights from meetings will appear here for two days.")
+                    description: Text("Saved meetings remain available for two days.")
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                ScrollView {
-                    LazyVStack(spacing: 12) {
-                        ForEach(insightHistory.entries) { entry in
-                            VStack(alignment: .leading, spacing: 6) {
-                                InsightCardView(card: entry.card)
-                                Text(entry.savedAt, format: .dateTime.month().day().hour().minute().second())
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .padding(.leading, 4)
-                            }
+                List(meetings, selection: $selectedMeetingID) { meeting in
+                    Button {
+                        selectedMeetingID = meeting.id
+                    } label: {
+                        MeetingHistoryRow(meeting: meeting)
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button("Delete Meeting", role: .destructive) {
+                            meetingPendingDeletion = meeting
                         }
                     }
-                    .padding(.vertical, 2)
+                    .tag(meeting.id)
                 }
+                .listStyle(.sidebar)
             }
+        }
+        .frame(width: 250)
+    }
 
-            HStack {
+    @ViewBuilder
+    private func meetingDetail(_ meeting: SavedMeeting) -> some View {
+        let presentation = RecentMeetingDetailPresentation(
+            insights: meeting.insights.map(\.card),
+            transcriptSegments: meeting.transcriptSegments.map {
+                RecentTranscriptSegment(sequenceNumber: $0.sequenceNumber, text: $0.text)
+            }
+        )
+
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(meeting.startedAt, format: .dateTime.month().day().year().hour().minute())
+                        .font(.title2.weight(.semibold))
+                    Text(meetingDuration(for: meeting))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    if meeting.incompleteTranscript {
+                        Label("Transcript incomplete", systemImage: "exclamationmark.triangle")
+                            .font(.caption)
+                            .foregroundStyle(.orange)
+                    }
+                }
+
                 Spacer()
+
+                Button(role: .destructive) {
+                    meetingPendingDeletion = meeting
+                } label: {
+                    Label("Delete Meeting", systemImage: "trash")
+                }
+                .help("Delete this meeting's transcript and insights")
+
                 Button("Done") { dismiss() }
                     .keyboardShortcut(.defaultAction)
             }
+
+            Picker("Meeting detail", selection: $selectedSection) {
+                ForEach(RecentMeetingDetailSection.allCases) { section in
+                    Text(section.title).tag(section)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            Group {
+                switch selectedSection {
+                case .insights:
+                    insightsContent(presentation.insights)
+                case .transcript:
+                    transcriptContent(presentation.transcriptText)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .padding(24)
-        .frame(width: 540, height: 560)
+        .padding(20)
+    }
+
+    @ViewBuilder
+    private func insightsContent(_ insights: [InsightCard]) -> some View {
+        if insights.isEmpty {
+            ContentUnavailableView(
+                "No insights",
+                systemImage: "lightbulb",
+                description: Text("Rio did not save any insights for this meeting.")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    ForEach(insights, id: \.stableKey) { card in
+                        InsightCardView(card: card)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func transcriptContent(_ transcript: String) -> some View {
+        if transcript.isEmpty {
+            ContentUnavailableView(
+                "No transcript",
+                systemImage: "text.quote",
+                description: Text("No finalized meeting text was saved.")
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ScrollView {
+                Text(transcript)
+                    .font(.body)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+            }
+            .background(Color(nsColor: .textBackgroundColor).opacity(0.35))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+        }
+    }
+
+    private func selectFirstMeetingIfNeeded() {
+        guard let selectedMeetingID,
+              meetings.contains(where: { $0.id == selectedMeetingID }) else {
+            selectedMeetingID = meetings.first?.id
+            return
+        }
+    }
+
+    private func meetingDuration(for meeting: SavedMeeting) -> String {
+        let seconds = max(0, meeting.endedAt.timeIntervalSince(meeting.startedAt))
+        let minutes = Int(seconds / 60)
+        let remainingSeconds = Int(seconds) % 60
+        return minutes > 0
+            ? "\(minutes)m \(remainingSeconds)s"
+            : "\(remainingSeconds)s"
+    }
+}
+
+private struct MeetingHistoryRow: View {
+    let meeting: SavedMeeting
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(meeting.startedAt, format: .dateTime.month().day().hour().minute())
+                .font(.body.weight(.medium))
+            HStack(spacing: 8) {
+                Text(meeting.endedAt, format: .dateTime.hour().minute())
+                Text("•")
+                Text("\(meeting.transcriptSegments.count) transcript chunks")
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            if meeting.incompleteTranscript {
+                Text("Transcript incomplete")
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+            }
+        }
+        .padding(.vertical, 6)
     }
 }
 
@@ -1260,14 +1505,12 @@ extension InsightCard {
 #Preview("Stopped") {
     RioView(controller: FakeSessionController())
         .environmentObject(OpenAIProviderSettings())
-        .environmentObject(InsightHistoryStore())
         .environmentObject(RioPanelRouter())
 }
 
 #Preview("Listening — empty") {
     RioView(controller: FakeSessionController(status: .listening))
         .environmentObject(OpenAIProviderSettings())
-        .environmentObject(InsightHistoryStore())
         .environmentObject(RioPanelRouter())
 }
 
@@ -1301,7 +1544,6 @@ extension InsightCard {
         )
     )
     .environmentObject(OpenAIProviderSettings())
-    .environmentObject(InsightHistoryStore())
     .environmentObject(RioPanelRouter())
 }
 
@@ -1314,7 +1556,6 @@ extension InsightCard {
         )
     )
     .environmentObject(OpenAIProviderSettings())
-    .environmentObject(InsightHistoryStore())
     .environmentObject(RioPanelRouter())
 }
 
@@ -1327,6 +1568,5 @@ extension InsightCard {
         )
     )
     .environmentObject(OpenAIProviderSettings())
-    .environmentObject(InsightHistoryStore())
     .environmentObject(RioPanelRouter())
 }

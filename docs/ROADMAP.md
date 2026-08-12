@@ -13,9 +13,9 @@ Goal: prove the complete meeting-understanding loop with the smallest possible a
 - Hold finalized text in a bounded, in-memory rolling context.
 - Let the user add their own OpenAI API key in Provider settings and check the stored Keychain credential before listening.
 - Generate JSON-Schema-constrained insight updates through OpenAI's Responses API.
-- Render simple insight cards without displaying transcript text.
-- Save only generated insight cards locally and prune them after two days.
-- Clear all audio, temporary text, model-session state, and insights when the session ends.
+- Render simple insight cards without displaying a live transcript.
+- Save each stopped meeting's finalized transcript and insight cards locally, and prune the meeting record after two days.
+- Clear all audio, temporary text, model-session state, and active insights when the session ends after saving the bounded meeting snapshot.
 - Add deterministic fixtures and unit tests for context limits and insight update behavior.
 
 Exit criterion: meeting audio produces useful, structured insight cards through the bounded capture/transcription pipeline and OpenAI insight generation.
@@ -79,7 +79,7 @@ Goal: ship a technical preview that behaves predictably for a full meeting.
 - Ensure cancellation and cleanup work from every state.
 - Run one-hour capture and insight-generation soak tests.
 - Verify bounded audio queues, text context, model context, and card count.
-- Confirm that no audio or transcript is written to logs, caches, crash annotations, or persistent storage, and that insight history expires after two days.
+- Confirm that no audio is written to logs, caches, crash annotations, or persistent storage, and that local transcript-plus-insight meeting history expires after two days.
 - Test missing and rejected OpenAI API keys, unavailable network/service responses, and bounded transcription backpressure.
 - Add accessibility, keyboard control, and basic VoiceOver coverage.
 - Sign, notarize, and package the macOS app.
@@ -90,7 +90,7 @@ Exit criterion: a one-hour meeting completes without unbounded memory growth, si
 
 - Insight export or history older than two days.
 - Alternative cloud or third-party model providers.
-- Audio or transcript storage.
+- Audio storage.
 - Speaker identification and diarization.
 - Accounts, calendars, and integrations.
 - Windows and Linux support.

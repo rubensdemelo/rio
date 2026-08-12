@@ -61,6 +61,8 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     private let contextFactory: any MeetingContextFactory
     private let insightGenerator: any SessionInsightGenerator
     private let insightState: any InsightState
+    private let transcriptCollector: any TranscriptCollecting
+    private let historyRecorder: any MeetingHistoryRecording
 
     private(set) var status: SessionStatus = .stopped
     private(set) var failure: PipelineFailure?
@@ -73,6 +75,9 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     private var speechTask: Task<Void, Never>?
     private var generationTask: Task<Void, Never>?
     private var finalizedSpeechSegmentCount = 0
+    private var activeMeetingID: UUID?
+    private var activeMeetingStartedAt: Date?
+    private var incompleteTranscript = false
 
     init(
         localeIdentifier: String,
@@ -80,7 +85,9 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         speechRecognizer: any SessionSpeechRecognizer,
         contextFactory: any MeetingContextFactory,
         insightGenerator: any SessionInsightGenerator,
-        insightState: any InsightState
+        insightState: any InsightState,
+        transcriptCollector: any TranscriptCollecting = InMemoryTranscriptCollector(),
+        historyRecorder: any MeetingHistoryRecording = NoopMeetingHistoryRecorder()
     ) {
         self.localeIdentifier = localeIdentifier
         self.capture = capture
@@ -88,6 +95,8 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         self.contextFactory = contextFactory
         self.insightGenerator = insightGenerator
         self.insightState = insightState
+        self.transcriptCollector = transcriptCollector
+        self.historyRecorder = historyRecorder
     }
 
     func checkAvailability() async -> Availability {
@@ -187,7 +196,11 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         activeSessionID = sessionID
         activeContext = contextFactory.makeContext()
         insightState.reset()
+        transcriptCollector.reset()
         finalizedSpeechSegmentCount = 0
+        activeMeetingID = UUID()
+        activeMeetingStartedAt = Date()
+        incompleteTranscript = false
         failure = nil
         status = .checkingAvailability
 
@@ -326,6 +339,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
                     return
                 }
                 try await context.append(segment)
+                transcriptCollector.append(segment)
                 finalizedSpeechSegmentCount += 1
                 guard activeSessionID == sessionID else {
                     return
@@ -335,13 +349,16 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
             if failure == .cancelled, status == .paused {
                 return
             }
+            incompleteTranscript = true
             await fail(failure, sessionID: sessionID)
         } catch is CancellationError {
             if status == .paused {
                 return
             }
+            incompleteTranscript = true
             await fail(.cancelled, sessionID: sessionID)
         } catch {
+            incompleteTranscript = true
             await fail(.stage(.speechRecognition, .failed), sessionID: sessionID)
         }
     }
@@ -406,8 +423,36 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
             return
         }
 
+        let meetingRecord: MeetingHistoryRecord? = {
+            let shouldRecord: Bool
+            switch kind {
+            case .stop:
+                shouldRecord = true
+            case .failure:
+                shouldRecord = status != .checkingAvailability
+            case .cancel:
+                shouldRecord = false
+            }
+            guard shouldRecord,
+                  let meetingID = activeMeetingID,
+                  let startedAt = activeMeetingStartedAt else {
+                return nil
+            }
+            return MeetingHistoryRecord(
+                meetingID: meetingID,
+                startedAt: startedAt,
+                endedAt: Date(),
+                transcript: transcriptCollector.snapshot(),
+                insights: insightState.cards,
+                incompleteTranscript: incompleteTranscript
+            )
+        }()
+
         activeSessionID = nil
         finalizedSpeechSegmentCount = 0
+        activeMeetingID = nil
+        activeMeetingStartedAt = nil
+        incompleteTranscript = false
         let context = activeContext
         activeContext = nil
 
@@ -445,6 +490,12 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
             failure = nil
             status = .stopped
         }
+
+        if let meetingRecord {
+            historyRecorder.record(meetingRecord)
+        }
+
+        transcriptCollector.reset()
     }
 
     private func makeForwardedAudioStream(

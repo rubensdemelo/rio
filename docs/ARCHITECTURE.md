@@ -28,7 +28,7 @@ System/meeting audio ─┘             │
 live SwiftUI insight cards
                      │
                      v
-      bounded local insight history (two days only)
+ bounded local meeting history (transcript + insights, two days only)
 
                          MenuBarExtra
           start/stop, recent, provider, open, quit
@@ -36,8 +36,8 @@ live SwiftUI insight cards
                        non-content voice feedback
                        (input level + recognition activity)
 
-Old audio buffers and temporary text are continuously discarded. Bounded audio batches are transmitted to OpenAI only for transcription; bounded temporary text is transmitted only for the active insight request. Generated insight cards are stored separately in a bounded local history and expire after two days.
-Stopping the session clears all remaining temporary meeting data.
+Old audio buffers and temporary text are continuously discarded. Bounded audio batches are transmitted to OpenAI only for transcription; bounded temporary text is transmitted only for the active insight request. Finalized transcript segments are collected for the active meeting and saved with its generated insight cards when the session stops. Meeting records expire after two days.
+Stopping the session clears all remaining temporary meeting data after creating the bounded local meeting snapshot.
 ```
 
 ## Native technology choices
@@ -81,9 +81,9 @@ The API key is the preflight requirement. A rejected key is unavailable; transie
 
 The capture layer may expose bounded, content-free input telemetry: a normalized level, whether audio buffers have arrived, and whether sustained silence suggests a muted input. It must not expose audio samples or temporary speech text to the UI. Pausing cancels the active capture and speech tasks while retaining the in-memory session context; resuming creates fresh capture and speech tasks. Stopping still clears all session data.
 
-### Rolling meeting context
+### Rolling meeting context and transcript collection
 
-The transcript is an internal, bounded buffer rather than a product model. It has no editor, transcript view, export path, or persistent store.
+The rolling context remains an internal bounded buffer for insight generation. A separate in-memory transcript collector receives each accepted finalized segment exactly once. At normal stop, the coordinator sends a snapshot of those segments and the current insight cards to the local meeting-history store. The UI exposes only the completed, read-only transcript; there is no live transcript, editor, export path, speaker labeling, or audio store.
 
 The context manager:
 
@@ -124,7 +124,7 @@ The app validates semantic constraints after generation, including nonempty text
 
 An in-memory insight store applies generated updates on the main actor. Stable keys allow the model to update or resolve an existing card instead of creating duplicates.
 
-The active insight store exists only for the current session. A separate local history store merges cards by stable key within each session, saves only card category, state, text, and save time, and retains them for at most two days. It is capped at 200 entries, prunes on load and every write, and has a user-initiated clear action. It never receives audio, temporary transcript text, or explicit action-owner metadata. The MVP does not include export or history beyond this bounded window.
+The active insight store exists only for the current session. The local meeting-history store saves one completed meeting record containing start/end times, ordered finalized transcript segments, an incomplete-transcript flag, and the generated cards. It retains records for at most two days, bounds transcript/card counts and text size, prunes on load and every write, and provides per-meeting and clear-all actions. It never receives audio, and it never stores guessed action-owner metadata.
 
 ## Data and memory boundaries
 
@@ -133,12 +133,12 @@ All queues and buffers are bounded:
 - Audio queues have a fixed duration limit and drop or signal overload rather than grow indefinitely.
 - Temporary finalized text is limited by age and token budget.
 - The insight store has a maximum active-card count.
-- The local insight history holds at most 200 cards and removes entries older than two days.
+- The local meeting history bounds meeting count, transcript segment count, transcript text bytes, and card count, and removes records older than two days.
 - In-flight API requests are cancelled and their in-memory request context is released when listening stops.
 
 Diagnostics may record durations, queue depth, model availability, and error codes. They must never record audio, transcript text, generated insight text, or other meeting content.
 
-The user-provided API key is held by the macOS Keychain rather than the meeting-data lifecycle and is never copied into `UserDefaults`, files, logs, or environment-dependent runtime configuration. The two-day local insight history is the only persisted meeting-derived content and lives in an atomically written application-support JSON file.
+The user-provided API key is held by the macOS Keychain rather than the meeting-data lifecycle and is never copied into `UserDefaults`, files, logs, or environment-dependent runtime configuration. The two-day local meeting history is the only persisted meeting-derived content and lives in an atomically written application-support JSON file.
 
 ## Concurrency
 
@@ -151,13 +151,13 @@ The user-provided API key is held by the macOS Keychain rather than the meeting-
 ### Application shell
 
 The app exposes a native `MenuBarExtra` alongside the main `Window` and a
-separate movable, floating Recent Insights `Window`. The menu-bar scene shares the main
+separate movable, floating Recent Meetings `Window`. The menu-bar scene shares the main
 actor-isolated `LiveSessionController`, so its start/stop action cannot create a
 second listening session or a separate insight store. Provider & API Key uses a
-sheet from the main window; Recent Insights is its own floating window so it can
+sheet from the main window; Recent Meetings is its own floating window so it can
 stay above normal app windows and be moved independently while the live insight
 stream remains visible.
-Open Rio targets the main window scene by ID, Recent Insights targets its own
+Open Rio targets the main window scene by ID, Recent Meetings targets its own
 scene by ID, and Quit Rio terminates the application. The main window uses a
 suppressed default launch behavior, so a ready app starts as a menu-bar-only
 experience and the window is opened only through an explicit menu action. The
@@ -177,7 +177,7 @@ A failure must not silently leave the app appearing to listen.
 - Transcription failure keeps capture state accurate and offers restart.
 - A missing or rejected OpenAI API key prevents insight generation and explains the reason.
 - A failed generation request may retry after new finalized text arrives; it does not preserve unbounded text while waiting.
-- Stopping always clears temporary meeting data, including after a partial failure; the bounded local insight history remains until it expires or the user clears it.
+- Stopping always clears temporary meeting data after saving the finalized meeting snapshot; a partial transcript is marked incomplete and remains until it expires or the user clears it.
 
 ## Deferred decisions
 

@@ -340,6 +340,30 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(controller.cards, [card])
     }
 
+    func testRecentMeetingDetailOffersInsightsAndTranscriptSections() {
+        XCTAssertEqual(
+            RecentMeetingDetailSection.allCases,
+            [.insights, .transcript]
+        )
+        XCTAssertEqual(RecentMeetingDetailSection.insights.title, "Insights")
+        XCTAssertEqual(RecentMeetingDetailSection.transcript.title, "Transcript")
+    }
+
+    func testRecentMeetingTranscriptIsPresentedInChronologicalOrder() {
+        let presentation = RecentMeetingDetailPresentation(
+            insights: [],
+            transcriptSegments: [
+                RecentTranscriptSegment(sequenceNumber: 2, text: "The later point."),
+                RecentTranscriptSegment(sequenceNumber: 1, text: "The opening point."),
+            ]
+        )
+
+        XCTAssertEqual(
+            presentation.transcriptText,
+            "The opening point.\nThe later point."
+        )
+    }
+
 }
 
 private final class TestOpenAIAPIKeyStore: OpenAIAPIKeyStore, @unchecked Sendable {

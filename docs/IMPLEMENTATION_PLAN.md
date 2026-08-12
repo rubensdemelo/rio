@@ -10,8 +10,8 @@ Keep each task small enough for one focused pull request. Every implementation c
 
 - Build with Swift 6 strict concurrency.
 - Include tests proportional to its risk.
-- Keep audio, temporary text, model state, and insights ephemeral.
-- Avoid transcript UI, persistence, content-bearing logs, and unrelated product features.
+- Keep audio, rolling temporary text, model state, and active insights ephemeral.
+- Persist only the bounded two-day meeting snapshot: finalized transcript segments and generated insights.
 - Update product or architecture documents when it changes a documented decision.
 - Leave `docs/ROADMAP.md` incomplete until the behavior has been built and verified.
 
@@ -212,7 +212,7 @@ Use an injected clock to cover:
 - Add accessibility labels and keyboard activation.
 - Use a fake session controller for previews and automated tests.
 
-Do not add a transcript view, debug transcript panel, editor, history, export, or settings surface.
+Do not add a live transcript, editor, export, searchable archive, or unrelated settings surface. The completed-session Recent Meetings view is the approved read-only transcript surface.
 
 #### Test
 
@@ -330,7 +330,7 @@ Create one orchestration owner for the entire active session:
 5. Generate typed insight updates serially.
 6. Validate and apply cards.
 7. Propagate stop or failure through every stage.
-8. Clear capture buffers, temporary text, model state, and insight state.
+8. Save the completed meeting snapshot, then clear capture buffers, temporary text, model state, and active insight state.
 
 #### Test
 

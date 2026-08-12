@@ -6,7 +6,7 @@ Rio is a deliberately simple macOS meeting assistant for IBM employees. Bob help
 
 Start listening, stay engaged in the support call, and see meaningful technical signals and next-best questions as they emerge.
 
-Rio is not a transcription, note-taking, diagnosis, or autonomous-action app. Speech-to-text exists only as temporary input for understanding the call. The live transcript is not a product surface, and neither audio nor transcript text is retained after it is no longer needed for insight generation.
+Rio is not a note-taking, diagnosis, or autonomous-action app. Speech-to-text exists as temporary input for live understanding and as a read-only transcript available from Recent Meetings for two days. Audio is never retained.
 
 For technical-support calls, Rio identifies symptoms, errors, product/version/environment facts, recent changes, failed checks, and unanswered diagnostic questions. It can formulate retrieval intent for trusted local manuals and runbooks and present evidence-grounded possible directions. It must preserve uncertainty, never invent an owner or source, and never take action on the user's behalf.
 
@@ -33,7 +33,7 @@ Insights should update or replace earlier cards as the meeting develops instead 
 
 ## Data lifecycle
 
-Audio is processed as a live stream and is not recorded to a file. Bounded in-memory WAV chunks are sent to OpenAI only for temporary transcription. The resulting text is held only in a bounded, rolling context window and sent to OpenAI only for current live insights. Rio continuously discards audio buffers and temporary text that are no longer needed. It retains only the generated insight cards locally for the last two days, then removes them automatically. A user-provided OpenAI API key is stored separately in the macOS Keychain and is not meeting data.
+Audio is processed as a live stream and is not recorded to a file. Bounded in-memory WAV chunks are sent to OpenAI for transcription. Rio continuously discards audio buffers and rolling temporary context, while retaining finalized transcript segments and generated insight cards locally for the last two days. A user-provided OpenAI API key is stored separately in the macOS Keychain and is not meeting data.
 
 Current insight cards may remain visible until the user stops the meeting or closes the window. Recent insight cards remain available locally for two days; the MVP does not create an archive beyond that window.
 
@@ -42,7 +42,7 @@ Current insight cards may remain visible until the user stops the meeting or clo
 - A visible live transcript.
 - A note-taking editor.
 - Audio recording or playback.
-- Transcript export or meeting history beyond the two-day local insight window.
+- Transcript export, speaker labels, or meeting history beyond the two-day local window.
 - Meeting bots or joining calls on the user's behalf.
 - Speaker identification or diarization.
 - Accounts, calendars, CRM integrations, or team workspaces.
@@ -52,4 +52,4 @@ Current insight cards may remain visible until the user stops the meeting or clo
 
 ## Engineering priority
 
-First prove one complete loop on supported Macs: capture a real meeting, derive temporary text, generate useful OpenAI insights, and run reliably for a full meeting with bounded memory, no persistent audio or transcript, and a bounded two-day local insight history.
+First prove one complete loop on supported Macs: capture a real meeting, derive text, generate useful OpenAI insights, save the bounded local transcript-plus-insight record, and run reliably for a full meeting with bounded memory and no persistent audio.
