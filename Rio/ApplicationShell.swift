@@ -5,17 +5,12 @@ import SwiftUI
 @MainActor
 final class RioPanelRouter: ObservableObject {
     enum Panel: String, Identifiable {
-        case recentInsights
         case provider
 
         var id: String { rawValue }
     }
 
     @Published var presentedPanel: Panel?
-
-    func showRecentInsights() {
-        presentedPanel = .recentInsights
-    }
 
     func showProvider() {
         presentedPanel = .provider
@@ -279,8 +274,6 @@ struct RioView<Controller: SessionShellControlling>: View {
                 OpenAIProviderSetupView {
                     Task { await controller.checkReadiness() }
                 }
-            case .recentInsights:
-                RecentInsightsView()
             }
         }
     }
@@ -902,7 +895,7 @@ private struct OpenAIAPIKeyDetailsView: View {
     }
 }
 
-private struct RecentInsightsView: View {
+struct RecentInsightsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var insightHistory: InsightHistoryStore
 

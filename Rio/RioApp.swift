@@ -39,6 +39,13 @@ struct RioApp: App {
         .defaultSize(width: 560, height: 96)
         .windowResizability(.contentSize)
 
+        Window("Recent Insights", id: "recent-insights") {
+            RecentInsightsView()
+                .environmentObject(insightHistory)
+        }
+        .defaultSize(width: 540, height: 560)
+        .windowResizability(.contentSize)
+
         MenuBarExtra("Rio", image: "RioMenuBarIcon") {
             RioMenuBarMenu(controller: sessionController)
                 .environmentObject(panelRouter)
@@ -82,9 +89,8 @@ private struct RioMenuBarMenu<Controller: SessionShellControlling>: View {
         Divider()
 
         Button("Recent Insights") {
-            openWindow(id: "main")
+            openWindow(id: "recent-insights")
             NSApp.activate(ignoringOtherApps: true)
-            panelRouter.showRecentInsights()
         }
 
         Button("Provider & API Key") {

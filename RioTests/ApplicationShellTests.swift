@@ -2,11 +2,8 @@ import XCTest
 
 @MainActor
 final class ApplicationShellTests: XCTestCase {
-    func testPanelRouterSelectsRecentInsightsAndProvider() {
+    func testPanelRouterSelectsProvider() {
         let router = RioPanelRouter()
-
-        router.showRecentInsights()
-        XCTAssertEqual(router.presentedPanel, .recentInsights)
 
         router.showProvider()
         XCTAssertEqual(router.presentedPanel, .provider)
