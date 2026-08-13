@@ -95,6 +95,13 @@ The context manager:
 
 The first implementation should trigger insight analysis on a small batch of new finalized text, with a maximum wait so quiet or slow meetings still produce updates. Exact thresholds must be tuned with recorded test fixtures and live meetings rather than treated as product behavior.
 
+Transient insight request failures caused by network loss, rate limiting,
+service errors, incomplete responses, or invalid structured output are retried
+with cancellation-safe exponential backoff. Rio keeps capture and finalized
+transcript collection alive while these retries run; a batch is skipped only
+after the bounded retry budget is exhausted. Authentication and other
+non-transient request failures remain explicit unavailable states.
+
 ### Meeting understanding
 
 Use OpenAI's Responses API with `gpt-5-mini` by default. OpenAI is the default and only MVP provider. The user supplies their own API key in Provider settings; Rio stores it only in the macOS Keychain and never in the bundle, source tree, diagnostics, app preferences, or an environment variable. Transcription uses `gpt-4o-transcribe` by default.

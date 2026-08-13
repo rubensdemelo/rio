@@ -119,3 +119,6 @@ The MVP is successful when:
 7. A one-hour meeting completes without deadlock, unrecovered capture failure, or unbounded memory growth.
 8. The app clearly reports a missing or rejected OpenAI API key, denied permission, transcription failure, and interrupted capture states.
 9. Completed meetings persist their finalized transcript and generated insight cards locally, automatically expire after two days, and never include audio.
+
+Transient insight service failures do not end an active listening session. Rio
+retries them while preserving capture and the finalized transcript pipeline.

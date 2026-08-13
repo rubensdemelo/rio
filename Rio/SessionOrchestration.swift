@@ -23,6 +23,30 @@ protocol MeetingContextFactory: Sendable {
     func makeContext() -> any RollingMeetingContext
 }
 
+private enum InsightRetryPolicy {
+    static let maximumRetries = 3
+
+    static func shouldRetry(_ failure: PipelineFailure) -> Bool {
+        guard case .stage(.insightGeneration, let reason) = failure else {
+            return false
+        }
+        switch reason {
+        case .network, .rateLimited, .serviceUnavailable, .failed, .responseInvalid:
+            return true
+        case .interrupted, .overloaded, .invalidState, .requestRejected:
+            return false
+        }
+    }
+
+    static func delay(for retryNumber: Int) -> Duration {
+        switch retryNumber {
+        case 1: .seconds(1)
+        case 2: .seconds(2)
+        default: .seconds(4)
+        }
+    }
+}
+
 struct BoundedMeetingContextFactory: MeetingContextFactory, Sendable {
     let configuration: MeetingContextConfiguration
     let tokenEstimator: BoundedRollingMeetingContext.TokenEstimator
@@ -397,17 +421,38 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         for batch: MeetingContextBatch,
         sessionID: UInt64
     ) async throws(PipelineFailure) -> [InsightUpdate] {
-        do {
-            return try await insightGenerator.generate(from: batch)
-        } catch let failure where failure == .stage(.insightGeneration, .failed)
-            || failure == .stage(.insightGeneration, .responseInvalid) {
-            // A single API request may fail transiently. Rebuild the ephemeral
-            // request state and retry the same bounded batch once.
-            await insightGenerator.stop()
-            try ensureActive(sessionID)
-            try await insightGenerator.startSession(localeIdentifier: localeIdentifier)
-            try ensureActive(sessionID)
-            return try await insightGenerator.generate(from: batch)
+        var retryNumber = 0
+
+        while true {
+            do {
+                return try await insightGenerator.generate(from: batch)
+            } catch let failure {
+                guard InsightRetryPolicy.shouldRetry(failure) else {
+                    throw failure
+                }
+
+                guard retryNumber < InsightRetryPolicy.maximumRetries else {
+                    // Keep capture and finalized-transcript collection alive.
+                    // The bounded batch has already been delivered to this
+                    // method and is intentionally skipped only after retries
+                    // are exhausted.
+                    return []
+                }
+
+                retryNumber += 1
+                await insightGenerator.stop()
+                try ensureActive(sessionID)
+                do {
+                    try await Task.sleep(
+                        for: InsightRetryPolicy.delay(for: retryNumber)
+                    )
+                } catch {
+                    throw .cancelled
+                }
+                try ensureActive(sessionID)
+                try await insightGenerator.startSession(localeIdentifier: localeIdentifier)
+                try ensureActive(sessionID)
+            }
         }
     }
 

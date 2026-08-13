@@ -44,15 +44,15 @@ final class VerticalSliceIntegrationTests: XCTestCase {
 
         let firstSpeechStream = await speech.lastStream()
         firstSpeechStream?.yield(makeSegment(sequence: 1, text: "old session"))
-        await waitUntil {
-            controller.status == SessionStatus.processing
+        await waitUntil(description: "first processing") {
+            controller.status == SessionStatus.processing || controller.cards.count == 1
         }
 
         await controller.performPrimaryAction()
         XCTAssertEqual(controller.status, SessionStatus.stopped)
         XCTAssertTrue(controller.cards.isEmpty)
 
-        await waitUntil {
+        await waitUntil(description: "first context cleanup") {
             contextFactory.contexts().count == 1
         }
         let firstContext = contextFactory.contexts()[0]
@@ -64,7 +64,7 @@ final class VerticalSliceIntegrationTests: XCTestCase {
         let secondSpeechStream = await speech.lastStream()
         secondSpeechStream?.yield(makeSegment(sequence: 1, text: "new session"))
 
-        await waitUntil {
+        await waitUntil(description: "new card") {
             controller.cards.count == 1 && controller.cards[0].text == "new card"
         }
         try await Task.sleep(for: .milliseconds(75))
@@ -88,7 +88,7 @@ final class VerticalSliceIntegrationTests: XCTestCase {
         XCTAssertEqual(generatorStops, 2)
     }
 
-    func testVerticalSliceRestartsAfterGenerationFailure() async throws {
+    func testVerticalSliceRetriesGenerationFailureWithoutRestartingListening() async throws {
         let capture = TestSessionAudioCapture()
         let speech = TestSessionSpeechRecognizer()
         let generator = TestSessionInsightGenerator(
@@ -122,22 +122,17 @@ final class VerticalSliceIntegrationTests: XCTestCase {
         await controller.performPrimaryAction()
         let firstSpeechStream = await speech.lastStream()
         firstSpeechStream?.yield(makeSegment(sequence: 1, text: "first attempt"))
-        await waitUntil {
-            controller.status == SessionStatus.unavailable
+        await waitUntil(timeout: .seconds(8)) {
+            controller.status == SessionStatus.listening
+                && controller.cards.count == 1
         }
-        XCTAssertTrue(controller.cards.isEmpty)
-
-        await controller.performPrimaryAction()
-        let secondSpeechStream = await speech.lastStream()
-        secondSpeechStream?.yield(makeSegment(sequence: 1, text: "second attempt"))
-        await waitUntil {
-            controller.cards.count == 1 && controller.cards[0].text == "new question"
-        }
+        XCTAssertEqual(controller.status, SessionStatus.listening)
+        XCTAssertEqual(controller.cards[0].text, "new question")
 
         await controller.performPrimaryAction()
         XCTAssertEqual(controller.status, SessionStatus.stopped)
         XCTAssertTrue(controller.cards.isEmpty)
-        XCTAssertEqual(contextFactory.contexts().count, 2)
+        XCTAssertEqual(contextFactory.contexts().count, 1)
     }
 
     func testVerticalSliceKeepsOnlyInsightCardsInRecentHistory() async throws {
@@ -174,7 +169,7 @@ final class VerticalSliceIntegrationTests: XCTestCase {
         let speechStream = await speech.lastStream()
         speechStream?.yield(makeSegment(sequence: 1, text: "synthetic meeting input"))
 
-        await waitUntil {
+        await waitUntil(description: "history card") {
             history.entries.map(\.text) == ["Use the safe rollout"]
         }
         await controller.performPrimaryAction()
@@ -185,16 +180,19 @@ final class VerticalSliceIntegrationTests: XCTestCase {
     }
 
     private func waitUntil(
+        description: String = "transition",
+        timeout: Duration = .seconds(8),
         _ condition: @escaping @MainActor () -> Bool
     ) async {
-        for _ in 0..<200 {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
             if condition() {
                 return
             }
             await Task.yield()
             try? await Task.sleep(for: .milliseconds(1))
         }
-        XCTFail("Timed out waiting for vertical slice transition")
+        XCTFail("Timed out waiting for vertical slice \(description)")
     }
 
     private func makeSegment(sequence: UInt64, text: String) -> FinalizedSpeechSegment {

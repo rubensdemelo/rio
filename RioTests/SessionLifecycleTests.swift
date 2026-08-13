@@ -370,7 +370,7 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertEqual(state.resetCount, 2)
     }
 
-    func testGenerationFailurePropagatesAfterFinalizedSpeech() async throws {
+    func testRepeatedTransientGenerationFailureDoesNotStopListening() async throws {
         let speech = TestSessionSpeechRecognizer()
         let generator = TestSessionInsightGenerator(
             generateFailure: .stage(.insightGeneration, .failed),
@@ -386,11 +386,13 @@ final class SessionLifecycleTests: XCTestCase {
         try await coordinator.start()
         let speechStream = await speech.lastStream()
         speechStream?.yield(makeSegment(sequence: 1, text: "synthetic generation failure"))
-        await waitUntil { coordinator.status == .unavailable }
+        await waitUntil(timeout: .seconds(8)) { state.appliedContexts.count == 1 }
 
-        XCTAssertTrue(state.appliedContexts.isEmpty)
+        XCTAssertEqual(coordinator.status, .listening)
+        XCTAssertEqual(state.appliedContexts.count, 1)
         let generatorCancellations = await generator.cancelCount()
-        XCTAssertEqual(generatorCancellations, 1)
+        XCTAssertEqual(generatorCancellations, 0)
+        await coordinator.stop()
     }
 
     func testTransientGenerationFailureRestartsTheModelAndRetriesTheBatch() async throws {
@@ -409,13 +411,41 @@ final class SessionLifecycleTests: XCTestCase {
         try await coordinator.start()
         let speechStream = await speech.lastStream()
         speechStream?.yield(makeSegment(sequence: 1, text: "synthetic retry"))
-        await waitUntil { state.appliedContexts.count == 1 }
+        await waitUntil(timeout: .seconds(8)) { state.appliedContexts.count == 1 }
 
         XCTAssertEqual(coordinator.status, SessionStatus.listening)
         let modelStops = await generator.stopCount()
         let modelStarts = await generator.startSessionCount()
         XCTAssertEqual(modelStops, 1)
         XCTAssertEqual(modelStarts, 2)
+        await coordinator.stop()
+    }
+
+    func testTransientNetworkFailureRestartsTheModelAndRetriesTheSameBatch() async throws {
+        let speech = TestSessionSpeechRecognizer()
+        let generator = TestSessionInsightGenerator(
+            updates: [makeUpdate(text: "recovered network insight")],
+            generateFailure: .stage(.insightGeneration, .network),
+            generateFailureCount: 2
+        )
+        let state = TestSessionInsightState()
+        let coordinator = makeCoordinator(
+            speech: speech,
+            generator: generator,
+            state: state
+        )
+
+        try await coordinator.start()
+        let speechStream = await speech.lastStream()
+        speechStream?.yield(makeSegment(sequence: 1, text: "synthetic network retry"))
+        await waitUntil(timeout: .seconds(8)) { state.cards.count == 1 }
+
+        XCTAssertEqual(coordinator.status, .listening)
+        XCTAssertEqual(state.appliedContexts.count, 1)
+        let modelStops = await generator.stopCount()
+        let modelStarts = await generator.startSessionCount()
+        XCTAssertEqual(modelStops, 2)
+        XCTAssertEqual(modelStarts, 3)
         await coordinator.stop()
     }
 
@@ -435,7 +465,7 @@ final class SessionLifecycleTests: XCTestCase {
         try await coordinator.start()
         let speechStream = await speech.lastStream()
         speechStream?.yield(makeSegment(sequence: 1, text: "synthetic invalid response"))
-        await waitUntil { state.appliedContexts.count == 1 }
+        await waitUntil(timeout: .seconds(8)) { state.appliedContexts.count == 1 }
 
         XCTAssertEqual(coordinator.status, SessionStatus.listening)
         let modelStops = await generator.stopCount()
@@ -697,9 +727,11 @@ final class SessionLifecycleTests: XCTestCase {
     }
 
     private func waitUntil(
+        timeout: Duration = .milliseconds(100),
         _ condition: @escaping @MainActor () -> Bool
     ) async {
-        for _ in 0..<100 {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
             if condition() {
                 return
             }
