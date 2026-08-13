@@ -19,8 +19,8 @@ final class ApplicationShellTests: XCTestCase {
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = ListeningCadenceSettings(defaults: defaults)
-        XCTAssertEqual(settings.selection, .fifteenSeconds)
-        XCTAssertEqual(settings.selection.title, "15 seconds")
+        XCTAssertEqual(settings.selection, .thirtySeconds)
+        XCTAssertEqual(settings.selection.title, "30 seconds")
 
         settings.selection = .fortyFiveSeconds
 

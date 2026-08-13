@@ -239,7 +239,7 @@ actor OpenAITranscriptionAdapter: SessionSpeechRecognizer {
             OpenAIAPIConfiguration.stored()
         },
         client: any OpenAIHTTPClient = URLSessionOpenAIHTTPClient(),
-        batchDuration: Duration = .seconds(15)
+        batchDuration: Duration = .seconds(30)
     ) {
         self.configurationProvider = { configuration ?? configurationProvider() }
         self.client = client

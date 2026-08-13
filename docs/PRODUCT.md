@@ -36,7 +36,8 @@ menu-bar action stays unavailable until the blocking checks pass.
 
 While listening, Rio shows a compact live microphone input level so the user can tell that capture is active without exposing a live transcript. The main window has one primary action: start listening or stop listening and clear the active session. Recent Meetings opens read-only transcripts and insights saved locally from the last two days. A concise cue explains that audio is never retained and finalized transcript text is kept only for that two-day window.
 
-Provider settings also include an Insight pace choice of 15, 30, or 45 seconds.
+Provider settings also include an Insight pace choice of 15, 30, or 45 seconds;
+30 seconds is the default for a new installation.
 This controls how much live meeting audio Rio groups before sending it for
 temporary transcription. Shorter choices produce quicker updates with more
 requests; longer choices use fewer requests and more context but make insights

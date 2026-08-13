@@ -98,7 +98,7 @@ final class LiveSessionController: SessionShellControlling {
             unavailableReason = nil
             do {
                 await lifecycle.configure(
-                    cadence: listeningCadenceSettings?.selection ?? .fifteenSeconds
+                    cadence: listeningCadenceSettings?.selection ?? .thirtySeconds
                 )
                 try await lifecycle.start()
                 insightHistorySessionID = UUID()
@@ -224,7 +224,7 @@ enum RioCompositionRoot {
         let capture = CoreAudioSystemAudioCapture()
         let speechRecognizer = OpenAITranscriptionAdapter(
             batchDuration: listeningCadenceSettings?.selection.audioBatchDuration
-                ?? ListeningCadence.fifteenSeconds.audioBatchDuration
+                ?? ListeningCadence.thirtySeconds.audioBatchDuration
         )
         let contextFactory = BoundedMeetingContextFactory(
             configuration: MeetingContextConfiguration(

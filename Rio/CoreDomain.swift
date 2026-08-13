@@ -43,7 +43,7 @@ final class ListeningCadenceSettings: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         let storedSeconds = defaults.integer(forKey: Self.storageKey)
-        selection = ListeningCadence(rawValue: storedSeconds) ?? .fifteenSeconds
+        selection = ListeningCadence(rawValue: storedSeconds) ?? .thirtySeconds
     }
 }
 
