@@ -2,6 +2,25 @@ import XCTest
 import Observation
 
 final class CoreContractsTests: XCTestCase {
+    @MainActor
+    func testTranscriptionVocabularyIsBoundedAndPersistsAsConfiguration() {
+        let suiteName = "RioTests.TranscriptionVocabulary.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = TranscriptionVocabularySettings(defaults: defaults)
+        settings.prompt = "Db2, IRLM, DASD"
+
+        XCTAssertEqual(settings.transcriptionPrompt, "Db2, IRLM, DASD")
+        XCTAssertEqual(
+            TranscriptionVocabularySettings(defaults: defaults).prompt,
+            "Db2, IRLM, DASD"
+        )
+
+        settings.prompt = String(repeating: "x", count: 1_001)
+        XCTAssertEqual(settings.prompt.count, TranscriptionVocabularySettings.maximumPromptLength)
+    }
+
     func testDomainValuesHaveStableValueSemantics() {
         let update = InsightUpdate(
             stableKey: "decision-1",

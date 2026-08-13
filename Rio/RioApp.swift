@@ -8,10 +8,12 @@ struct RioApp: App {
     @StateObject private var meetingHistory: MeetingHistoryStore
     @StateObject private var panelRouter: RioPanelRouter
     @StateObject private var listeningCadenceSettings: ListeningCadenceSettings
+    @StateObject private var transcriptionVocabularySettings: TranscriptionVocabularySettings
 
     init() {
         let meetingHistory = MeetingHistoryStore()
         let listeningCadenceSettings = ListeningCadenceSettings()
+        let transcriptionVocabularySettings = TranscriptionVocabularySettings()
         let sessionController = RioCompositionRoot.makeLiveController(
             meetingHistory: meetingHistory,
             listeningCadenceSettings: listeningCadenceSettings
@@ -21,6 +23,9 @@ struct RioApp: App {
         _meetingHistory = StateObject(wrappedValue: meetingHistory)
         _panelRouter = StateObject(wrappedValue: RioPanelRouter())
         _listeningCadenceSettings = StateObject(wrappedValue: listeningCadenceSettings)
+        _transcriptionVocabularySettings = StateObject(
+            wrappedValue: transcriptionVocabularySettings
+        )
 
         Task { @MainActor in
             await sessionController.checkReadiness()
@@ -33,6 +38,7 @@ struct RioApp: App {
                 .environmentObject(providerSettings)
                 .environmentObject(panelRouter)
                 .environmentObject(listeningCadenceSettings)
+                .environmentObject(transcriptionVocabularySettings)
         }
         .defaultLaunchBehavior(.suppressed)
         .defaultSize(width: 560, height: 96)
@@ -51,6 +57,7 @@ struct RioApp: App {
                 .environmentObject(panelRouter)
                 .environmentObject(providerSettings)
                 .environmentObject(listeningCadenceSettings)
+                .environmentObject(transcriptionVocabularySettings)
         }
         .menuBarExtraStyle(.menu)
     }

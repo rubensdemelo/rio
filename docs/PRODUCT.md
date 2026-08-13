@@ -38,6 +38,12 @@ While listening, Rio shows a compact live microphone input level so the user can
 
 Provider settings also include an Insight pace choice of 15, 30, or 45 seconds;
 30 seconds is the default for a new installation.
+
+Provider settings also include an optional Technical vocabulary field. The user
+can enter concise product names, acronyms, versions, and error-code prefixes to
+guide OpenAI transcription. This bounded configuration is sent with each
+transcription request and must not contain meeting notes or other meeting
+content.
 This controls how much live meeting audio Rio groups before sending it for
 temporary transcription. Shorter choices produce quicker updates with more
 requests; longer choices use fewer requests and more context but make insights
@@ -93,6 +99,9 @@ Transcription is a cloud stage: Rio sends bounded in-memory WAV chunks to OpenAI
 - Entries older than two days are removed automatically, and the user can clear the local history at any time.
 - The user-provided OpenAI API key is retained separately in the macOS Keychain as configuration, not meeting data.
 - No audio, transcript text, insight text outside the two-day local history, or secrets may appear in logs.
+- The bounded user-provided technical vocabulary is retained locally as
+  configuration, not meeting data; it must not contain meeting notes or other
+  meeting content.
 
 ## Explicit exclusions
 

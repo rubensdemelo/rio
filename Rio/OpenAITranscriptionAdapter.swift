@@ -79,12 +79,16 @@ enum WAVEncoder {
 private enum OpenAITranscriptionRequest {
     static func make(
         configuration: OpenAIAPIConfiguration,
-        audio: Data
+        audio: Data,
+        prompt: String?
     ) -> URLRequest {
         let boundary = "RioBoundary-\(UUID().uuidString)"
         var body = Data()
         appendField("model", value: configuration.transcriptionModel, boundary: boundary, to: &body)
         appendField("language", value: "en", boundary: boundary, to: &body)
+        if let prompt {
+            appendField("prompt", value: prompt, boundary: boundary, to: &body)
+        }
         appendField("response_format", value: "json", boundary: boundary, to: &body)
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"file\"; filename=\"meeting.wav\"\r\n".data(using: .utf8)!)
@@ -122,6 +126,7 @@ private actor OpenAITranscriptionQueue {
     private let configuration: OpenAIAPIConfiguration
     private let client: any OpenAIHTTPClient
     private let continuation: FinalizedSpeechStream.Continuation
+    private let prompt: String?
     private var pending: [WAVAudioBatch] = []
     private var worker: Task<Void, Never>?
     private var acceptsInput = true
@@ -130,11 +135,13 @@ private actor OpenAITranscriptionQueue {
     init(
         configuration: OpenAIAPIConfiguration,
         client: any OpenAIHTTPClient,
-        continuation: FinalizedSpeechStream.Continuation
+        continuation: FinalizedSpeechStream.Continuation,
+        prompt: String?
     ) {
         self.configuration = configuration
         self.client = client
         self.continuation = continuation
+        self.prompt = prompt
     }
 
     func enqueue(_ batch: WAVAudioBatch) {
@@ -171,11 +178,13 @@ private actor OpenAITranscriptionQueue {
         let batch = pending.removeFirst()
         let configuration = configuration
         let client = client
+        let requestPrompt = prompt
         let worker = Task { [weak self] in
             do {
                 let request = OpenAITranscriptionRequest.make(
                     configuration: configuration,
-                    audio: batch.wavData
+                    audio: batch.wavData,
+                    prompt: requestPrompt
                 )
                 let (data, response) = try await client.data(for: request)
                 guard (200...299).contains(response.statusCode) else {
@@ -228,6 +237,7 @@ private actor OpenAITranscriptionQueue {
 
 actor OpenAITranscriptionAdapter: SessionSpeechRecognizer {
     private let configurationProvider: @Sendable () -> OpenAIAPIConfiguration?
+    private let transcriptionPromptProvider: @Sendable () -> String?
     private let client: any OpenAIHTTPClient
     private var batchDuration: Duration
     private var processingTask: Task<Void, Never>?
@@ -239,9 +249,13 @@ actor OpenAITranscriptionAdapter: SessionSpeechRecognizer {
             OpenAIAPIConfiguration.stored()
         },
         client: any OpenAIHTTPClient = URLSessionOpenAIHTTPClient(),
-        batchDuration: Duration = .seconds(30)
+        batchDuration: Duration = .seconds(30),
+        transcriptionPromptProvider: @escaping @Sendable () -> String? = {
+            TranscriptionVocabularyConfiguration.storedPrompt()
+        }
     ) {
         self.configurationProvider = { configuration ?? configurationProvider() }
+        self.transcriptionPromptProvider = transcriptionPromptProvider
         self.client = client
         self.batchDuration = batchDuration
     }
@@ -283,7 +297,8 @@ actor OpenAITranscriptionAdapter: SessionSpeechRecognizer {
         let queue = OpenAITranscriptionQueue(
             configuration: configuration,
             client: client,
-            continuation: outputContinuation
+            continuation: outputContinuation,
+            prompt: transcriptionPromptProvider()
         )
         self.queue = queue
         processingTask = Task { [weak self] in

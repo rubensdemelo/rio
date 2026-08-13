@@ -1,6 +1,50 @@
 import Combine
 import Foundation
 
+enum TranscriptionVocabularyConfiguration {
+    static let maximumPromptLength = 1_000
+    static let storageKey = "transcriptionVocabularyPrompt"
+
+    static func storedPrompt(defaults: UserDefaults = .standard) -> String? {
+        normalized(defaults.string(forKey: storageKey))
+    }
+
+    static func normalized(_ prompt: String?) -> String? {
+        guard let prompt else { return nil }
+        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
+@MainActor
+final class TranscriptionVocabularySettings: ObservableObject {
+    static let maximumPromptLength = TranscriptionVocabularyConfiguration.maximumPromptLength
+
+    @Published var prompt: String {
+        didSet {
+            if prompt.count > Self.maximumPromptLength {
+                prompt = String(prompt.prefix(Self.maximumPromptLength))
+                return
+            }
+            defaults.set(prompt, forKey: TranscriptionVocabularyConfiguration.storageKey)
+        }
+    }
+
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        prompt = String(
+            (defaults.string(forKey: TranscriptionVocabularyConfiguration.storageKey) ?? "")
+                .prefix(Self.maximumPromptLength)
+        )
+    }
+
+    var transcriptionPrompt: String? {
+        TranscriptionVocabularyConfiguration.normalized(prompt)
+    }
+}
+
 enum ListeningCadence: Int, CaseIterable, Hashable, Identifiable, Sendable {
     case fifteenSeconds = 15
     case thirtySeconds = 30

@@ -714,6 +714,7 @@ private struct OpenAIProviderSetupView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var providerSettings: OpenAIProviderSettings
     @EnvironmentObject private var listeningCadenceSettings: ListeningCadenceSettings
+    @EnvironmentObject private var transcriptionVocabularySettings: TranscriptionVocabularySettings
     @State private var isShowingKeyDetails = false
     @State private var isConfirmingDeletion = false
 
@@ -795,6 +796,10 @@ private struct OpenAIProviderSetupView: View {
 
             listeningCadenceSection
 
+            Divider()
+
+            technicalVocabularySection
+
             HStack {
                 Spacer()
                 Button("Done") { dismiss() }
@@ -827,6 +832,31 @@ private struct OpenAIProviderSetupView: View {
             Text("This takes effect the next time you start listening.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+    }
+
+    private var technicalVocabularySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Technical vocabulary")
+                .font(.headline)
+            Text("Optional terms to guide transcription, such as product names, acronyms, versions, and error-code prefixes. Do not include meeting notes or other meeting content.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            TextEditor(text: $transcriptionVocabularySettings.prompt)
+                .font(.body)
+                .frame(height: 90)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.secondary.opacity(0.35))
+                }
+                .accessibilityLabel("Technical vocabulary for transcription")
+
+            Text("Stored locally as configuration and sent with each transcription request. \(transcriptionVocabularySettings.prompt.count)/\(TranscriptionVocabularySettings.maximumPromptLength) characters. Changes apply to the next listening session.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

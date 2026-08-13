@@ -73,6 +73,11 @@ display-capture API.
 
 Use OpenAI's `gpt-4o-transcribe` through `POST /v1/audio/transcriptions`. The adapter converts bounded interleaved float audio to PCM16 WAV bytes in memory, identifies the expected English input language to improve accuracy and latency, sends a multipart request, and yields only nonempty finalized text. No WAV data is written to disk.
 
+An optional bounded user-provided technical-vocabulary prompt supplies static
+product names, acronyms, versions, and error-code prefixes to transcription.
+It is local configuration applied to the next session, never derived from
+meeting text, and must not contain meeting notes or other meeting content.
+
 The collector keeps accepting capture chunks while a single request is in flight. Its pending request queue is bounded to two batches; when the service cannot keep up, it drops the oldest pending audio rather than accumulating memory or blocking capture. This is intentional: Rio is a live insight stream, not a recording or transcript archive.
 
 The transcription batch duration is selected from the persisted `ListeningCadence`

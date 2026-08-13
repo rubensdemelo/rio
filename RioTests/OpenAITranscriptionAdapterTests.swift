@@ -39,6 +39,23 @@ final class OpenAITranscriptionAdapterTests: XCTestCase {
         XCTAssertNil(request.httpBody?.range(of: Data("meeting decision".utf8)))
     }
 
+    func testTranscriptionSendsConfiguredTechnicalVocabularyOnlyAsPrompt() async throws {
+        let client = RecordingTranscriptionHTTPClient(text: "technical term")
+        let adapter = OpenAITranscriptionAdapter(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client,
+            batchDuration: .seconds(1),
+            transcriptionPromptProvider: { "Db2, IRLM, DASD" }
+        )
+        let stream = try await adapter.recognize(audio: audioStream())
+
+        for try await _ in stream {}
+
+        let request = await client.request()
+        let body = try XCTUnwrap(request?.httpBody)
+        XCTAssertNotNil(body.range(of: Data("name=\"prompt\"\r\n\r\nDb2, IRLM, DASD\r\n".utf8)))
+    }
+
     func testMissingAPIKeyIsReportedBeforeAudioCapture() async {
         let adapter = OpenAITranscriptionAdapter(
             configuration: nil,
