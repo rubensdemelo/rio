@@ -40,35 +40,50 @@ enum SystemAudioSampleDecoder {
     }
 }
 
+private struct CoreAudioRawBuffer: Sendable {
+    let sequenceNumber: UInt64
+    let buffers: [Data]
+}
+
+private enum CoreAudioRawBufferCopier {
+    static func copy(
+        _ inputData: UnsafePointer<AudioBufferList>,
+        sequenceNumber: UInt64
+    ) -> CoreAudioRawBuffer? {
+        let buffers = UnsafeMutableAudioBufferListPointer(
+            UnsafeMutablePointer(mutating: inputData)
+        )
+        let copiedBuffers = buffers.compactMap { buffer -> Data? in
+            guard let data = buffer.mData, buffer.mDataByteSize > 0 else {
+                return nil
+            }
+            return Data(bytes: data, count: Int(buffer.mDataByteSize))
+        }
+        guard !copiedBuffers.isEmpty else { return nil }
+        return CoreAudioRawBuffer(sequenceNumber: sequenceNumber, buffers: copiedBuffers)
+    }
+}
+
 private enum CoreAudioSampleChunkDecoder {
     static func chunk(
-        from inputData: UnsafePointer<AudioBufferList>,
+        from rawBuffer: CoreAudioRawBuffer,
         format: AudioStreamBasicDescription,
-        sequenceNumber: UInt64
     ) -> AudioChunk? {
-        let buffers = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: inputData))
-        guard !buffers.isEmpty,
-              format.mChannelsPerFrame > 0,
+        guard format.mChannelsPerFrame > 0,
               format.mSampleRate > 0 else {
             return nil
         }
 
         let channelCount = Int(format.mChannelsPerFrame)
         let isNonInterleaved = format.mFormatFlags & kAudioFormatFlagIsNonInterleaved != 0
-        let decodedBuffers = buffers.compactMap { buffer -> [Float]? in
-            guard let data = buffer.mData,
-                  buffer.mDataByteSize > 0 else {
-                return nil
-            }
-            let bytes = UnsafeRawBufferPointer(
-                start: data,
-                count: Int(buffer.mDataByteSize)
-            )
-            return SystemAudioSampleDecoder.decode(
+        let decodedBuffers = rawBuffer.buffers.compactMap { data in
+            data.withUnsafeBytes { bytes in
+                SystemAudioSampleDecoder.decode(
                 bytes: bytes,
                 bitsPerChannel: format.mBitsPerChannel,
                 formatFlags: format.mFormatFlags
-            )
+                )
+            }
         }
         guard !decodedBuffers.isEmpty else { return nil }
 
@@ -101,7 +116,7 @@ private enum CoreAudioSampleChunkDecoder {
         } / Float(samples.count)
 
         return AudioChunk(
-            sequenceNumber: sequenceNumber,
+            sequenceNumber: rawBuffer.sequenceNumber,
             duration: .seconds(Double(frameCount) / format.mSampleRate),
             sampleRate: format.mSampleRate,
             channelCount: channelCount,
@@ -112,21 +127,15 @@ private enum CoreAudioSampleChunkDecoder {
 }
 
 private final class CoreAudioCaptureCallbackState: @unchecked Sendable {
-    let queue: BoundedAudioQueue
-    let inputLevelMonitor: AudioInputLevelMonitor
-    let format: AudioStreamBasicDescription
+    let rawQueue: BoundedQueue<CoreAudioRawBuffer>
 
     private let sequenceLock = NSLock()
     private var sequenceNumber: UInt64 = 0
 
     init(
-        queue: BoundedAudioQueue,
-        inputLevelMonitor: AudioInputLevelMonitor,
-        format: AudioStreamBasicDescription
+        rawQueue: BoundedQueue<CoreAudioRawBuffer>
     ) {
-        self.queue = queue
-        self.inputLevelMonitor = inputLevelMonitor
-        self.format = format
+        self.rawQueue = rawQueue
     }
 
     func receive(_ inputData: UnsafePointer<AudioBufferList>) {
@@ -134,16 +143,11 @@ private final class CoreAudioCaptureCallbackState: @unchecked Sendable {
             defer { self.sequenceNumber &+= 1 }
             return self.sequenceNumber
         }
-        guard let chunk = CoreAudioSampleChunkDecoder.chunk(
-            from: inputData,
-            format: format,
+        guard let rawBuffer = CoreAudioRawBufferCopier.copy(
+            inputData,
             sequenceNumber: sequenceNumber
-        ) else {
-            return
-        }
-
-        inputLevelMonitor.update(level: chunk.inputLevel)
-        _ = queue.enqueue(chunk)
+        ) else { return }
+        _ = rawQueue.enqueue(rawBuffer)
     }
 }
 
@@ -193,6 +197,8 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
     private let inputLevelMonitor: AudioInputLevelMonitor
 
     private var queue: BoundedAudioQueue?
+    private var rawQueue: BoundedQueue<CoreAudioRawBuffer>?
+    private var decodingTask: Task<Void, Never>?
     private var activeStream: AudioStream?
     private var resources: CoreAudioCaptureResources?
     private var callbackState: CoreAudioCaptureCallbackState?
@@ -239,6 +245,7 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
         guard !Task.isCancelled else { throw .cancelled }
 
         let queue = BoundedAudioQueue(capacity: queueCapacity)
+        let rawQueue = BoundedQueue<CoreAudioRawBuffer>(capacity: queueCapacity)
         let audioStream = queue.makeStream(
             onOutputDrop: {},
             onTermination: { [weak self] in
@@ -247,10 +254,16 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
         )
 
         do {
-            let resources = try makeResources(queue: queue)
+            let resources = try makeResources(rawQueue: rawQueue)
             self.queue = queue
+            self.rawQueue = rawQueue
             activeStream = audioStream
             self.resources = resources
+            decodingTask = makeDecodingTask(
+                rawQueue: rawQueue,
+                destination: queue,
+                format: try resources.tap.format
+            )
             isRunning = true
 
             guard !Task.isCancelled, !cancellationRequested else {
@@ -287,7 +300,9 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
         await finish(throwing: .cancelled)
     }
 
-    private func makeResources(queue: BoundedAudioQueue) throws -> CoreAudioCaptureResources {
+    private func makeResources(
+        rawQueue: BoundedQueue<CoreAudioRawBuffer>
+    ) throws -> CoreAudioCaptureResources {
         let system = AudioHardwareSystem.shared
         guard try system.defaultOutputDevice != nil else {
             throw CoreAudioCaptureError.noOutputDevice
@@ -322,9 +337,7 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
             try createdAggregate.setSubtaps([createdTap])
 
             let callbackState = CoreAudioCaptureCallbackState(
-                queue: queue,
-                inputLevelMonitor: inputLevelMonitor,
-                format: try createdTap.format
+                rawQueue: rawQueue
             )
             self.callbackState = callbackState
 
@@ -374,9 +387,42 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
         activeStream = nil
         isRunning = false
         inputLevelMonitor.reset()
+        decodingTask?.cancel()
+        decodingTask = nil
+        rawQueue?.finish(throwing: failure)
+        rawQueue = nil
         queue?.finish(throwing: failure)
         queue = nil
         resources?.stop()
+    }
+
+    private func makeDecodingTask(
+        rawQueue: BoundedQueue<CoreAudioRawBuffer>,
+        destination: BoundedAudioQueue,
+        format: AudioStreamBasicDescription
+    ) -> Task<Void, Never> {
+        let rawStream = rawQueue.makeStream(
+            onOutputDrop: {},
+            onTermination: {}
+        )
+        return Task.detached(priority: .userInitiated) { [inputLevelMonitor] in
+            do {
+                for try await rawBuffer in rawStream {
+                    try Task.checkCancellation()
+                    guard let chunk = CoreAudioSampleChunkDecoder.chunk(
+                        from: rawBuffer,
+                        format: format
+                    ) else { continue }
+                    inputLevelMonitor.update(level: chunk.inputLevel)
+                    _ = destination.enqueue(chunk)
+                }
+                destination.finish()
+            } catch is CancellationError {
+                destination.finish(throwing: .cancelled)
+            } catch {
+                destination.finish(throwing: .stage(.audioCapture, .failed))
+            }
+        }
     }
 }
 

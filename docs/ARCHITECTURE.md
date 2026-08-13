@@ -58,7 +58,11 @@ selected meeting source disappearing.
 
 Development builds use a persistent Apple Development code-signing identity configured through the ignored `Config/Development.xcconfig`, so macOS privacy grants survive ordinary source rebuilds. The identity is managed by Xcode and is not stored in the repository. A changed bundle identifier, signing authority, or user privacy decision remains a legitimate reason for macOS to request access again.
 
-The MVP does not save audio or create a recording output. Capture callbacks perform minimal work and hand bounded buffers to the transcription pipeline without file I/O, model requests, or blocking UI work.
+The MVP does not save audio or create a recording output. Capture callbacks only
+make a bounded copy of the ephemeral Core Audio buffers and attempt a
+non-blocking enqueue. A separate worker decodes PCM and calculates input-level
+telemetry before handing audio to transcription; callbacks perform no model
+requests, UI work, PCM conversion, or blocking synchronization.
 
 If the Core Audio tap cannot provide the required system-audio behavior on the
 minimum supported macOS release, keep the capture interface stable and report
@@ -67,7 +71,7 @@ display-capture API.
 
 ### Temporary speech-to-text
 
-Use OpenAI's `gpt-4o-transcribe` through `POST /v1/audio/transcriptions`. The adapter converts bounded interleaved float audio to PCM16 WAV bytes in memory, sends a multipart request, and yields only nonempty finalized text. No WAV data is written to disk.
+Use OpenAI's `gpt-4o-transcribe` through `POST /v1/audio/transcriptions`. The adapter converts bounded interleaved float audio to PCM16 WAV bytes in memory, identifies the expected English input language to improve accuracy and latency, sends a multipart request, and yields only nonempty finalized text. No WAV data is written to disk.
 
 The collector keeps accepting capture chunks while a single request is in flight. Its pending request queue is bounded to two batches; when the service cannot keep up, it drops the oldest pending audio rather than accumulating memory or blocking capture. This is intentional: Rio is a live insight stream, not a recording or transcript archive.
 

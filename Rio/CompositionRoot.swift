@@ -147,7 +147,10 @@ final class LiveSessionController: SessionShellControlling {
                 case .stopped, .interrupted, .unavailable:
                     return
                 case .checkingAvailability, .listening, .processing, .paused:
-                    try? await Task.sleep(for: .milliseconds(50))
+                    // The input meter is visual feedback, not a real-time
+                    // control. Ten updates per second keeps it responsive
+                    // without continuously invalidating the card list.
+                    try? await Task.sleep(for: .milliseconds(100))
                 }
             }
         }
@@ -159,14 +162,21 @@ final class LiveSessionController: SessionShellControlling {
     }
 
     private func refreshSnapshot() async {
-        status = lifecycle.status
-        readiness = lifecycle.readiness
-        failure = lifecycle.failure
+        let nextStatus = lifecycle.status
+        let nextReadiness = lifecycle.readiness
+        let nextFailure = lifecycle.failure
+        if status != nextStatus { status = nextStatus }
+        if readiness != nextReadiness { readiness = nextReadiness }
+        if failure != nextFailure { failure = nextFailure }
         if case let .unavailable(reason)? = failure {
-            unavailableReason = reason
+            if unavailableReason != reason { unavailableReason = reason }
+        } else if unavailableReason != nil {
+            unavailableReason = nil
         }
-        feedback = await lifecycle.feedbackSnapshot()
-        cards = insightStore.cards
+        let nextFeedback = await lifecycle.feedbackSnapshot()
+        let nextCards = insightStore.cards
+        if feedback != nextFeedback { feedback = nextFeedback }
+        if cards != nextCards { cards = nextCards }
     }
 
     private func observeInsightStore() {

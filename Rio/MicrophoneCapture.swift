@@ -259,10 +259,10 @@ final class MicrophoneCaptureDiagnostics: @unchecked Sendable {
     }
 }
 
-final class BoundedAudioQueue: @unchecked Sendable {
+final class BoundedQueue<Element: Sendable>: @unchecked Sendable {
     private let capacity: Int
     private let lock = NSLock()
-    private var storage: [AudioChunk?]
+    private var storage: [Element?]
     private var readIndex = 0
     private var writeIndex = 0
     private var count = 0
@@ -290,7 +290,7 @@ final class BoundedAudioQueue: @unchecked Sendable {
         return count
     }
 
-    func enqueue(_ chunk: AudioChunk) -> BoundedAudioEnqueueOutcome {
+    func enqueue(_ element: Element) -> BoundedAudioEnqueueOutcome {
         // The realtime producer never waits for the consumer. Contention drops the newest chunk.
         guard lock.try() else {
             return BoundedAudioEnqueueOutcome(result: .dropped, queueDepth: 0)
@@ -306,7 +306,7 @@ final class BoundedAudioQueue: @unchecked Sendable {
             return BoundedAudioEnqueueOutcome(result: .dropped, queueDepth: queueDepth)
         }
 
-        storage[writeIndex] = chunk
+        storage[writeIndex] = element
         writeIndex = (writeIndex + 1) % capacity
         count += 1
         let queueDepth = count
@@ -318,8 +318,8 @@ final class BoundedAudioQueue: @unchecked Sendable {
     func makeStream(
         onOutputDrop: @escaping @Sendable () -> Void,
         onTermination: @escaping @Sendable () -> Void
-    ) -> AudioStream {
-        let stream = AsyncThrowingStream<AudioChunk, any Error>(
+    ) -> AsyncThrowingStream<Element, any Error> {
+        let stream = AsyncThrowingStream<Element, any Error>(
             bufferingPolicy: .bufferingOldest(capacity)
         ) { continuation in
             let pump = Task { [self] in
@@ -356,7 +356,7 @@ final class BoundedAudioQueue: @unchecked Sendable {
     }
 
     private func drain(
-        into continuation: AsyncThrowingStream<AudioChunk, any Error>.Continuation,
+        into continuation: AsyncThrowingStream<Element, any Error>.Continuation,
         onOutputDrop: @Sendable () -> Void
     ) {
         while let chunk = dequeue() {
@@ -366,7 +366,7 @@ final class BoundedAudioQueue: @unchecked Sendable {
         }
     }
 
-    private func dequeue() -> AudioChunk? {
+    private func dequeue() -> Element? {
         lock.lock()
         defer { lock.unlock() }
         guard count > 0 else {
@@ -395,6 +395,8 @@ final class BoundedAudioQueue: @unchecked Sendable {
         return terminalFailure
     }
 }
+
+typealias BoundedAudioQueue = BoundedQueue<AudioChunk>
 
 actor AVAudioEngineMicrophoneCapture: SessionAudioCapture {
     private let engine: any MicrophoneEngineDriver

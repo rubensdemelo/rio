@@ -1,11 +1,25 @@
 import Foundation
 
-private struct WAVAudioBatch: Sendable {
+private final class WAVAudioBatch: @unchecked Sendable {
     let sampleRate: Int
     let channelCount: Int
-    let samples: [Float]
+    private(set) var samples: [Float]
     let startOffset: Duration
-    let endOffset: Duration
+    private(set) var endOffset: Duration
+
+    init(
+        sampleRate: Int,
+        channelCount: Int,
+        samples: [Float],
+        startOffset: Duration,
+        endOffset: Duration
+    ) {
+        self.sampleRate = sampleRate
+        self.channelCount = channelCount
+        self.samples = samples
+        self.startOffset = startOffset
+        self.endOffset = endOffset
+    }
 
     var wavData: Data {
         WAVEncoder.encode(
@@ -13,6 +27,11 @@ private struct WAVAudioBatch: Sendable {
             sampleRate: sampleRate,
             channelCount: channelCount
         )
+    }
+
+    func append(_ samples: [Float], endingAt endOffset: Duration) {
+        self.samples.append(contentsOf: samples)
+        self.endOffset = endOffset
     }
 }
 
@@ -65,6 +84,7 @@ private enum OpenAITranscriptionRequest {
         let boundary = "RioBoundary-\(UUID().uuidString)"
         var body = Data()
         appendField("model", value: configuration.transcriptionModel, boundary: boundary, to: &body)
+        appendField("language", value: "en", boundary: boundary, to: &body)
         appendField("response_format", value: "json", boundary: boundary, to: &body)
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"file\"; filename=\"meeting.wav\"\r\n".data(using: .utf8)!)
@@ -305,14 +325,7 @@ actor OpenAITranscriptionAdapter: SessionSpeechRecognizer {
                 let startOffset = nextOffset
                 nextOffset += chunk.duration
                 if let current = batch {
-                    let samples = current.samples + chunk.samples
-                    batch = WAVAudioBatch(
-                        sampleRate: current.sampleRate,
-                        channelCount: current.channelCount,
-                        samples: samples,
-                        startOffset: current.startOffset,
-                        endOffset: nextOffset
-                    )
+                    current.append(chunk.samples, endingAt: nextOffset)
                 } else {
                     batch = WAVAudioBatch(
                         sampleRate: sampleRate,
