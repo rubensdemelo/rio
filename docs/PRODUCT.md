@@ -28,10 +28,11 @@ than a foreground app, so it does not appear in the Dock or app switcher.
 Closing the main window does not quit Rio; the menu-bar item remains the way to
 reopen the app or access those controls.
 
-The start listening action remains disabled until Rio has confirmed that meeting
-audio access, transcription, and OpenAI configuration are ready. If setup is
-incomplete, the main window shows the prerequisite guidance and the menu-bar
-action stays unavailable until the checks pass.
+The start listening action remains disabled while a blocking prerequisite is
+unavailable. Permission states that macOS can request or re-check only when
+capture starts remain actionable so the user can complete the permission flow.
+If setup is incomplete, the main window shows the prerequisite guidance and the
+menu-bar action stays unavailable until the blocking checks pass.
 
 While listening, Rio shows a compact live microphone input level so the user can tell that capture is active without exposing a live transcript. The main window has one primary action: start listening or stop listening and clear the active session. Recent Meetings opens read-only transcripts and insights saved locally from the last two days. A concise cue explains that audio is never retained and finalized transcript text is kept only for that two-day window.
 

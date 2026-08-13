@@ -58,7 +58,9 @@ final class LiveSessionController: SessionShellControlling {
     }
 
     var isReadyToStartListening: Bool {
-        readiness?.isReady == true
+        // Permission states that macOS can request or re-check only when the
+        // capture starts must not disable the action that triggers that check.
+        readiness != nil && readiness?.blockingReason == nil
     }
 
     func checkReadiness() async {

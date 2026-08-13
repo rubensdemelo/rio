@@ -102,10 +102,12 @@ Use OpenAI's Responses API with `gpt-5-mini` by default. OpenAI is the default a
 When the application launches and before starting a session, inspect all session
 prerequisites and retain a combined readiness report for the UI. Preflight
 checks capture availability, transcription configuration, and a stored API key.
-The start action remains disabled until the readiness report confirms every
-prerequisite. A missing or rejected API key is an explicit unavailable state;
-transient network or service errors are explicit transient failures, not a
-permissions issue.
+The start action remains disabled only when the readiness report contains a
+blocking prerequisite. Permission states that macOS can request or re-check
+only when capture starts remain actionable so the user can complete the
+permission flow. A missing or rejected API key is an explicit unavailable
+state; transient network or service errors are explicit transient failures,
+not a permissions issue.
 
 Each request has stable developer-authored instructions and one untrusted meeting-text input. The request asks the API for strict JSON Schema output; meeting text never enters instructions. A conceptual result is:
 

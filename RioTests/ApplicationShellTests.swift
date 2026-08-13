@@ -29,7 +29,7 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertTrue(reloadedSettings.selection.detail.contains("Fewer requests"))
     }
 
-    func testStartListeningRequiresCompletedReadinessChecks() {
+    func testStartListeningAllowsPermissionRequestButRequiresBlockingChecks() {
         let controller = FakeSessionController()
 
         XCTAssertFalse(controller.isReadyToStartListening)
@@ -52,6 +52,20 @@ final class ApplicationShellTests: XCTestCase {
                     PrerequisiteCheck(
                         kind: .meetingAudio,
                         reason: .systemAudioPermissionDenied
+                    )
+                ]
+            )
+        )
+
+        XCTAssertTrue(controller.isReadyToStartListening)
+
+        controller.inject(
+            status: .stopped,
+            readiness: SessionReadiness(
+                checks: [
+                    PrerequisiteCheck(
+                        kind: .openAI,
+                        reason: .openAIAPIKeyMissing
                     )
                 ]
             )

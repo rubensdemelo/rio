@@ -115,7 +115,7 @@ final class FakeSessionController: SessionShellControlling {
     }
 
     var isReadyToStartListening: Bool {
-        readiness?.isReady == true
+        readiness != nil && readiness?.blockingReason == nil
     }
 
     func checkReadiness() async {
@@ -432,6 +432,12 @@ struct RioView<Controller: SessionShellControlling>: View {
 
         if isStartAction && !controller.isReadyToStartListening {
             return "Complete the listening prerequisites above before starting."
+        }
+
+        if isStartAction,
+           let readiness = controller.readiness,
+           !readiness.isReady {
+            return "Start Listening to request the remaining macOS audio permission."
         }
 
         switch controller.status {
@@ -1411,7 +1417,7 @@ private extension UnavailableReason {
         case .audioInputUnavailable:
             "Connect or enable a microphone, then try again."
         case .systemAudioPermissionDenied:
-            "Click Start Listening to let macOS request access. Then enable Rio here if it appears."
+            "Enable Rio in System Settings → Privacy & Security → Screen & System Audio Recording, then press Start Listening again."
         case .systemAudioUnavailable:
             "Rio could not find an available system audio output. Connect or enable an audio output, then try again."
         case .openAIAPIKeyMissing:
