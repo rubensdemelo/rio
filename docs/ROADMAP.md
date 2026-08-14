@@ -61,11 +61,15 @@ Goal: make the insight stream consistently useful instead of merely functional.
 - Tune batching cadence and rolling-context limits.
 - Define and evaluate prompts for important points, decisions, actions, questions, and risks.
 - Implement stable insight keys, deduplication, updates, and resolution.
+- Add Customer-critical and Internal technical meeting profiles with distinct
+  evidence and technical-knowledge evaluation criteria.
 - Enforce the rule against guessed action-item owners.
 - Cap active cards and prioritize newer or unresolved information.
 - Build a small, non-sensitive evaluation corpus from synthetic meeting fixtures.
 - Add the version-controlled synthetic incident-copilot evaluation pack at `docs/evaluation/incident-copilot-mvp/`.
 - Measure time from finalized speech to visible insight.
+- Measure unsupported-claim rate for Customer-critical calls and technical-fact
+  retention plus transcript completeness for Internal technical calls.
 - Handle model refusal, context overflow, transcription, and generation errors.
 
 Exit criterion: representative meeting fixtures produce concise, non-repetitive insights with acceptable latency and no invented owners.

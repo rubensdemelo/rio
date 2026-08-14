@@ -17,6 +17,7 @@ final class LiveSessionController: SessionShellControlling {
     let insightStore: InMemoryInsightStore
     private let insightHistory: InsightHistoryStore?
     private let listeningCadenceSettings: ListeningCadenceSettings?
+    private let meetingProfileSettings: MeetingProfileSettings?
 
     private var monitoringTask: Task<Void, Never>?
     private var insightHistorySessionID: UUID?
@@ -25,12 +26,14 @@ final class LiveSessionController: SessionShellControlling {
         lifecycle: SessionLifecycleCoordinator,
         insightStore: InMemoryInsightStore,
         insightHistory: InsightHistoryStore? = nil,
-        listeningCadenceSettings: ListeningCadenceSettings? = nil
+        listeningCadenceSettings: ListeningCadenceSettings? = nil,
+        meetingProfileSettings: MeetingProfileSettings? = nil
     ) {
         self.lifecycle = lifecycle
         self.insightStore = insightStore
         self.insightHistory = insightHistory
         self.listeningCadenceSettings = listeningCadenceSettings
+        self.meetingProfileSettings = meetingProfileSettings
         observeInsightStore()
         status = lifecycle.status
         readiness = lifecycle.readiness
@@ -98,7 +101,8 @@ final class LiveSessionController: SessionShellControlling {
             unavailableReason = nil
             do {
                 await lifecycle.configure(
-                    cadence: listeningCadenceSettings?.selection ?? .thirtySeconds
+                    cadence: listeningCadenceSettings?.selection ?? .thirtySeconds,
+                    profile: meetingProfileSettings?.selection ?? .customerCritical
                 )
                 try await lifecycle.start()
                 insightHistorySessionID = UUID()
@@ -218,7 +222,8 @@ enum RioCompositionRoot {
     static func makeLiveController(
         insightHistory: InsightHistoryStore? = nil,
         meetingHistory: MeetingHistoryStore? = nil,
-        listeningCadenceSettings: ListeningCadenceSettings? = nil
+        listeningCadenceSettings: ListeningCadenceSettings? = nil,
+        meetingProfileSettings: MeetingProfileSettings? = nil
     ) -> LiveSessionController {
         let localeIdentifier = defaultLocaleIdentifier
         let capture = CoreAudioSystemAudioCapture()
@@ -257,7 +262,8 @@ enum RioCompositionRoot {
             lifecycle: lifecycle,
             insightStore: insightStore,
             insightHistory: insightHistory,
-            listeningCadenceSettings: listeningCadenceSettings
+            listeningCadenceSettings: listeningCadenceSettings,
+            meetingProfileSettings: meetingProfileSettings
         )
     }
 }
@@ -290,7 +296,8 @@ private final class MeetingHistoryStoreRecorder: MeetingHistoryRecording {
                     savedAt: meeting.endedAt
                 )
             },
-            incompleteTranscript: meeting.incompleteTranscript
+            incompleteTranscript: meeting.incompleteTranscript,
+            profile: meeting.profile
         )
         store.record(savedMeeting, now: meeting.endedAt)
     }

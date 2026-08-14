@@ -21,6 +21,7 @@ struct SavedMeeting: Codable, Equatable, Identifiable, Sendable {
     let transcriptSegments: [SavedTranscriptSegment]
     let insights: [SavedInsight]
     let incompleteTranscript: Bool
+    let profile: MeetingProfile
 
     init(
         id: UUID = UUID(),
@@ -28,7 +29,8 @@ struct SavedMeeting: Codable, Equatable, Identifiable, Sendable {
         endedAt: Date,
         transcriptSegments: [SavedTranscriptSegment],
         insights: [SavedInsight],
-        incompleteTranscript: Bool
+        incompleteTranscript: Bool,
+        profile: MeetingProfile = .customerCritical
     ) {
         self.id = id
         self.startedAt = startedAt
@@ -36,6 +38,7 @@ struct SavedMeeting: Codable, Equatable, Identifiable, Sendable {
         self.transcriptSegments = Self.normalizedTranscript(transcriptSegments)
         self.insights = Self.normalizedInsights(insights)
         self.incompleteTranscript = incompleteTranscript
+        self.profile = profile
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -45,6 +48,7 @@ struct SavedMeeting: Codable, Equatable, Identifiable, Sendable {
         case transcriptSegments
         case insights
         case incompleteTranscript
+        case profile
     }
 
     init(from decoder: Decoder) throws {
@@ -55,7 +59,8 @@ struct SavedMeeting: Codable, Equatable, Identifiable, Sendable {
             endedAt: try container.decode(Date.self, forKey: .endedAt),
             transcriptSegments: try container.decode([SavedTranscriptSegment].self, forKey: .transcriptSegments),
             insights: try container.decode([SavedInsight].self, forKey: .insights),
-            incompleteTranscript: try container.decode(Bool.self, forKey: .incompleteTranscript)
+            incompleteTranscript: try container.decode(Bool.self, forKey: .incompleteTranscript),
+            profile: try container.decodeIfPresent(MeetingProfile.self, forKey: .profile) ?? .customerCritical
         )
     }
 

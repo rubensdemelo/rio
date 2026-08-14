@@ -134,6 +134,34 @@ final class MeetingHistoryStoreTests: XCTestCase {
         XCTAssertEqual(decoded.insights, [insight])
     }
 
+    func testSavedMeetingRoundTripsTheMeetingProfile() throws {
+        let expected = meeting(id: UUID(), endedAt: 100, profile: .internalTechnical)
+
+        let decoded = try JSONDecoder().decode(
+            SavedMeeting.self,
+            from: JSONEncoder().encode(expected)
+        )
+
+        XCTAssertEqual(decoded.profile, .internalTechnical)
+    }
+
+    func testSavedMeetingWithoutProfileDefaultsToCustomerCritical() throws {
+        let legacyJSON = """
+        {
+          "id": "00000000-0000-0000-0000-000000000001",
+          "startedAt": 70,
+          "endedAt": 100,
+          "transcriptSegments": [],
+          "insights": [],
+          "incompleteTranscript": false
+        }
+        """.data(using: .utf8)!
+
+        let decoded = try JSONDecoder().decode(SavedMeeting.self, from: legacyJSON)
+
+        XCTAssertEqual(decoded.profile, .customerCritical)
+    }
+
     func testFileRepositoryRoundTripsMeetingHistory() throws {
         let fileURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -150,7 +178,8 @@ final class MeetingHistoryStoreTests: XCTestCase {
     private func meeting(
         id: UUID,
         endedAt: TimeInterval,
-        transcriptText: String = "Transcript"
+        transcriptText: String = "Transcript",
+        profile: MeetingProfile = .customerCritical
     ) -> SavedMeeting {
         SavedMeeting(
             id: id,
@@ -160,7 +189,8 @@ final class MeetingHistoryStoreTests: XCTestCase {
                 segment(sequenceNumber: 1, startOffset: 0, endOffset: 30, text: transcriptText)
             ],
             insights: [],
-            incompleteTranscript: false
+            incompleteTranscript: false,
+            profile: profile
         )
     }
 

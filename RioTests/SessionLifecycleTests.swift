@@ -13,6 +13,17 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertEqual(configuredBatchDuration, .seconds(30))
     }
 
+    func testConfiguredProfileIsRecordedWithTheCompletedMeeting() async throws {
+        let historyRecorder = TestMeetingHistoryRecorder()
+        let coordinator = makeCoordinator(historyRecorder: historyRecorder)
+
+        await coordinator.configure(cadence: .thirtySeconds, profile: .internalTechnical)
+        try await coordinator.start()
+        await coordinator.stop()
+
+        XCTAssertEqual(historyRecorder.records().first?.profile, .internalTechnical)
+    }
+
     func testAcceptedFinalizedSpeechSegmentsAreForwardedExactlyOnce() async throws {
         let speech = TestSessionSpeechRecognizer()
         let transcriptCollector = TestTranscriptCollector()

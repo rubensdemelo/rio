@@ -102,6 +102,8 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     private var activeMeetingID: UUID?
     private var activeMeetingStartedAt: Date?
     private var incompleteTranscript = false
+    private var configuredProfile: MeetingProfile = .customerCritical
+    private var activeMeetingProfile: MeetingProfile = .customerCritical
 
     init(
         localeIdentifier: String,
@@ -133,8 +135,22 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     }
 
     func configure(cadence: ListeningCadence) async {
+        await configure(
+            cadence: cadence,
+            profile: .customerCritical
+        )
+    }
+
+    func configure(
+        cadence: ListeningCadence,
+        profile: MeetingProfile
+    ) async {
         guard activeSessionID == nil else { return }
         await speechRecognizer.configure(batchDuration: cadence.audioBatchDuration)
+        configuredProfile = profile
+        if let profileGenerator = insightGenerator as? any ProfileConfigurableInsightGenerator {
+            await profileGenerator.configure(profile: profile)
+        }
     }
 
     func checkReadiness() async -> SessionReadiness {
@@ -224,6 +240,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         finalizedSpeechSegmentCount = 0
         activeMeetingID = UUID()
         activeMeetingStartedAt = Date()
+        activeMeetingProfile = configuredProfile
         incompleteTranscript = false
         failure = nil
         status = .checkingAvailability
@@ -489,7 +506,8 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
                 endedAt: Date(),
                 transcript: transcriptCollector.snapshot(),
                 insights: insightState.cards,
-                incompleteTranscript: incompleteTranscript
+                incompleteTranscript: incompleteTranscript,
+                profile: activeMeetingProfile
             )
         }()
 

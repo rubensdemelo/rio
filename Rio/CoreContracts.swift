@@ -457,6 +457,11 @@ protocol InsightGenerator: Sendable {
     func cancel() async
 }
 
+/// Optional seam for adapters whose model behavior changes by meeting profile.
+protocol ProfileConfigurableInsightGenerator: SessionInsightGenerator {
+    func configure(profile: MeetingProfile) async
+}
+
 struct MeetingHistoryRecord: Sendable, Equatable {
     let meetingID: UUID
     let startedAt: Date
@@ -464,6 +469,25 @@ struct MeetingHistoryRecord: Sendable, Equatable {
     let transcript: [FinalizedSpeechSegment]
     let insights: [InsightCard]
     let incompleteTranscript: Bool
+    let profile: MeetingProfile
+
+    init(
+        meetingID: UUID,
+        startedAt: Date,
+        endedAt: Date,
+        transcript: [FinalizedSpeechSegment],
+        insights: [InsightCard],
+        incompleteTranscript: Bool,
+        profile: MeetingProfile = .customerCritical
+    ) {
+        self.meetingID = meetingID
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.transcript = transcript
+        self.insights = insights
+        self.incompleteTranscript = incompleteTranscript
+        self.profile = profile
+    }
 }
 
 @MainActor

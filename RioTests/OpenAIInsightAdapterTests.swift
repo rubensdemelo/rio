@@ -55,6 +55,28 @@ final class OpenAIInsightAdapterTests: XCTestCase {
         XCTAssertEqual(format["strict"] as? Bool, true)
     }
 
+    func testInternalTechnicalProfileUsesTechnicalKnowledgeInstructions() async throws {
+        let client = RecordingOpenAIHTTPClient(responseData: makeAPIResponseData())
+        let generator = OpenAIInsightGenerator(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client
+        )
+
+        await generator.configure(profile: .internalTechnical)
+        try await generator.startSession(localeIdentifier: "en-US")
+        _ = try await generator.generate(from: makeBatch(text: "The API returns HTTP 503."))
+
+        let requests = await client.requests()
+        let request = try XCTUnwrap(requests.first)
+        let body = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: Any]
+        )
+        let instructions = try XCTUnwrap(body["instructions"] as? String)
+        XCTAssertTrue(instructions.contains("internal technical"))
+        XCTAssertTrue(instructions.contains("technical facts"))
+        XCTAssertFalse(instructions.contains("customer-critical"))
+    }
+
     func testTranslationPreservesExplicitOwnersOnlyWhenSupportedByMeetingText() async throws {
         let client = RecordingOpenAIHTTPClient(
             responseData: makeAPIResponseData(

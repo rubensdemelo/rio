@@ -34,6 +34,13 @@ capture starts remain actionable so the user can complete the permission flow.
 If setup is incomplete, the main window shows the prerequisite guidance and the
 menu-bar action stays unavailable until the blocking checks pass.
 
+Before starting a session, the user chooses one meeting profile:
+
+- Customer-critical: the live insight stream uses a high evidence threshold and prioritizes confirmed decisions, customer commitments, risks, and unanswered questions. Rio distinguishes supported facts from hypotheses and does not present a diagnosis or promise as established when the meeting text is uncertain.
+- Internal technical: the completed transcript is the primary knowledge source. The insight stream preserves supported errors, versions, environments, commands, changes, failed checks, hypotheses, and technical terminology instead of reducing the meeting to broad summaries.
+
+The selected profile is fixed for the session, saved with the completed two-day meeting record, and defaults to Customer-critical for new installations. The profile changes model instructions and Recent Meetings presentation; it does not relax validation, deduplication, privacy, retention, or the no-live-transcript boundary.
+
 While listening, Rio shows a compact live microphone input level so the user can tell that capture is active without exposing a live transcript. The main window has one primary action: start listening or stop listening and clear the active session. Recent Meetings opens read-only transcripts and insights saved locally from the last two days. A concise cue explains that audio is never retained and finalized transcript text is kept only for that two-day window.
 
 Provider settings also include an Insight pace choice of 15, 30, or 45 seconds;
@@ -96,12 +103,13 @@ Transcription is a cloud stage: Rio sends bounded in-memory WAV chunks to OpenAI
 - All temporary meeting text is discarded when listening stops.
 - Current insight cards disappear from the active session when it ends, but Rio stores them with the meeting's finalized transcript locally for up to two days so they remain available through Recent Meetings.
 - The two-day local history contains meeting timing, finalized transcript segments, and generated card category, state, text, and save time; it never contains audio or guessed action-owner metadata.
+- The two-day local history also records the selected meeting profile so a saved meeting can be interpreted in its original mode.
 - Entries older than two days are removed automatically, and the user can clear the local history at any time.
 - The user-provided OpenAI API key is retained separately in the macOS Keychain as configuration, not meeting data.
-- No audio, transcript text, insight text outside the two-day local history, or secrets may appear in logs.
 - The bounded user-provided technical vocabulary is retained locally as
   configuration, not meeting data; it must not contain meeting notes or other
   meeting content.
+- No audio, transcript text, insight text outside the two-day local history, or secrets may appear in logs.
 
 ## Explicit exclusions
 
@@ -114,6 +122,7 @@ Transcription is a cloud stage: Rio sends bounded in-memory WAV chunks to OpenAI
 - Apple Intelligence or another on-device language-model dependency.
 - Accounts, calendars, CRM integrations, team workspaces, or cloud synchronization.
 - Generic assistant chat, unrelated recommendations, or autonomous actions.
+- Profiles that promise perfect transcription or zero insight mistakes.
 - Windows and Linux support in the MVP.
 
 ## Success criteria

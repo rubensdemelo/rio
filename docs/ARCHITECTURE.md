@@ -38,6 +38,16 @@ live SwiftUI insight cards
 
 Old audio buffers and temporary text are continuously discarded. Bounded audio batches are transmitted to OpenAI only for transcription; bounded temporary text is transmitted only for the active insight request. Finalized transcript segments are collected for the active meeting and saved with its generated insight cards when the session stops. Meeting records expire after two days.
 Stopping the session clears all remaining temporary meeting data after creating the bounded local meeting snapshot.
+
+Each session carries an immutable `MeetingProfile` snapshot
+(`customerCritical` or `internalTechnical`) from the pre-session UI. The
+snapshot is passed to the insight adapter, which selects profile-specific
+developer instructions while keeping the same strict schema, validation, owner
+rule, bounded card count, and deduplication behavior. It is also saved with the
+bounded meeting-history record. Internal technical meetings open their saved
+record on the transcript view; customer-critical meetings open on insights.
+This is presentation and model guidance, not a relaxation of the no-live-
+transcript or data-retention boundaries.
 ```
 
 ## Native technology choices
@@ -115,6 +125,13 @@ non-transient request failures remain explicit unavailable states.
 
 Use OpenAI's Responses API with `gpt-5-mini` by default. OpenAI is the default and only MVP provider. The user supplies their own API key in Provider settings; Rio stores it only in the macOS Keychain and never in the bundle, source tree, diagnostics, app preferences, or an environment variable. Transcription uses `gpt-4o-transcribe` by default.
 
+The customer-critical profile requires cautious, directly supported claims and
+prioritizes decisions, commitments, risks, and open questions. The internal
+technical profile asks the model to retain supported errors, versions,
+environments, commands, changes, failed checks, hypotheses, and terminology;
+the transcript remains the authoritative saved knowledge source. Profile text
+is developer-authored and meeting text remains untrusted prompt input.
+
 When the application launches and before starting a session, inspect all session
 prerequisites and retain a combined readiness report for the UI. Preflight
 checks capture availability, transcription configuration, and a stored API key.
@@ -142,7 +159,7 @@ The app validates semantic constraints after generation, including nonempty text
 
 An in-memory insight store applies generated updates on the main actor. Stable keys allow the model to update or resolve an existing card instead of creating duplicates.
 
-The active insight store exists only for the current session. The local meeting-history store saves one completed meeting record containing start/end times, ordered finalized transcript segments, an incomplete-transcript flag, and the generated cards. It retains records for at most two days, bounds transcript/card counts and text size, prunes on load and every write, and provides per-meeting and clear-all actions. It never receives audio, and it never stores guessed action-owner metadata.
+The active insight store exists only for the current session. The local meeting-history store saves one completed meeting record containing start/end times, the selected profile, ordered finalized transcript segments, an incomplete-transcript flag, and the generated cards. It retains records for at most two days, bounds transcript/card counts and text size, prunes on load and every write, and provides per-meeting and clear-all actions. It never receives audio, and it never stores guessed action-owner metadata.
 
 ## Data and memory boundaries
 

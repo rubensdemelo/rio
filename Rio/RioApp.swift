@@ -8,21 +8,25 @@ struct RioApp: App {
     @StateObject private var meetingHistory: MeetingHistoryStore
     @StateObject private var panelRouter: RioPanelRouter
     @StateObject private var listeningCadenceSettings: ListeningCadenceSettings
+    @StateObject private var meetingProfileSettings: MeetingProfileSettings
     @StateObject private var transcriptionVocabularySettings: TranscriptionVocabularySettings
 
     init() {
         let meetingHistory = MeetingHistoryStore()
         let listeningCadenceSettings = ListeningCadenceSettings()
+        let meetingProfileSettings = MeetingProfileSettings()
         let transcriptionVocabularySettings = TranscriptionVocabularySettings()
         let sessionController = RioCompositionRoot.makeLiveController(
             meetingHistory: meetingHistory,
-            listeningCadenceSettings: listeningCadenceSettings
+            listeningCadenceSettings: listeningCadenceSettings,
+            meetingProfileSettings: meetingProfileSettings
         )
         _sessionController = StateObject(wrappedValue: sessionController)
         _providerSettings = StateObject(wrappedValue: OpenAIProviderSettings())
         _meetingHistory = StateObject(wrappedValue: meetingHistory)
         _panelRouter = StateObject(wrappedValue: RioPanelRouter())
         _listeningCadenceSettings = StateObject(wrappedValue: listeningCadenceSettings)
+        _meetingProfileSettings = StateObject(wrappedValue: meetingProfileSettings)
         _transcriptionVocabularySettings = StateObject(
             wrappedValue: transcriptionVocabularySettings
         )
@@ -38,6 +42,7 @@ struct RioApp: App {
                 .environmentObject(providerSettings)
                 .environmentObject(panelRouter)
                 .environmentObject(listeningCadenceSettings)
+                .environmentObject(meetingProfileSettings)
                 .environmentObject(transcriptionVocabularySettings)
         }
         .defaultLaunchBehavior(.suppressed)
@@ -57,6 +62,7 @@ struct RioApp: App {
                 .environmentObject(panelRouter)
                 .environmentObject(providerSettings)
                 .environmentObject(listeningCadenceSettings)
+                .environmentObject(meetingProfileSettings)
                 .environmentObject(transcriptionVocabularySettings)
         }
         .menuBarExtraStyle(.menu)
@@ -89,6 +95,7 @@ private struct RioMenuBarMenu<Controller: SessionShellControlling>: View {
     @Environment(\.openWindow) private var openWindow
     @EnvironmentObject private var panelRouter: RioPanelRouter
     @EnvironmentObject private var providerSettings: OpenAIProviderSettings
+    @EnvironmentObject private var meetingProfileSettings: MeetingProfileSettings
 
     init(controller: Controller) {
         self.controller = controller
@@ -113,6 +120,13 @@ private struct RioMenuBarMenu<Controller: SessionShellControlling>: View {
                         || !controller.isReadyToStartListening
                 ))
         )
+
+        Picker("Meeting profile", selection: $meetingProfileSettings.selection) {
+            ForEach(MeetingProfile.allCases) { profile in
+                Text(profile.title).tag(profile)
+            }
+        }
+        .disabled(!isStartAction)
 
         Divider()
 

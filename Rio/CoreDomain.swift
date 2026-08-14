@@ -1,6 +1,47 @@
 import Combine
 import Foundation
 
+enum MeetingProfile: String, CaseIterable, Codable, Hashable, Identifiable, Sendable {
+    case customerCritical
+    case internalTechnical
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .customerCritical: "Customer-critical"
+        case .internalTechnical: "Internal technical"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .customerCritical:
+            "Prioritizes cautious, evidence-grounded insights for customer conversations."
+        case .internalTechnical:
+            "Prioritizes accurate technical speech capture for internal knowledge."
+        }
+    }
+}
+
+@MainActor
+final class MeetingProfileSettings: ObservableObject {
+    private static let storageKey = "meetingProfile"
+
+    @Published var selection: MeetingProfile {
+        didSet { defaults.set(selection.rawValue, forKey: Self.storageKey) }
+    }
+
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        selection = MeetingProfile(
+            rawValue: defaults.string(forKey: Self.storageKey) ?? ""
+        ) ?? .customerCritical
+    }
+}
+
 enum TranscriptionVocabularyConfiguration {
     static let maximumPromptLength = 1_000
     static let storageKey = "transcriptionVocabularyPrompt"

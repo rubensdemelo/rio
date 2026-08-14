@@ -237,6 +237,7 @@ struct RioView<Controller: SessionShellControlling>: View {
     @ObservedObject private var controller: Controller
     @EnvironmentObject private var providerSettings: OpenAIProviderSettings
     @EnvironmentObject private var panelRouter: RioPanelRouter
+    @EnvironmentObject private var meetingProfileSettings: MeetingProfileSettings
 
     init(controller: Controller) {
         self.controller = controller
@@ -365,10 +366,26 @@ struct RioView<Controller: SessionShellControlling>: View {
     }
 
     private var sessionControls: some View {
-        HStack {
-            Spacer()
-            primaryAction
-            Spacer()
+        VStack(spacing: 12) {
+            HStack {
+                Spacer()
+                primaryAction
+                Spacer()
+            }
+
+            Picker("Meeting profile", selection: $meetingProfileSettings.selection) {
+                ForEach(MeetingProfile.allCases) { profile in
+                    Text(profile.title).tag(profile)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(!isStartAction)
+            .help(meetingProfileSettings.selection.detail)
+
+            Text(meetingProfileSettings.selection.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
         }
     }
 
@@ -1074,6 +1091,7 @@ struct RecentMeetingsView: View {
                 List(meetings, selection: $selectedMeetingID) { meeting in
                     Button {
                         selectedMeetingID = meeting.id
+                        selectedSection = meeting.profile == .internalTechnical ? .transcript : .insights
                     } label: {
                         MeetingHistoryRow(meeting: meeting)
                     }
@@ -1107,6 +1125,14 @@ struct RecentMeetingsView: View {
                         .font(.title2.weight(.semibold))
                     Text(meetingDuration(for: meeting))
                         .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    Label(
+                        meeting.profile.title,
+                        systemImage: meeting.profile == .internalTechnical
+                            ? "wrench.and.screwdriver"
+                            : "person.2"
+                    )
+                        .font(.caption)
                         .foregroundStyle(.secondary)
                     if meeting.incompleteTranscript {
                         Label("Transcript incomplete", systemImage: "exclamationmark.triangle")
@@ -1195,6 +1221,9 @@ struct RecentMeetingsView: View {
         guard let selectedMeetingID,
               meetings.contains(where: { $0.id == selectedMeetingID }) else {
             selectedMeetingID = meetings.first?.id
+            if let first = meetings.first {
+                selectedSection = first.profile == .internalTechnical ? .transcript : .insights
+            }
             return
         }
     }

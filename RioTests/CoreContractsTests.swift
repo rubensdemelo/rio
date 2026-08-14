@@ -3,6 +3,21 @@ import Observation
 
 final class CoreContractsTests: XCTestCase {
     @MainActor
+    func testMeetingProfileSettingsPersistsTheSelectedProfile() {
+        let suiteName = "RioTests.MeetingProfileSettings.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = MeetingProfileSettings(defaults: defaults)
+        XCTAssertEqual(settings.selection, .customerCritical)
+
+        settings.selection = .internalTechnical
+
+        let reloaded = MeetingProfileSettings(defaults: defaults)
+        XCTAssertEqual(reloaded.selection, .internalTechnical)
+    }
+
+    @MainActor
     func testTranscriptionVocabularyIsBoundedAndPersistsAsConfiguration() {
         let suiteName = "RioTests.TranscriptionVocabulary.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
