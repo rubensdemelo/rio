@@ -589,12 +589,25 @@ final class BoundedRollingMeetingContextTests: XCTestCase {
         let waitingBatch = Task {
             try await context.nextBatch()
         }
-        await waitForClockSleeper(clock)
+        await waitForClockSleeper(clock, atLeast: 2)
         await clock.advance(by: .seconds(6))
         try await context.append(ready)
 
         let batch = try await waitingBatch.value
         XCTAssertEqual(batch?.segments, [ready])
+        await context.cancel()
+    }
+
+    func testCancellingContextReleasesScheduledEvictionWaiter() async throws {
+        let clock = TestMeetingContextClock()
+        let context = makeContext(clock: clock)
+        try await context.append(segment(1, text: "pending", start: .zero))
+        await waitForClockSleeper(clock)
+        await context.cancel()
+
+        while await clock.sleeperCount != 0 {
+            await Task.yield()
+        }
     }
 
     func testTokenAndUTF8SizeLimitsEvictOldestSegments() async throws {
@@ -674,7 +687,7 @@ final class BoundedRollingMeetingContextTests: XCTestCase {
         let maximumWaitBatch = Task {
             try await waitContext.nextBatch()
         }
-        await waitForClockSleeper(waitClock)
+        await waitForClockSleeper(waitClock, atLeast: 2)
         await waitClock.advance(by: .seconds(5))
 
         let maximumWaitResult = try await maximumWaitBatch.value
@@ -693,7 +706,7 @@ final class BoundedRollingMeetingContextTests: XCTestCase {
         let firstConsumer = Task {
             try await context.nextBatch()
         }
-        await waitForClockSleeper(clock)
+        await waitForClockSleeper(clock, atLeast: 2)
 
         do {
             _ = try await context.nextBatch()
@@ -719,7 +732,7 @@ final class BoundedRollingMeetingContextTests: XCTestCase {
         let cancelledConsumer = Task {
             try await context.nextBatch()
         }
-        await waitForClockSleeper(clock)
+        await waitForClockSleeper(clock, atLeast: 2)
         cancelledConsumer.cancel()
 
         do {
@@ -746,7 +759,7 @@ final class BoundedRollingMeetingContextTests: XCTestCase {
         let clearedConsumer = Task {
             try await clearable.nextBatch()
         }
-        await waitForClockSleeper(clearClock)
+        await waitForClockSleeper(clearClock, atLeast: 2)
         await clearable.clear()
         let clearedBatch = try await clearedConsumer.value
         XCTAssertNil(clearedBatch)
@@ -766,7 +779,7 @@ final class BoundedRollingMeetingContextTests: XCTestCase {
         let cancelledConsumer = Task {
             try await cancellable.nextBatch()
         }
-        await waitForClockSleeper(cancelClock)
+        await waitForClockSleeper(cancelClock, atLeast: 2)
         await cancellable.cancel()
 
         do {
@@ -794,7 +807,7 @@ final class BoundedRollingMeetingContextTests: XCTestCase {
             text.split(whereSeparator: \.isWhitespace).count
         }
     ) -> BoundedRollingMeetingContext {
-        BoundedRollingMeetingContext(
+        return BoundedRollingMeetingContext(
             configuration: MeetingContextConfiguration(
                 maximumAge: maximumAge,
                 maximumTokenCount: maximumTokenCount,
@@ -820,8 +833,11 @@ final class BoundedRollingMeetingContextTests: XCTestCase {
         )
     }
 
-    private func waitForClockSleeper(_ clock: TestMeetingContextClock) async {
-        while await clock.sleeperCount == 0 {
+    private func waitForClockSleeper(
+        _ clock: TestMeetingContextClock,
+        atLeast expectedCount: Int = 1
+    ) async {
+        while await clock.sleeperCount < expectedCount {
             await Task.yield()
         }
     }
