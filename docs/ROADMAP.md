@@ -92,6 +92,8 @@ Exit criterion: a one-hour meeting completes without unbounded memory growth, si
 
 ## Deferred until after the MVP
 
+- Safari/browser meeting detection as an optional start suggestion. It must not
+  begin capture automatically or replace the explicit Start Listening action.
 - Insight export or history older than two days.
 - Alternative cloud or third-party model providers.
 - Audio storage.
