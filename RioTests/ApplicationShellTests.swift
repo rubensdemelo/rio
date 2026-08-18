@@ -301,6 +301,16 @@ final class ApplicationShellTests: XCTestCase {
         )
     }
 
+    func testSystemAudioPermissionDenialOffersDirectSettingsRecovery() {
+        let presentation = SessionStatusPresentation(
+            status: .unavailable,
+            unavailableReason: .systemAudioPermissionDenied
+        )
+
+        XCTAssertEqual(presentation.recoveryAction, .openSystemAudioRecording)
+        XCTAssertFalse(presentation.detail.contains("System Settings →"))
+    }
+
     func testVoiceFeedbackUsesNonContentSpeechActivityInsteadOfTranscript() {
         let presentation = VoiceFeedbackPresentation(
             status: .listening,

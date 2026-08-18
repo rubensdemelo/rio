@@ -24,7 +24,7 @@ Exit criterion: meeting audio produces useful, structured insight cards through 
 
 Verified on macOS 26.5.2:
 
-- 130 unit and integration tests pass in Debug, including deterministic long-session coverage for rolling-context novelty, current-card insight requests, explicit transcription-overload shutdown before audio eviction, pause/resume continuity, elapsed transcription feedback, and saved-transcript navigation. The earlier 68-test suite passed in Release; the expanded Release suite has not been rerun.
+- 131 unit and integration tests pass in Debug, including deterministic long-session coverage for rolling-context novelty, current-card insight requests, explicit transcription-overload shutdown before audio eviction, pause/resume continuity, elapsed transcription feedback, saved-transcript navigation, and direct system-audio permission recovery. The earlier 68-test suite passed in Release; the expanded Release suite has not been rerun.
 - Debug and Release builds pass with warnings treated as errors and Swift 6 complete strict-concurrency checking enabled.
 - Static privacy scans find no production logging or persistence APIs other than the bounded two-day insight history.
 - The built application launches and exits cleanly without creating audio or transcript files; its inspected container contains only app preferences and the bounded local insight-history file after cards are generated.

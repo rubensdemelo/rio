@@ -299,6 +299,7 @@ struct RioView<Controller: SessionShellControlling>: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .lineSpacing(1)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 Spacer()
@@ -307,6 +308,14 @@ struct RioView<Controller: SessionShellControlling>: View {
             .accessibilityLabel("Session status")
             .accessibilityValue("\(presentation.title). \(presentation.detail)")
 
+            if presentation.recoveryAction == .openSystemAudioRecording {
+                Button("Open System Settings") {
+                    SystemSettingsOpener.openSystemAudioRecording()
+                }
+                .controlSize(.small)
+                .padding(.leading, 40)
+                .accessibilityHint("Opens the Screen and System Audio Recording privacy settings for Rio.")
+            }
         }
     }
 
@@ -1435,6 +1444,7 @@ struct SessionStatusPresentation: Equatable {
     let detail: String
     let symbolName: String
     let tintName: TintName
+    let recoveryAction: SessionRecoveryAction?
 
     enum TintName: Equatable {
         case neutral
@@ -1448,6 +1458,11 @@ struct SessionStatusPresentation: Equatable {
         unavailableReason: UnavailableReason? = nil,
         failure: PipelineFailure? = nil
     ) {
+        recoveryAction = status == .unavailable
+            && unavailableReason == .systemAudioPermissionDenied
+            ? .openSystemAudioRecording
+            : nil
+
         switch status {
         case .stopped:
             title = "Stopped"
@@ -1501,6 +1516,10 @@ struct SessionStatusPresentation: Equatable {
             .red
         }
     }
+}
+
+enum SessionRecoveryAction: Equatable {
+    case openSystemAudioRecording
 }
 
 struct EmptyStatePresentation: Equatable {
@@ -1574,7 +1593,7 @@ private extension UnavailableReason {
         case .audioInputUnavailable:
             "Connect or enable a microphone, then try again."
         case .systemAudioPermissionDenied:
-            "Enable Rio in System Settings → Privacy & Security → Screen & System Audio Recording, then press Start Listening again."
+            "Rio needs System Audio Recording access to listen to meeting audio."
         case .systemAudioUnavailable:
             "Rio could not find an available system audio output. Connect or enable an audio output, then try again."
         case .openAIAPIKeyMissing:
