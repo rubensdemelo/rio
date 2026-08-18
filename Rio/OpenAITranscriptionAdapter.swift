@@ -126,6 +126,8 @@ private struct OpenAITranscriptionResponse: Decodable, Sendable {
 }
 
 private actor OpenAITranscriptionQueue {
+    private static let maximumPendingBatchCount = 2
+
     private let configuration: OpenAIAPIConfiguration
     private let client: any OpenAIHTTPClient
     private let continuation: FinalizedSpeechStream.Continuation
@@ -133,7 +135,7 @@ private actor OpenAITranscriptionQueue {
     private var pending: [WAVAudioBatch] = []
     private var worker: Task<Void, Never>?
     private var acceptsInput = true
-    private var latestDroppedAudioEndOffset: Duration?
+    private var isTerminated = false
 
     init(
         configuration: OpenAIAPIConfiguration,
@@ -148,34 +150,30 @@ private actor OpenAITranscriptionQueue {
     }
 
     func enqueue(_ batch: WAVAudioBatch) {
-        guard acceptsInput else { return }
-        if pending.count == 2 {
-            let dropped = pending.removeFirst()
-            if latestDroppedAudioEndOffset.map({ dropped.endOffset > $0 }) ?? true {
-                latestDroppedAudioEndOffset = dropped.endOffset
-            }
+        guard acceptsInput, !isTerminated else { return }
+        guard pending.count < Self.maximumPendingBatchCount else {
+            terminate(throwing: .stage(.speechRecognition, .overloaded))
+            return
         }
         pending.append(batch)
         startNextIfNeeded()
     }
 
     func finishInput() {
+        guard !isTerminated else { return }
         acceptsInput = false
         startNextIfNeeded()
     }
 
     func cancel() {
-        acceptsInput = false
-        pending.removeAll()
-        worker?.cancel()
-        worker = nil
-        continuation.finish(throwing: PipelineFailure.cancelled)
+        terminate(throwing: .cancelled)
     }
 
     private func startNextIfNeeded() {
-        guard worker == nil else { return }
+        guard !isTerminated, worker == nil else { return }
         guard !pending.isEmpty else {
             if !acceptsInput {
+                isTerminated = true
                 continuation.finish()
             }
             return
@@ -207,43 +205,45 @@ private actor OpenAITranscriptionQueue {
     }
 
     private func completed(batch: WAVAudioBatch, text: String) {
+        guard !isTerminated else { return }
         worker = nil
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
-            let precededByGap = latestDroppedAudioEndOffset.map {
-                batch.startOffset >= $0
-            } ?? false
             continuation.yield(
                 FinalizedSpeechSegment(
                     sequenceNumber: batch.sequenceNumber,
                     text: trimmed,
                     startOffset: batch.startOffset,
-                    endOffset: batch.endOffset,
-                    precededByTranscriptionGap: precededByGap
+                    endOffset: batch.endOffset
                 )
             )
-            if precededByGap {
-                latestDroppedAudioEndOffset = nil
-            }
         }
         startNextIfNeeded()
     }
-
     private func failed(_ error: any Error) {
+        guard !isTerminated else { return }
         worker = nil
-        acceptsInput = false
-        pending.removeAll()
         if error is CancellationError {
-            continuation.finish(throwing: PipelineFailure.cancelled)
+            terminate(throwing: .cancelled)
             return
         }
         if let error = error as? OpenAIHTTPError,
            case .unexpectedStatus(let status) = error,
            status == 401 || status == 403 {
-            continuation.finish(throwing: PipelineFailure.unavailable(.openAIAPIKeyInvalid))
+            terminate(throwing: .unavailable(.openAIAPIKeyInvalid))
             return
         }
-        continuation.finish(throwing: PipelineFailure.stage(.speechRecognition, .failed))
+        terminate(throwing: .stage(.speechRecognition, .failed))
+    }
+
+    private func terminate(throwing failure: PipelineFailure) {
+        guard !isTerminated else { return }
+        isTerminated = true
+        acceptsInput = false
+        pending.removeAll()
+        worker?.cancel()
+        worker = nil
+        continuation.finish(throwing: failure)
     }
 }
 

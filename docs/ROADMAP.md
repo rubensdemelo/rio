@@ -24,7 +24,7 @@ Exit criterion: meeting audio produces useful, structured insight cards through 
 
 Verified on macOS 26.5.2:
 
-- 129 unit and integration tests pass in Debug, including deterministic long-session coverage for rolling-context novelty, current-card insight requests, bounded transcription gaps, pause/resume continuity, elapsed transcription feedback, and saved-transcript navigation. The earlier 68-test suite passed in Release; the expanded Release suite has not been rerun.
+- 130 unit and integration tests pass in Debug, including deterministic long-session coverage for rolling-context novelty, current-card insight requests, explicit transcription-overload shutdown before audio eviction, pause/resume continuity, elapsed transcription feedback, and saved-transcript navigation. The earlier 68-test suite passed in Release; the expanded Release suite has not been rerun.
 - Debug and Release builds pass with warnings treated as errors and Swift 6 complete strict-concurrency checking enabled.
 - Static privacy scans find no production logging or persistence APIs other than the bounded two-day insight history.
 - The built application launches and exits cleanly without creating audio or transcript files; its inspected container contains only app preferences and the bounded local insight-history file after cards are generated.
@@ -92,7 +92,14 @@ Goal: ship a technical preview that behaves predictably for a full meeting.
 
 Exit criterion: a one-hour meeting completes without unbounded memory growth, silent capture loss, persistent audio or transcript data, or manual recovery from ordinary interruptions.
 
-Implementation status: bounded transcription backpressure now marks continuity gaps without stopping capture, pause/resume preserves meeting-relative offsets and segment ordering, live feedback exposes the latest finalized offset and incomplete state, the live card region scrolls, and completed transcripts have local timestamped filtering. Deterministic coverage passes; the one-hour hardware soak and live interruption checks remain outstanding.
+Implementation status: transcription backlog exhaustion now stops explicitly
+before dropping a queued audio interval, preserves the continuous finalized
+prefix as an incomplete meeting record, and offers restart. Pause/resume preserves
+meeting-relative offsets and segment ordering, live feedback exposes the latest
+finalized offset, the live card region scrolls, and completed transcripts have
+local timestamped filtering. Deterministic queue-pressure and long-session
+coverage passes; the one-hour hardware soak and live interruption checks remain
+outstanding.
 
 ## Deferred until after the MVP
 

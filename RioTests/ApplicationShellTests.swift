@@ -228,6 +228,17 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertTrue(rejected.detail.contains("HTTP 400"))
     }
 
+    func testTranscriptionOverloadExplainsContinuityAndRecovery() {
+        let presentation = SessionStatusPresentation(
+            status: .unavailable,
+            failure: .stage(.speechRecognition, .overloaded)
+        )
+
+        XCTAssertTrue(presentation.detail.contains("before skipping meeting audio"))
+        XCTAssertTrue(presentation.detail.contains("marked incomplete"))
+        XCTAssertTrue(presentation.detail.contains("Start listening again"))
+    }
+
     func testGenericUnavailableFailureDoesNotClaimSetupIsRequired() {
         let presentation = EmptyStatePresentation(
             status: .unavailable,
@@ -309,7 +320,7 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertFalse(presentation.detail.contains("transcript"))
     }
 
-    func testVoiceFeedbackShowsLongMeetingProgressAndContinuityWithoutMeetingText() {
+    func testVoiceFeedbackShowsLongMeetingProgressWithoutMeetingText() {
         let presentation = VoiceFeedbackPresentation(
             status: .listening,
             feedback: SessionFeedbackSnapshot(
@@ -319,14 +330,13 @@ final class ApplicationShellTests: XCTestCase {
                     isMuted: false
                 ),
                 finalizedSpeechSegmentCount: 76,
-                latestFinalizedSpeechEndOffset: .seconds(3_620),
-                transcriptIsIncomplete: true
+                latestFinalizedSpeechEndOffset: .seconds(3_620)
             )
         )
 
         XCTAssertTrue(presentation.detail.contains("76 message chunks"))
         XCTAssertTrue(presentation.detail.contains("1:00:20"))
-        XCTAssertTrue(presentation.detail.contains("marked incomplete"))
+        XCTAssertFalse(presentation.detail.contains("meeting text"))
     }
 
     func testVoiceFeedbackDistinguishesMutedAndConnectionErrorStates() {

@@ -111,7 +111,7 @@ final class OpenAITranscriptionAdapterTests: XCTestCase {
         XCTAssertGreaterThan(body.count, 64_000)
     }
 
-    func testBoundedQueueReportsAContinuityGapAfterDroppingPendingAudio() async throws {
+    func testBackpressureStopsBeforeCreatingASilentTranscriptGap() async throws {
         let client = BlockingTranscriptionHTTPClient()
         let adapter = OpenAITranscriptionAdapter(
             configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
@@ -121,26 +121,35 @@ final class OpenAITranscriptionAdapterTests: XCTestCase {
         var audioContinuation: AudioStream.Continuation?
         let audio = AudioStream { audioContinuation = $0 }
         let stream = try await adapter.recognize(audio: audio)
+        let collection = Task {
+            do {
+                var segments: [FinalizedSpeechSegment] = []
+                for try await segment in stream {
+                    segments.append(segment)
+                }
+                return Result<[FinalizedSpeechSegment], PipelineFailure>.success(segments)
+            } catch let failure as PipelineFailure {
+                return .failure(failure)
+            } catch {
+                return .failure(.stage(.speechRecognition, .failed))
+            }
+        }
 
         audioContinuation?.yield(chunk(sequenceNumber: 0))
         audioContinuation?.yield(chunk(sequenceNumber: 1))
         await client.waitForFirstRequest()
-        for sequenceNumber in 2..<6 {
+        for sequenceNumber in 2..<5 {
             audioContinuation?.yield(chunk(sequenceNumber: UInt64(sequenceNumber)))
         }
         audioContinuation?.finish()
-        try await Task.sleep(for: .milliseconds(20))
         await client.releaseFirstRequest()
 
-        var segments: [FinalizedSpeechSegment] = []
-        for try await segment in stream {
-            segments.append(segment)
+        switch await collection.value {
+        case .success(let segments):
+            XCTFail("Backpressure must be explicit instead of returning a gapped transcript: \(segments.map(\.startOffset))")
+        case .failure(let failure):
+            XCTAssertEqual(failure, .stage(.speechRecognition, .overloaded))
         }
-
-        XCTAssertGreaterThanOrEqual(segments.count, 2)
-        XCTAssertFalse(segments[0].precededByTranscriptionGap)
-        XCTAssertTrue(segments[1].precededByTranscriptionGap)
-        XCTAssertGreaterThan(segments[1].startOffset, segments[0].endOffset)
     }
 
     func testPauseAndResumePreserveSegmentOrderingAndElapsedOffsetsWithinSession() async throws {
@@ -247,6 +256,7 @@ private actor BlockingTranscriptionHTTPClient: OpenAIHTTPClient {
                 }
             }
         }
+        try Task.checkCancellation()
         return (
             try JSONSerialization.data(withJSONObject: ["text": "chunk-\(requestNumber)"]),
             HTTPURLResponse(

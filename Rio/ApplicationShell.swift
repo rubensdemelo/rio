@@ -545,10 +545,7 @@ struct VoiceFeedbackPresentation: Equatable {
         let progress = feedback.latestFinalizedSpeechEndOffset.map {
             " Latest finalized speech: \(Self.elapsedTimestamp($0))."
         } ?? ""
-        let continuity = feedback.transcriptIsIncomplete
-            ? " Some audio could not be transcribed; the saved transcript will be marked incomplete."
-            : ""
-        return "Transcription is active. \(count) message \(noun) collected.\(progress)\(continuity)"
+        return "Transcription is active. \(count) message \(noun) collected.\(progress)"
     }
 
     private static func elapsedTimestamp(_ duration: Duration) -> String {
@@ -1598,6 +1595,8 @@ private extension PipelineFailure {
             "System audio capture stopped unexpectedly. Rio will retry when it can; otherwise start listening again."
         case .stage(.speechRecognition, .failed):
             "Meeting transcription stopped unexpectedly. Start listening again."
+        case .stage(.speechRecognition, .overloaded):
+            "Transcription fell behind and stopped before skipping meeting audio. The transcript saved so far is marked incomplete. Start listening again to resume."
         case .stage(.insightGeneration, .network):
             "Rio could not reach OpenAI for insights. Check your internet connection, then start listening again."
         case .stage(.insightGeneration, .rateLimited):

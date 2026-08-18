@@ -386,9 +386,6 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
                 transcriptCollector.append(segment)
                 finalizedSpeechSegmentCount += 1
                 latestFinalizedSpeechEndOffset = segment.endOffset
-                if segment.precededByTranscriptionGap {
-                    incompleteTranscript = true
-                }
                 guard activeSessionID == sessionID else {
                     return
                 }
@@ -615,8 +612,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         return SessionFeedbackSnapshot(
             audioInput: await capture.inputSnapshot(),
             finalizedSpeechSegmentCount: finalizedSpeechSegmentCount,
-            latestFinalizedSpeechEndOffset: latestFinalizedSpeechEndOffset,
-            transcriptIsIncomplete: incompleteTranscript
+            latestFinalizedSpeechEndOffset: latestFinalizedSpeechEndOffset
         )
     }
 

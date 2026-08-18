@@ -201,18 +201,15 @@ struct SessionFeedbackSnapshot: Sendable, Equatable {
     let audioInput: AudioInputSnapshot
     let finalizedSpeechSegmentCount: Int
     let latestFinalizedSpeechEndOffset: Duration?
-    let transcriptIsIncomplete: Bool
 
     init(
         audioInput: AudioInputSnapshot,
         finalizedSpeechSegmentCount: Int,
-        latestFinalizedSpeechEndOffset: Duration? = nil,
-        transcriptIsIncomplete: Bool = false
+        latestFinalizedSpeechEndOffset: Duration? = nil
     ) {
         self.audioInput = audioInput
         self.finalizedSpeechSegmentCount = finalizedSpeechSegmentCount
         self.latestFinalizedSpeechEndOffset = latestFinalizedSpeechEndOffset
-        self.transcriptIsIncomplete = transcriptIsIncomplete
     }
 
     static let inactive = SessionFeedbackSnapshot(
@@ -226,21 +223,6 @@ struct FinalizedSpeechSegment: Sendable, Equatable {
     let text: String
     let startOffset: Duration
     let endOffset: Duration
-    let precededByTranscriptionGap: Bool
-
-    init(
-        sequenceNumber: UInt64,
-        text: String,
-        startOffset: Duration,
-        endOffset: Duration,
-        precededByTranscriptionGap: Bool = false
-    ) {
-        self.sequenceNumber = sequenceNumber
-        self.text = text
-        self.startOffset = startOffset
-        self.endOffset = endOffset
-        self.precededByTranscriptionGap = precededByTranscriptionGap
-    }
 }
 
 enum InsightCategory: Sendable, Equatable {

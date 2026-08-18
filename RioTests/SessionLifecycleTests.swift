@@ -109,7 +109,7 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertTrue(records[0].incompleteTranscript)
     }
 
-    func testTranscriptionGapKeepsListeningAndMarksProgressAndSavedTranscriptIncomplete() async throws {
+    func testTranscriptionOverloadStopsAndMarksSavedTranscriptIncomplete() async throws {
         let speech = TestSessionSpeechRecognizer()
         let transcriptCollector = TestTranscriptCollector()
         let historyRecorder = TestMeetingHistoryRecorder()
@@ -122,10 +122,9 @@ final class SessionLifecycleTests: XCTestCase {
         try await coordinator.start()
         let segment = FinalizedSpeechSegment(
             sequenceNumber: 1,
-            text: "available after bounded queue overload",
+            text: "continuous prefix before bounded queue overload",
             startOffset: .seconds(90),
-            endOffset: .seconds(120),
-            precededByTranscriptionGap: true
+            endOffset: .seconds(120)
         )
         let speechStream = await speech.lastStream()
         speechStream?.yield(segment)
@@ -133,12 +132,14 @@ final class SessionLifecycleTests: XCTestCase {
             transcriptCollector.segments == [segment]
         }
 
-        let feedback = await coordinator.feedbackSnapshot()
-        XCTAssertEqual(coordinator.status, .listening)
-        XCTAssertEqual(feedback.latestFinalizedSpeechEndOffset, .seconds(120))
-        XCTAssertTrue(feedback.transcriptIsIncomplete)
+        speechStream?.finish(throwing: PipelineFailure.stage(.speechRecognition, .overloaded))
+        await waitUntil { coordinator.status == .unavailable }
 
-        await coordinator.stop()
+        XCTAssertEqual(
+            coordinator.failure,
+            .stage(.speechRecognition, .overloaded)
+        )
+        XCTAssertEqual(historyRecorder.records().first?.transcript, [segment])
         XCTAssertTrue(historyRecorder.records().first?.incompleteTranscript == true)
     }
 

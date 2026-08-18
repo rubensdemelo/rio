@@ -88,7 +88,13 @@ product names, acronyms, versions, and error-code prefixes to transcription.
 It is local configuration applied to the next session, never derived from
 meeting text, and must not contain meeting notes or other meeting content.
 
-The collector keeps accepting capture chunks while a single request is in flight. Its pending request queue is bounded to two batches; when the service cannot keep up, it drops the oldest pending audio rather than accumulating memory or blocking capture. The next nonempty finalized segment carries content-free discontinuity metadata, causing live feedback and the saved meeting record to mark the transcript incomplete while capture continues. This is intentional: Rio is a live insight stream, not a recording or transcript archive.
+The collector keeps accepting capture chunks while a single request is in
+flight. Its pending request queue is bounded to two batches. If another batch
+arrives while that backlog is full, the recognizer fails with an explicit
+overload before evicting any queued interval. Session cleanup then saves the
+continuous finalized transcript prefix as incomplete and stops capture, so Rio
+never resumes after a hidden transcript gap and never accumulates unbounded
+audio in memory.
 
 The transcription batch duration is selected from the persisted `ListeningCadence`
 preference: 15, 30, or 45 seconds. The setting is applied before a new session
@@ -98,7 +104,7 @@ request, while delaying finalized text and insight generation.
 
 The API key is the preflight requirement. A rejected key is unavailable; transient network and service failures are explicit transcription failures. TTS is not part of the pipeline.
 
-The capture layer may expose bounded, content-free input telemetry: a normalized level, whether audio buffers have arrived, whether sustained silence suggests a muted input, the latest finalized meeting offset, and whether transcription continuity is incomplete. It must not expose audio samples or temporary speech text to the UI. Pausing cancels the active capture and speech tasks while retaining the in-memory session context; resuming creates fresh capture and speech tasks while preserving segment ordering and meeting-relative offsets. Stopping still clears all session data and resets those counters for the next session.
+The capture layer may expose bounded, content-free input telemetry: a normalized level, whether audio buffers have arrived, whether sustained silence suggests a muted input, and the latest finalized meeting offset. It must not expose audio samples or temporary speech text to the UI. Pausing cancels the active capture and speech tasks while retaining the in-memory session context; resuming creates fresh capture and speech tasks while preserving segment ordering and meeting-relative offsets. Stopping still clears all session data and resets those counters for the next session.
 
 ### Rolling meeting context and transcript collection
 
@@ -214,6 +220,7 @@ A failure must not silently leave the app appearing to listen.
 - Permission denial explains which permission is needed and how to retry.
 - Capture interruption changes the status and attempts a bounded recovery where safe.
 - Transcription failure keeps capture state accurate and offers restart.
+- Transcription overload stops before skipping queued audio, saves the continuous finalized prefix as incomplete, and offers restart.
 - A missing or rejected OpenAI API key prevents insight generation and explains the reason.
 - A failed generation request may retry after new finalized text arrives; it does not preserve unbounded text while waiting.
 - Stopping always clears temporary meeting data after saving the finalized meeting snapshot; a partial transcript is marked incomplete and remains until it expires or the user clears it.

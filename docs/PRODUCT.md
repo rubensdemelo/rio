@@ -41,7 +41,7 @@ Before starting a session, the user chooses one meeting profile:
 
 The selected profile is fixed for the session, saved with the completed two-day meeting record, and defaults to Customer-critical for new installations. The profile changes model instructions and Recent Meetings presentation; it does not relax validation, deduplication, privacy, retention, or the no-live-transcript boundary.
 
-While listening, Rio shows a compact live microphone input level, the elapsed meeting offset reached by finalized transcription, and a warning if bounded transcription backpressure created a gap. This lets the user verify long-session continuity without exposing live transcript text. The live insight list remains bounded and scrollable. The main window has one primary action: start listening or stop listening and clear the active session. Recent Meetings opens read-only transcripts and insights saved locally from the last two days. Saved transcript segments retain meeting-relative timestamps and can be filtered locally by text so a long completed meeting remains navigable; this is not AI search, editing, or export. A concise cue explains that audio is never retained and finalized transcript text is kept only for that two-day window.
+While listening, Rio shows a compact live microphone input level and the elapsed meeting offset reached by finalized transcription. This lets the user verify long-session progress without exposing live transcript text. If bounded transcription backpressure would skip audio, Rio stops explicitly and explains that the continuous transcript prefix was saved as incomplete. The live insight list remains bounded and scrollable. The main window has one primary action: start listening or stop listening and clear the active session. Recent Meetings opens read-only transcripts and insights saved locally from the last two days. Saved transcript segments retain meeting-relative timestamps and can be filtered locally by text so a long completed meeting remains navigable; this is not AI search, editing, or export. A concise cue explains that audio is never retained and finalized transcript text is kept only for that two-day window.
 
 Provider settings also include an Insight pace choice of 15, 30, or 45 seconds;
 30 seconds is the default for a new installation.
@@ -141,3 +141,8 @@ The MVP is successful when:
 
 Transient insight service failures do not end an active listening session. Rio
 retries them while preserving capture and the finalized transcript pipeline.
+
+If transcription falls far enough behind to exhaust its bounded in-memory audio
+backlog, Rio stops the session before skipping an interval. It saves the
+continuous finalized transcript prefix as incomplete and tells the user to
+start listening again, rather than silently continuing with a gap.
