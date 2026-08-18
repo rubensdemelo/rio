@@ -309,6 +309,26 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertFalse(presentation.detail.contains("transcript"))
     }
 
+    func testVoiceFeedbackShowsLongMeetingProgressAndContinuityWithoutMeetingText() {
+        let presentation = VoiceFeedbackPresentation(
+            status: .listening,
+            feedback: SessionFeedbackSnapshot(
+                audioInput: AudioInputSnapshot(
+                    level: 0.65,
+                    hasReceivedAudio: true,
+                    isMuted: false
+                ),
+                finalizedSpeechSegmentCount: 76,
+                latestFinalizedSpeechEndOffset: .seconds(3_620),
+                transcriptIsIncomplete: true
+            )
+        )
+
+        XCTAssertTrue(presentation.detail.contains("76 message chunks"))
+        XCTAssertTrue(presentation.detail.contains("1:00:20"))
+        XCTAssertTrue(presentation.detail.contains("marked incomplete"))
+    }
+
     func testVoiceFeedbackDistinguishesMutedAndConnectionErrorStates() {
         let muted = VoiceFeedbackPresentation(
             status: .listening,
@@ -376,6 +396,37 @@ final class ApplicationShellTests: XCTestCase {
             presentation.transcriptText,
             "The opening point.\nThe later point."
         )
+    }
+
+    func testLongTranscriptCanBeNavigatedByTimeAndFilteredWithoutChangingSavedText() {
+        let presentation = RecentMeetingDetailPresentation(
+            insights: [],
+            transcriptSegments: [
+                RecentTranscriptSegment(
+                    sequenceNumber: 3,
+                    startOffset: 3_605,
+                    endOffset: 3_635,
+                    text: "The billing workspace still returns 403."
+                ),
+                RecentTranscriptSegment(
+                    sequenceNumber: 1,
+                    startOffset: 5,
+                    endOffset: 35,
+                    text: "The customer described the sign-in issue."
+                ),
+            ]
+        )
+
+        XCTAssertEqual(
+            presentation.orderedTranscriptSegments.map(\.timestamp),
+            ["00:05", "1:00:05"]
+        )
+        XCTAssertEqual(
+            presentation.transcriptSegments(matching: "403").map(\.sequenceNumber),
+            [3]
+        )
+        XCTAssertEqual(presentation.transcriptSegments(matching: "missing"), [])
+        XCTAssertEqual(presentation.transcriptText, "The customer described the sign-in issue.\nThe billing workspace still returns 403.")
     }
 
 }

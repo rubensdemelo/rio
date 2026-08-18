@@ -6,6 +6,18 @@ typealias FinalizedSpeechStream = AsyncThrowingStream<FinalizedSpeechSegment, an
 
 struct MeetingContextBatch: Sendable, Equatable {
     let segments: [FinalizedSpeechSegment]
+    let newSegments: [FinalizedSpeechSegment]
+    let currentInsights: [InsightCard]
+
+    init(
+        segments: [FinalizedSpeechSegment],
+        newSegments: [FinalizedSpeechSegment]? = nil,
+        currentInsights: [InsightCard] = []
+    ) {
+        self.segments = segments
+        self.newSegments = newSegments ?? segments
+        self.currentInsights = currentInsights
+    }
 }
 
 protocol AudioCapture: Sendable {
@@ -297,8 +309,19 @@ actor BoundedRollingMeetingContext: RollingMeetingContext {
             return nil
         }
 
+        let newSegments = Array(storedSegments
+            .lazy
+            .filter { stored in
+                self.lastDeliveredSequenceNumber.map {
+                    stored.segment.sequenceNumber > $0
+                } ?? true
+            }
+            .map(\.segment))
         lastDeliveredSequenceNumber = newestSequenceNumber
-        return MeetingContextBatch(segments: storedSegments.map(\.segment))
+        return MeetingContextBatch(
+            segments: storedSegments.map(\.segment),
+            newSegments: newSegments
+        )
     }
 
     private func evictExpiredSegments(at current: Duration) {

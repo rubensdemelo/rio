@@ -545,6 +545,8 @@ final class BoundedRollingMeetingContextTests: XCTestCase {
 
         XCTAssertEqual(firstBatch?.segments, [first])
         XCTAssertEqual(secondBatch?.segments, [first, second])
+        XCTAssertEqual(firstBatch?.newSegments, [first])
+        XCTAssertEqual(secondBatch?.newSegments, [second])
     }
 
     func testRejectsOutOfOrderOrMalformedFinalizedSegments() async throws {

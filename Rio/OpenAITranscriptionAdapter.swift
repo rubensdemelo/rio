@@ -1,6 +1,7 @@
 import Foundation
 
 private final class WAVAudioBatch: @unchecked Sendable {
+    let sequenceNumber: UInt64
     let sampleRate: Int
     let channelCount: Int
     private(set) var samples: [Float]
@@ -8,12 +9,14 @@ private final class WAVAudioBatch: @unchecked Sendable {
     private(set) var endOffset: Duration
 
     init(
+        sequenceNumber: UInt64,
         sampleRate: Int,
         channelCount: Int,
         samples: [Float],
         startOffset: Duration,
         endOffset: Duration
     ) {
+        self.sequenceNumber = sequenceNumber
         self.sampleRate = sampleRate
         self.channelCount = channelCount
         self.samples = samples
@@ -130,7 +133,7 @@ private actor OpenAITranscriptionQueue {
     private var pending: [WAVAudioBatch] = []
     private var worker: Task<Void, Never>?
     private var acceptsInput = true
-    private var nextSequenceNumber: UInt64 = 0
+    private var latestDroppedAudioEndOffset: Duration?
 
     init(
         configuration: OpenAIAPIConfiguration,
@@ -147,7 +150,10 @@ private actor OpenAITranscriptionQueue {
     func enqueue(_ batch: WAVAudioBatch) {
         guard acceptsInput else { return }
         if pending.count == 2 {
-            pending.removeFirst()
+            let dropped = pending.removeFirst()
+            if latestDroppedAudioEndOffset.map({ dropped.endOffset > $0 }) ?? true {
+                latestDroppedAudioEndOffset = dropped.endOffset
+            }
         }
         pending.append(batch)
         startNextIfNeeded()
@@ -204,15 +210,21 @@ private actor OpenAITranscriptionQueue {
         worker = nil
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
+            let precededByGap = latestDroppedAudioEndOffset.map {
+                batch.startOffset >= $0
+            } ?? false
             continuation.yield(
                 FinalizedSpeechSegment(
-                    sequenceNumber: nextSequenceNumber,
+                    sequenceNumber: batch.sequenceNumber,
                     text: trimmed,
                     startOffset: batch.startOffset,
-                    endOffset: batch.endOffset
+                    endOffset: batch.endOffset,
+                    precededByTranscriptionGap: precededByGap
                 )
             )
-            nextSequenceNumber &+= 1
+            if precededByGap {
+                latestDroppedAudioEndOffset = nil
+            }
         }
         startNextIfNeeded()
     }
@@ -242,6 +254,8 @@ actor OpenAITranscriptionAdapter: SessionSpeechRecognizer {
     private var batchDuration: Duration
     private var processingTask: Task<Void, Never>?
     private var queue: OpenAITranscriptionQueue?
+    private var nextBatchSequenceNumber: UInt64 = 0
+    private var nextAudioOffset = Duration.zero
 
     init(
         configuration: OpenAIAPIConfiguration? = nil,
@@ -286,7 +300,8 @@ actor OpenAITranscriptionAdapter: SessionSpeechRecognizer {
         var outputContinuation: FinalizedSpeechStream.Continuation?
         let output = FinalizedSpeechStream(bufferingPolicy: .bufferingOldest(16)) { continuation in
             outputContinuation = continuation
-            continuation.onTermination = { @Sendable [weak self] _ in
+            continuation.onTermination = { @Sendable [weak self] termination in
+                guard case .cancelled = termination else { return }
                 Task { await self?.cancel() }
             }
         }
@@ -308,19 +323,30 @@ actor OpenAITranscriptionAdapter: SessionSpeechRecognizer {
     }
 
     func stop() async {
-        await cancel()
+        await endRecognition(resetSession: true)
+    }
+
+    func pause() async {
+        await endRecognition(resetSession: false)
     }
 
     func cancel() async {
+        await endRecognition(resetSession: true)
+    }
+
+    private func endRecognition(resetSession: Bool) async {
         processingTask?.cancel()
         processingTask = nil
         await queue?.cancel()
         queue = nil
+        if resetSession {
+            nextBatchSequenceNumber = 0
+            nextAudioOffset = .zero
+        }
     }
 
     private func collect(audio: AudioStream, queue: OpenAITranscriptionQueue) async {
         var batch: WAVAudioBatch?
-        var nextOffset = Duration.zero
         do {
             for try await chunk in audio {
                 try Task.checkCancellation()
@@ -337,18 +363,20 @@ actor OpenAITranscriptionAdapter: SessionSpeechRecognizer {
                     batch = nil
                 }
 
-                let startOffset = nextOffset
-                nextOffset += chunk.duration
+                let startOffset = nextAudioOffset
+                nextAudioOffset += chunk.duration
                 if let current = batch {
-                    current.append(chunk.samples, endingAt: nextOffset)
+                    current.append(chunk.samples, endingAt: nextAudioOffset)
                 } else {
                     batch = WAVAudioBatch(
+                        sequenceNumber: nextBatchSequenceNumber,
                         sampleRate: sampleRate,
                         channelCount: chunk.channelCount,
                         samples: chunk.samples,
                         startOffset: startOffset,
-                        endOffset: nextOffset
+                        endOffset: nextAudioOffset
                     )
+                    nextBatchSequenceNumber &+= 1
                 }
             }
             if let batch {

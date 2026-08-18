@@ -10,6 +10,7 @@ protocol SessionSpeechRecognizer: TemporarySpeechRecognizer {
     func availability() async -> Availability
     func prepare() async throws(PipelineFailure)
     func configure(batchDuration: Duration) async
+    func pause() async
 }
 
 protocol SessionInsightGenerator: InsightGenerator {
@@ -99,6 +100,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     private var speechTask: Task<Void, Never>?
     private var generationTask: Task<Void, Never>?
     private var finalizedSpeechSegmentCount = 0
+    private var latestFinalizedSpeechEndOffset: Duration?
     private var activeMeetingID: UUID?
     private var activeMeetingStartedAt: Date?
     private var incompleteTranscript = false
@@ -238,6 +240,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         insightState.reset()
         transcriptCollector.reset()
         finalizedSpeechSegmentCount = 0
+        latestFinalizedSpeechEndOffset = nil
         activeMeetingID = UUID()
         activeMeetingStartedAt = Date()
         activeMeetingProfile = configuredProfile
@@ -317,7 +320,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         audioTask?.cancel()
         speechTask?.cancel()
         generationTask?.cancel()
-        await speechRecognizer.stop()
+        await speechRecognizer.pause()
         await capture.stop()
         guard activeSessionID == sessionID else { return }
     }
@@ -382,6 +385,10 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
                 try await context.append(segment)
                 transcriptCollector.append(segment)
                 finalizedSpeechSegmentCount += 1
+                latestFinalizedSpeechEndOffset = segment.endOffset
+                if segment.precededByTranscriptionGap {
+                    incompleteTranscript = true
+                }
                 guard activeSessionID == sessionID else {
                     return
                 }
@@ -419,11 +426,19 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
                 }
 
                 status = .processing
-                let updates = try await generateInsights(for: batch, sessionID: sessionID)
+                let generationBatch = MeetingContextBatch(
+                    segments: batch.segments,
+                    newSegments: batch.newSegments,
+                    currentInsights: insightState.cards
+                )
+                let updates = try await generateInsights(
+                    for: generationBatch,
+                    sessionID: sessionID
+                )
                 guard activeSessionID == sessionID else {
                     return
                 }
-                try insightState.apply(updates, supportedBy: batch)
+                try insightState.apply(updates, supportedBy: generationBatch)
                 status = .listening
             }
         } catch let failure {
@@ -513,6 +528,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
 
         activeSessionID = nil
         finalizedSpeechSegmentCount = 0
+        latestFinalizedSpeechEndOffset = nil
         activeMeetingID = nil
         activeMeetingStartedAt = nil
         incompleteTranscript = false
@@ -598,7 +614,9 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         }
         return SessionFeedbackSnapshot(
             audioInput: await capture.inputSnapshot(),
-            finalizedSpeechSegmentCount: finalizedSpeechSegmentCount
+            finalizedSpeechSegmentCount: finalizedSpeechSegmentCount,
+            latestFinalizedSpeechEndOffset: latestFinalizedSpeechEndOffset,
+            transcriptIsIncomplete: incompleteTranscript
         )
     }
 

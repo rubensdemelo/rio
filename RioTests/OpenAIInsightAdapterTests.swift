@@ -46,13 +46,60 @@ final class OpenAIInsightAdapterTests: XCTestCase {
         XCTAssertEqual(body["model"] as? String, OpenAIAPIConfiguration.defaultModel)
         XCTAssertEqual(body["instructions"] as? String, OpenAIInsightPrompt.instructions)
         XCTAssertFalse((body["instructions"] as? String ?? "").contains(meetingText))
-        XCTAssertTrue((body["input"] as? String ?? "").contains("<MEETING_TEXT>"))
+        XCTAssertTrue((body["input"] as? String ?? "").contains("<NEW_FINALIZED_TEXT>"))
         XCTAssertTrue((body["input"] as? String ?? "").contains(meetingText))
 
         let text = try XCTUnwrap(body["text"] as? [String: Any])
         let format = try XCTUnwrap(text["format"] as? [String: Any])
         XCTAssertEqual(format["type"] as? String, "json_schema")
         XCTAssertEqual(format["strict"] as? Bool, true)
+    }
+
+    func testLongMeetingRequestDistinguishesNewSpeechAndSuppliesCurrentInsightState() async throws {
+        let client = RecordingOpenAIHTTPClient(responseData: makeAPIResponseData())
+        let generator = OpenAIInsightGenerator(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client
+        )
+        let earlier = FinalizedSpeechSegment(
+            sequenceNumber: 40,
+            text: "Checkout latency rose after the release.",
+            startOffset: .seconds(1_800),
+            endOffset: .seconds(1_830)
+        )
+        let latest = FinalizedSpeechSegment(
+            sequenceNumber: 41,
+            text: "Payment latency has not been checked.",
+            startOffset: .seconds(1_830),
+            endOffset: .seconds(1_860)
+        )
+        let existing = InsightCard(
+            stableKey: "checkout-latency",
+            category: .important,
+            text: "Checkout latency rose after the release.",
+            explicitOwner: nil,
+            state: .new
+        )
+        let batch = MeetingContextBatch(
+            segments: [earlier, latest],
+            newSegments: [latest],
+            currentInsights: [existing]
+        )
+
+        try await generator.startSession(localeIdentifier: "en-US")
+        _ = try await generator.generate(from: batch)
+
+        let requests = await client.requests()
+        let request = try XCTUnwrap(requests.first)
+        let body = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: Any]
+        )
+        let input = try XCTUnwrap(body["input"] as? String)
+        XCTAssertTrue(input.contains("<RECENT_CONTEXT>"))
+        XCTAssertTrue(input.contains("<NEW_FINALIZED_TEXT>"))
+        XCTAssertTrue(input.contains("<CURRENT_INSIGHTS>"))
+        XCTAssertTrue(input.contains("checkout-latency"))
+        XCTAssertTrue(input.contains(latest.text))
     }
 
     func testInternalTechnicalProfileUsesTechnicalKnowledgeInstructions() async throws {

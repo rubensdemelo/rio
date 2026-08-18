@@ -356,11 +356,15 @@ struct RioView<Controller: SessionShellControlling>: View {
         }
 
         if !controller.cards.isEmpty {
-            LazyVStack(spacing: 12) {
-                ForEach(controller.cards, id: \.stableKey) { card in
-                    InsightCardView(card: card)
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    ForEach(controller.cards, id: \.stableKey) { card in
+                        InsightCardView(card: card)
+                    }
                 }
+                .padding(.vertical, 2)
             }
+            .frame(maxHeight: 520)
             .accessibilityLabel("Meeting insights")
         }
     }
@@ -520,7 +524,7 @@ struct VoiceFeedbackPresentation: Equatable {
         } else if feedback.audioInput.hasReceivedAudio {
             condition = .live
             title = "Meeting audio live"
-            detail = Self.speechDetail(for: feedback.finalizedSpeechSegmentCount)
+            detail = Self.speechDetail(for: feedback)
             symbolName = "mic.fill"
             tintName = .active
         } else {
@@ -532,12 +536,31 @@ struct VoiceFeedbackPresentation: Equatable {
         }
     }
 
-    private static func speechDetail(for count: Int) -> String {
+    private static func speechDetail(for feedback: SessionFeedbackSnapshot) -> String {
+        let count = feedback.finalizedSpeechSegmentCount
         guard count > 0 else {
             return "Transcription is active. Collecting finalized message chunks for insights."
         }
         let noun = count == 1 ? "chunk" : "chunks"
-        return "Transcription is active. \(count) message \(noun) collected for insights."
+        let progress = feedback.latestFinalizedSpeechEndOffset.map {
+            " Latest finalized speech: \(Self.elapsedTimestamp($0))."
+        } ?? ""
+        let continuity = feedback.transcriptIsIncomplete
+            ? " Some audio could not be transcribed; the saved transcript will be marked incomplete."
+            : ""
+        return "Transcription is active. \(count) message \(noun) collected.\(progress)\(continuity)"
+    }
+
+    private static func elapsedTimestamp(_ duration: Duration) -> String {
+        let components = duration.components
+        let seconds = max(0, Int(components.seconds))
+        let hours = seconds / 3_600
+        let minutes = (seconds % 3_600) / 60
+        let remainingSeconds = seconds % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, remainingSeconds)
+        }
+        return String(format: "%02d:%02d", minutes, remainingSeconds)
     }
 
     var tint: Color {
@@ -572,13 +595,21 @@ private struct VoiceFeedbackView: View {
                 )
                 .frame(width: 72, height: 28)
 
-                Label(presentation.title, systemImage: presentation.symbolName)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(presentation.tint)
+                VStack(alignment: .leading, spacing: 2) {
+                    Label(presentation.title, systemImage: presentation.symbolName)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(presentation.tint)
+
+                    Text(presentation.detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
                 Spacer(minLength: 0)
 
-                Text("Live chunks sent to OpenAI. Nothing is saved by Rio.")
+                Text("Audio isn’t saved.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -963,20 +994,57 @@ enum RecentMeetingDetailSection: String, CaseIterable, Identifiable {
 
 struct RecentTranscriptSegment: Equatable, Identifiable {
     let sequenceNumber: UInt64
+    let startOffset: TimeInterval
+    let endOffset: TimeInterval
     let text: String
 
+    init(
+        sequenceNumber: UInt64,
+        startOffset: TimeInterval = 0,
+        endOffset: TimeInterval = 0,
+        text: String
+    ) {
+        self.sequenceNumber = sequenceNumber
+        self.startOffset = startOffset
+        self.endOffset = endOffset
+        self.text = text
+    }
+
     var id: UInt64 { sequenceNumber }
+
+    var timestamp: String {
+        let seconds = max(0, Int(startOffset))
+        let hours = seconds / 3_600
+        let minutes = (seconds % 3_600) / 60
+        let remainingSeconds = seconds % 60
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, remainingSeconds)
+        }
+        return String(format: "%02d:%02d", minutes, remainingSeconds)
+    }
 }
 
 struct RecentMeetingDetailPresentation: Equatable {
     let insights: [InsightCard]
     let transcriptSegments: [RecentTranscriptSegment]
 
-    var transcriptText: String {
+    var orderedTranscriptSegments: [RecentTranscriptSegment] {
         transcriptSegments
+            .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .sorted { $0.sequenceNumber < $1.sequenceNumber }
+    }
+
+    func transcriptSegments(matching query: String) -> [RecentTranscriptSegment] {
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedQuery.isEmpty else { return orderedTranscriptSegments }
+        return orderedTranscriptSegments.filter {
+            $0.text.localizedCaseInsensitiveContains(normalizedQuery)
+        }
+    }
+
+    var transcriptText: String {
+        orderedTranscriptSegments
             .map(\.text)
-            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .joined(separator: "\n")
     }
 }
@@ -993,6 +1061,7 @@ struct RecentMeetingsView: View {
     @State private var selectedSection: RecentMeetingDetailSection = .insights
     @State private var meetingPendingDeletion: SavedMeeting?
     @State private var isConfirmingClear = false
+    @State private var transcriptQuery = ""
 
     private var meetings: [SavedMeeting] {
         meetingHistory.meetings.sorted { $0.startedAt > $1.startedAt }
@@ -1092,6 +1161,7 @@ struct RecentMeetingsView: View {
                     Button {
                         selectedMeetingID = meeting.id
                         selectedSection = meeting.profile == .internalTechnical ? .transcript : .insights
+                        transcriptQuery = ""
                     } label: {
                         MeetingHistoryRow(meeting: meeting)
                     }
@@ -1114,7 +1184,12 @@ struct RecentMeetingsView: View {
         let presentation = RecentMeetingDetailPresentation(
             insights: meeting.insights.map(\.card),
             transcriptSegments: meeting.transcriptSegments.map {
-                RecentTranscriptSegment(sequenceNumber: $0.sequenceNumber, text: $0.text)
+                RecentTranscriptSegment(
+                    sequenceNumber: $0.sequenceNumber,
+                    startOffset: $0.startOffset,
+                    endOffset: $0.endOffset,
+                    text: $0.text
+                )
             }
         )
 
@@ -1166,7 +1241,7 @@ struct RecentMeetingsView: View {
                 case .insights:
                     insightsContent(presentation.insights)
                 case .transcript:
-                    transcriptContent(presentation.transcriptText)
+                    transcriptContent(presentation)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -1196,8 +1271,8 @@ struct RecentMeetingsView: View {
     }
 
     @ViewBuilder
-    private func transcriptContent(_ transcript: String) -> some View {
-        if transcript.isEmpty {
+    private func transcriptContent(_ presentation: RecentMeetingDetailPresentation) -> some View {
+        if presentation.orderedTranscriptSegments.isEmpty {
             ContentUnavailableView(
                 "No transcript",
                 systemImage: "text.quote",
@@ -1205,15 +1280,40 @@ struct RecentMeetingsView: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            ScrollView {
-                Text(transcript)
-                    .font(.body)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
+            let matches = presentation.transcriptSegments(matching: transcriptQuery)
+            VStack(alignment: .leading, spacing: 10) {
+                TextField("Search transcript", text: $transcriptQuery)
+                    .textFieldStyle(.roundedBorder)
+                    .accessibilityLabel("Search saved transcript")
+
+                if matches.isEmpty {
+                    ContentUnavailableView.search(text: transcriptQuery)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(matches) { segment in
+                                HStack(alignment: .top, spacing: 14) {
+                                    Text(segment.timestamp)
+                                        .font(.caption.monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 58, alignment: .trailing)
+                                        .accessibilityLabel("Meeting time \(segment.timestamp)")
+                                    Text(segment.text)
+                                        .font(.body)
+                                        .textSelection(.enabled)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 10)
+                                Divider()
+                            }
+                        }
+                    }
+                    .background(Color(nsColor: .textBackgroundColor).opacity(0.35))
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
             }
-            .background(Color(nsColor: .textBackgroundColor).opacity(0.35))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
         }
     }
 
@@ -1221,6 +1321,7 @@ struct RecentMeetingsView: View {
         guard let selectedMeetingID,
               meetings.contains(where: { $0.id == selectedMeetingID }) else {
             selectedMeetingID = meetings.first?.id
+            transcriptQuery = ""
             if let first = meetings.first {
                 selectedSection = first.profile == .internalTechnical ? .transcript : .insights
             }

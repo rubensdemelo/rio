@@ -41,7 +41,7 @@ Before starting a session, the user chooses one meeting profile:
 
 The selected profile is fixed for the session, saved with the completed two-day meeting record, and defaults to Customer-critical for new installations. The profile changes model instructions and Recent Meetings presentation; it does not relax validation, deduplication, privacy, retention, or the no-live-transcript boundary.
 
-While listening, Rio shows a compact live microphone input level so the user can tell that capture is active without exposing a live transcript. The main window has one primary action: start listening or stop listening and clear the active session. Recent Meetings opens read-only transcripts and insights saved locally from the last two days. A concise cue explains that audio is never retained and finalized transcript text is kept only for that two-day window.
+While listening, Rio shows a compact live microphone input level, the elapsed meeting offset reached by finalized transcription, and a warning if bounded transcription backpressure created a gap. This lets the user verify long-session continuity without exposing live transcript text. The live insight list remains bounded and scrollable. The main window has one primary action: start listening or stop listening and clear the active session. Recent Meetings opens read-only transcripts and insights saved locally from the last two days. Saved transcript segments retain meeting-relative timestamps and can be filtered locally by text so a long completed meeting remains navigable; this is not AI search, editing, or export. A concise cue explains that audio is never retained and finalized transcript text is kept only for that two-day window.
 
 Provider settings also include an Insight pace choice of 15, 30, or 45 seconds;
 30 seconds is the default for a new installation.
@@ -61,7 +61,7 @@ When the user starts listening:
 1. Rio captures system/meeting audio, including browser-based calls.
 2. Rio groups live audio into bounded, in-memory WAV chunks and sends them to OpenAI's `gpt-4o-transcribe` API for temporary finalized text.
 3. A bounded rolling text window is sent to OpenAI's Responses API.
-4. The API returns structured incident-signal and insight updates.
+4. The API receives the bounded recent context, a distinct new-finalized-text slice, and the bounded current insight cards, then returns structured incident-signal and insight updates. This lets it update or resolve stable keys instead of re-summarizing repeated rolling context.
 5. The UI adds, updates, or removes concise cards as the support call develops.
 
 For the incident-copilot evaluation target, the useful signal set is symptoms, errors, product/version/environment facts, recent changes, failed checks, and unanswered diagnostic questions. Rio may formulate intent for trusted local manuals and runbooks and offer evidence-grounded possible investigation directions and next-best questions. It does not state diagnoses as facts, infer action owners, fabricate source evidence, or execute automatic actions.

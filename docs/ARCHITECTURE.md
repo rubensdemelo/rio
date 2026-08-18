@@ -88,7 +88,7 @@ product names, acronyms, versions, and error-code prefixes to transcription.
 It is local configuration applied to the next session, never derived from
 meeting text, and must not contain meeting notes or other meeting content.
 
-The collector keeps accepting capture chunks while a single request is in flight. Its pending request queue is bounded to two batches; when the service cannot keep up, it drops the oldest pending audio rather than accumulating memory or blocking capture. This is intentional: Rio is a live insight stream, not a recording or transcript archive.
+The collector keeps accepting capture chunks while a single request is in flight. Its pending request queue is bounded to two batches; when the service cannot keep up, it drops the oldest pending audio rather than accumulating memory or blocking capture. The next nonempty finalized segment carries content-free discontinuity metadata, causing live feedback and the saved meeting record to mark the transcript incomplete while capture continues. This is intentional: Rio is a live insight stream, not a recording or transcript archive.
 
 The transcription batch duration is selected from the persisted `ListeningCadence`
 preference: 15, 30, or 45 seconds. The setting is applied before a new session
@@ -98,7 +98,7 @@ request, while delaying finalized text and insight generation.
 
 The API key is the preflight requirement. A rejected key is unavailable; transient network and service failures are explicit transcription failures. TTS is not part of the pipeline.
 
-The capture layer may expose bounded, content-free input telemetry: a normalized level, whether audio buffers have arrived, and whether sustained silence suggests a muted input. It must not expose audio samples or temporary speech text to the UI. Pausing cancels the active capture and speech tasks while retaining the in-memory session context; resuming creates fresh capture and speech tasks. Stopping still clears all session data.
+The capture layer may expose bounded, content-free input telemetry: a normalized level, whether audio buffers have arrived, whether sustained silence suggests a muted input, the latest finalized meeting offset, and whether transcription continuity is incomplete. It must not expose audio samples or temporary speech text to the UI. Pausing cancels the active capture and speech tasks while retaining the in-memory session context; resuming creates fresh capture and speech tasks while preserving segment ordering and meeting-relative offsets. Stopping still clears all session data and resets those counters for the next session.
 
 ### Rolling meeting context and transcript collection
 
@@ -109,6 +109,7 @@ The context manager:
 - Accepts finalized text segments in order.
 - Retains only a limited recent window sized to fit the language model context.
 - Groups enough new content before requesting another insight update.
+- Identifies the new finalized segments separately from older retained context.
 - Discards segments after they are no longer needed.
 - Clears immediately when the session stops.
 
@@ -142,7 +143,7 @@ permission flow. A missing or rejected API key is an explicit unavailable
 state; transient network or service errors are explicit transient failures,
 not a permissions issue.
 
-Each request has stable developer-authored instructions and one untrusted meeting-text input. The request asks the API for strict JSON Schema output; meeting text never enters instructions. A conceptual result is:
+Each request has stable developer-authored instructions and one untrusted input containing three bounded data sections: retained recent meeting context, new finalized text, and the current insight-card state. New text drives additions while the current cards supply stable keys for updates and resolutions. The request asks the API for strict JSON Schema output; meeting text and generated card text never enter instructions. A conceptual result is:
 
 ```text
 InsightUpdate
@@ -153,7 +154,7 @@ InsightUpdate
   explicitOwner: String
 ```
 
-The app validates semantic constraints after generation, including nonempty text, known categories, bounded card counts, and the rule against guessed owners. It sends only the current bounded context, does not log request or response content, and cancels in-flight requests when the session ends.
+The app validates semantic constraints after generation, including nonempty text, known categories, bounded card counts, and the rule against guessed owners. It sends only the bounded recent/new text and bounded active-card snapshot, does not log request or response content, and cancels in-flight requests when the session ends.
 
 ### Insight state
 
@@ -201,7 +202,10 @@ The menu-bar scene has no meeting-data state of its own.
 
 The main window uses its content size rather than a fixed idle canvas. Its
 single listening action is always first; status feedback, setup guidance, and
-insight cards are conditionally composed below it.
+insight cards are conditionally composed below it. The bounded live-card region
+scrolls instead of expanding beyond a useful long-meeting window size. Recent
+Meetings renders finalized transcript segments with meeting-relative timestamps
+and performs local, non-AI text filtering without changing the saved record.
 
 ## Failure behavior
 

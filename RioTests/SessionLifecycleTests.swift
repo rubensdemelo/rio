@@ -109,6 +109,39 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertTrue(records[0].incompleteTranscript)
     }
 
+    func testTranscriptionGapKeepsListeningAndMarksProgressAndSavedTranscriptIncomplete() async throws {
+        let speech = TestSessionSpeechRecognizer()
+        let transcriptCollector = TestTranscriptCollector()
+        let historyRecorder = TestMeetingHistoryRecorder()
+        let coordinator = makeCoordinator(
+            speech: speech,
+            transcriptCollector: transcriptCollector,
+            historyRecorder: historyRecorder
+        )
+
+        try await coordinator.start()
+        let segment = FinalizedSpeechSegment(
+            sequenceNumber: 1,
+            text: "available after bounded queue overload",
+            startOffset: .seconds(90),
+            endOffset: .seconds(120),
+            precededByTranscriptionGap: true
+        )
+        let speechStream = await speech.lastStream()
+        speechStream?.yield(segment)
+        await waitUntil {
+            transcriptCollector.segments == [segment]
+        }
+
+        let feedback = await coordinator.feedbackSnapshot()
+        XCTAssertEqual(coordinator.status, .listening)
+        XCTAssertEqual(feedback.latestFinalizedSpeechEndOffset, .seconds(120))
+        XCTAssertTrue(feedback.transcriptIsIncomplete)
+
+        await coordinator.stop()
+        XCTAssertTrue(historyRecorder.records().first?.incompleteTranscript == true)
+    }
+
     func testPermissionDeniedStopsBeforeStartingPipeline() async throws {
         let capture = TestSessionAudioCapture(
             permission: .denied,
@@ -570,6 +603,34 @@ final class SessionLifecycleTests: XCTestCase {
         await coordinator.stop()
     }
 
+    func testLaterInsightRequestsReceiveTheBoundedCurrentCardState() async throws {
+        let speech = TestSessionSpeechRecognizer()
+        let generator = TestSessionInsightGenerator(
+            updates: [makeUpdate(text: "checkout latency increased")]
+        )
+        let state = TestSessionInsightState()
+        let coordinator = makeCoordinator(
+            speech: speech,
+            generator: generator,
+            state: state
+        )
+
+        try await coordinator.start()
+        let speechStream = await speech.lastStream()
+        speechStream?.yield(makeSegment(sequence: 1, text: "latency increased"))
+        await waitUntil { state.cards.count == 1 }
+        let firstCard = state.cards[0]
+
+        speechStream?.yield(makeSegment(sequence: 2, text: "payment latency is unknown"))
+        await waitUntil { state.appliedContexts.count == 2 }
+
+        let generatedBatches = await generator.generatedBatches()
+        XCTAssertEqual(generatedBatches.count, 2)
+        XCTAssertTrue(generatedBatches[0].currentInsights.isEmpty)
+        XCTAssertEqual(generatedBatches[1].currentInsights, [firstCard])
+        await coordinator.stop()
+    }
+
     func testCaptureInterruptionPropagatesAsInterrupted() async throws {
         let capture = TestSessionAudioCapture()
         let coordinator = makeCoordinator(capture: capture)
@@ -890,6 +951,12 @@ actor TestSessionSpeechRecognizer: SessionSpeechRecognizer {
         configuredBatchDuration = batchDuration
     }
 
+    func pause() async {
+        stops += 1
+        currentStream?.finish(throwing: PipelineFailure.cancelled)
+        currentStream = nil
+    }
+
     func recognize(audio: AudioStream) async throws(PipelineFailure) -> FinalizedSpeechStream {
         if let recognizeFailure {
             throw recognizeFailure
@@ -1030,6 +1097,7 @@ actor TestSessionInsightGenerator: SessionInsightGenerator {
     private var cancellations = 0
     private var activeRequests = 0
     private var maximumActiveRequests = 0
+    private var receivedBatches: [MeetingContextBatch] = []
 
     init(
         availability: Availability = .available,
@@ -1072,6 +1140,7 @@ actor TestSessionInsightGenerator: SessionInsightGenerator {
             throw .stage(.insightGeneration, .invalidState)
         }
         activeRequests += 1
+        receivedBatches.append(batch)
         maximumActiveRequests = max(maximumActiveRequests, activeRequests)
         defer { activeRequests -= 1 }
 
@@ -1104,6 +1173,7 @@ actor TestSessionInsightGenerator: SessionInsightGenerator {
     func stopCount() -> Int { stops }
     func cancelCount() -> Int { cancellations }
     func maximumConcurrentRequests() -> Int { maximumActiveRequests }
+    func generatedBatches() -> [MeetingContextBatch] { receivedBatches }
 }
 
 @MainActor

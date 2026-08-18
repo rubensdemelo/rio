@@ -111,6 +111,65 @@ final class OpenAITranscriptionAdapterTests: XCTestCase {
         XCTAssertGreaterThan(body.count, 64_000)
     }
 
+    func testBoundedQueueReportsAContinuityGapAfterDroppingPendingAudio() async throws {
+        let client = BlockingTranscriptionHTTPClient()
+        let adapter = OpenAITranscriptionAdapter(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client,
+            batchDuration: .seconds(1)
+        )
+        var audioContinuation: AudioStream.Continuation?
+        let audio = AudioStream { audioContinuation = $0 }
+        let stream = try await adapter.recognize(audio: audio)
+
+        audioContinuation?.yield(chunk(sequenceNumber: 0))
+        audioContinuation?.yield(chunk(sequenceNumber: 1))
+        await client.waitForFirstRequest()
+        for sequenceNumber in 2..<6 {
+            audioContinuation?.yield(chunk(sequenceNumber: UInt64(sequenceNumber)))
+        }
+        audioContinuation?.finish()
+        try await Task.sleep(for: .milliseconds(20))
+        await client.releaseFirstRequest()
+
+        var segments: [FinalizedSpeechSegment] = []
+        for try await segment in stream {
+            segments.append(segment)
+        }
+
+        XCTAssertGreaterThanOrEqual(segments.count, 2)
+        XCTAssertFalse(segments[0].precededByTranscriptionGap)
+        XCTAssertTrue(segments[1].precededByTranscriptionGap)
+        XCTAssertGreaterThan(segments[1].startOffset, segments[0].endOffset)
+    }
+
+    func testPauseAndResumePreserveSegmentOrderingAndElapsedOffsetsWithinSession() async throws {
+        let client = RecordingTranscriptionHTTPClient(text: "continued")
+        let adapter = OpenAITranscriptionAdapter(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client,
+            batchDuration: .seconds(1)
+        )
+
+        let firstStream = try await adapter.recognize(audio: audioStream())
+        let firstSegments = try await collect(firstStream)
+        await adapter.pause()
+        let resumedStream = try await adapter.recognize(audio: audioStream())
+        let resumedSegments = try await collect(resumedStream)
+
+        XCTAssertEqual(firstSegments.first?.sequenceNumber, 0)
+        XCTAssertEqual(firstSegments.first?.startOffset, .zero)
+        XCTAssertEqual(resumedSegments.first?.sequenceNumber, 1)
+        XCTAssertEqual(resumedSegments.first?.startOffset, .seconds(1))
+
+        await adapter.stop()
+        let nextSessionStream = try await adapter.recognize(audio: audioStream())
+        let nextSessionSegments = try await collect(nextSessionStream)
+        XCTAssertEqual(nextSessionSegments.first?.sequenceNumber, 0)
+        XCTAssertEqual(nextSessionSegments.first?.startOffset, .zero)
+        await adapter.stop()
+    }
+
     private func audioStream() -> AudioStream {
         AudioStream { continuation in
             continuation.yield(
@@ -124,6 +183,24 @@ final class OpenAITranscriptionAdapterTests: XCTestCase {
             )
             continuation.finish()
         }
+    }
+
+    private func chunk(sequenceNumber: UInt64) -> AudioChunk {
+        AudioChunk(
+            sequenceNumber: sequenceNumber,
+            duration: .seconds(1),
+            sampleRate: 16_000,
+            channelCount: 1,
+            samples: Array(repeating: 0.1, count: 16_000)
+        )
+    }
+
+    private func collect(_ stream: FinalizedSpeechStream) async throws -> [FinalizedSpeechSegment] {
+        var segments: [FinalizedSpeechSegment] = []
+        for try await segment in stream {
+            segments.append(segment)
+        }
+        return segments
     }
 }
 
@@ -149,4 +226,48 @@ private actor RecordingTranscriptionHTTPClient: OpenAIHTTPClient {
     }
 
     func request() -> URLRequest? { recordedRequest }
+}
+
+private actor BlockingTranscriptionHTTPClient: OpenAIHTTPClient {
+    private var requestCount = 0
+    private var firstRequestWaiters: [CheckedContinuation<Void, Never>] = []
+    private var releaseContinuation: CheckedContinuation<Void, Never>?
+    private var isFirstRequestReleased = false
+
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        requestCount += 1
+        let requestNumber = requestCount
+        if requestNumber == 1 {
+            let waiters = firstRequestWaiters
+            firstRequestWaiters.removeAll()
+            waiters.forEach { $0.resume() }
+            if !isFirstRequestReleased {
+                await withCheckedContinuation { continuation in
+                    releaseContinuation = continuation
+                }
+            }
+        }
+        return (
+            try JSONSerialization.data(withJSONObject: ["text": "chunk-\(requestNumber)"]),
+            HTTPURLResponse(
+                url: URL(string: "https://api.openai.com/v1/audio/transcriptions")!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+        )
+    }
+
+    func waitForFirstRequest() async {
+        guard requestCount == 0 else { return }
+        await withCheckedContinuation { continuation in
+            firstRequestWaiters.append(continuation)
+        }
+    }
+
+    func releaseFirstRequest() {
+        isFirstRequestReleased = true
+        releaseContinuation?.resume()
+        releaseContinuation = nil
+    }
 }

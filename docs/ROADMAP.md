@@ -24,7 +24,7 @@ Exit criterion: meeting audio produces useful, structured insight cards through 
 
 Verified on macOS 26.5.2:
 
-- 68 unit tests pass in both Debug and Release configurations.
+- 129 unit and integration tests pass in Debug, including deterministic long-session coverage for rolling-context novelty, current-card insight requests, bounded transcription gaps, pause/resume continuity, elapsed transcription feedback, and saved-transcript navigation. The earlier 68-test suite passed in Release; the expanded Release suite has not been rerun.
 - Debug and Release builds pass with warnings treated as errors and Swift 6 complete strict-concurrency checking enabled.
 - Static privacy scans find no production logging or persistence APIs other than the bounded two-day insight history.
 - The built application launches and exits cleanly without creating audio or transcript files; its inspected container contains only app preferences and the bounded local insight-history file after cards are generated.
@@ -74,6 +74,8 @@ Goal: make the insight stream consistently useful instead of merely functional.
 
 Exit criterion: representative meeting fixtures produce concise, non-repetitive insights with acceptable latency and no invented owners.
 
+Implementation status: insight requests now distinguish newly finalized text from retained rolling context and include the bounded current-card snapshot so the model can update or resolve stable keys. Prompt guidance prioritizes concrete incident signals and next-best diagnostic questions. Deterministic request-shape and orchestration coverage passes; live model evaluation against the synthetic incident corpus remains required.
+
 ## Milestone 4: Reliability and product polish
 
 Goal: ship a technical preview that behaves predictably for a full meeting.
@@ -89,6 +91,8 @@ Goal: ship a technical preview that behaves predictably for a full meeting.
 - Sign, notarize, and package the macOS app.
 
 Exit criterion: a one-hour meeting completes without unbounded memory growth, silent capture loss, persistent audio or transcript data, or manual recovery from ordinary interruptions.
+
+Implementation status: bounded transcription backpressure now marks continuity gaps without stopping capture, pause/resume preserves meeting-relative offsets and segment ordering, live feedback exposes the latest finalized offset and incomplete state, the live card region scrolls, and completed transcripts have local timestamped filtering. Deterministic coverage passes; the one-hour hardware soak and live interruption checks remain outstanding.
 
 ## Deferred until after the MVP
 
