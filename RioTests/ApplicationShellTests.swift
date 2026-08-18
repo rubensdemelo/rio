@@ -7,6 +7,9 @@ final class ApplicationShellTests: XCTestCase {
 
         router.showProvider()
         XCTAssertEqual(router.presentedPanel, .provider)
+
+        router.showProfiles()
+        XCTAssertEqual(router.presentedPanel, .profiles)
     }
 
     func testLiveCompositionUsesFixedEnglishUSLocale() {

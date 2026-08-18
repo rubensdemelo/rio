@@ -2,6 +2,20 @@ import Foundation
 import XCTest
 
 final class OpenAIInsightAdapterTests: XCTestCase {
+    func testCustomMeetingProfileGuidanceIsIncludedInInsightInstructions() throws {
+        let profile = try XCTUnwrap(
+            MeetingProfile.custom(
+                name: "Incident review",
+                guidance: "Prioritize symptoms, failed checks, and diagnostic questions."
+            )
+        )
+
+        let instructions = OpenAIInsightPrompt.instructions(for: profile)
+
+        XCTAssertTrue(instructions.contains("Incident review"))
+        XCTAssertTrue(instructions.contains("Prioritize symptoms, failed checks, and diagnostic questions."))
+    }
+
     func testMissingKeyIsUnavailable() async {
         let generator = OpenAIInsightGenerator(
             configuration: nil,

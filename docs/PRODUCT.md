@@ -34,12 +34,19 @@ capture starts remain actionable so the user can complete the permission flow.
 If setup is incomplete, the main window shows the prerequisite guidance and the
 menu-bar action stays unavailable until the blocking checks pass.
 
-Before starting a session, the user chooses one meeting profile:
+Before starting a session, the user chooses one configured meeting profile.
+Rio ships two profiles, and the user can create, edit, or delete custom
+profiles with a name and bounded guidance:
 
 - Customer-critical: the live insight stream uses a high evidence threshold and prioritizes confirmed decisions, customer commitments, risks, and unanswered questions. Rio distinguishes supported facts from hypotheses and does not present a diagnosis or promise as established when the meeting text is uncertain.
 - Internal technical: the completed transcript is the primary knowledge source. The insight stream preserves supported errors, versions, environments, commands, changes, failed checks, hypotheses, and technical terminology instead of reducing the meeting to broad summaries.
 
 The selected profile is fixed for the session, saved with the completed two-day meeting record, and defaults to Customer-critical for new installations. The profile changes model instructions and Recent Meetings presentation; it does not relax validation, deduplication, privacy, retention, or the no-live-transcript boundary.
+
+Custom profile names and guidance are local configuration. They are included in
+the model's profile instructions for the active session and saved as part of
+that meeting's profile snapshot; they are not meeting text or live transcript
+content.
 
 While listening, Rio shows a compact live microphone input level and the elapsed meeting offset reached by finalized transcription. This lets the user verify long-session progress without exposing live transcript text. If bounded transcription backpressure would skip audio, Rio stops explicitly and explains that the continuous transcript prefix was saved as incomplete. The live insight list remains bounded and scrollable. The main window has one primary action: start listening or stop listening and clear the active session. Recent Meetings opens read-only transcripts and insights saved locally from the last two days. Saved transcript segments retain meeting-relative timestamps and can be filtered locally by text so a long completed meeting remains navigable; this is not AI search, editing, or export. A concise cue explains that audio is never retained and finalized transcript text is kept only for that two-day window.
 
@@ -51,10 +58,15 @@ can enter concise product names, acronyms, versions, and error-code prefixes to
 guide OpenAI transcription. This bounded configuration is sent with each
 transcription request and must not contain meeting notes or other meeting
 content.
+
 This controls how much live meeting audio Rio groups before sending it for
 temporary transcription. Shorter choices produce quicker updates with more
 requests; longer choices use fewer requests and more context but make insights
 arrive later. A changed choice applies to the next listening session.
+
+Meeting profile settings let the user create, edit, and delete custom profiles.
+Each custom profile has a nonempty name and bounded guidance; built-in profiles
+remain available and cannot be deleted.
 
 When the user starts listening:
 

@@ -18,6 +18,76 @@ final class CoreContractsTests: XCTestCase {
     }
 
     @MainActor
+    func testCustomMeetingProfileCanBeCreatedSelectedAndReloaded() throws {
+        let suiteName = "RioTests.CustomMeetingProfile.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = MeetingProfileSettings(defaults: defaults)
+        let profile = try XCTUnwrap(
+            settings.addCustomProfile(
+                name: "Incident review",
+                guidance: "Prioritize symptoms, failed checks, and the next diagnostic question."
+            )
+        )
+
+        XCTAssertFalse(profile.isBuiltIn)
+        XCTAssertEqual(settings.selection, profile)
+        XCTAssertEqual(settings.profiles.last, profile)
+
+        let reloaded = MeetingProfileSettings(defaults: defaults)
+        XCTAssertEqual(reloaded.selection, profile)
+        XCTAssertEqual(reloaded.profiles.last, profile)
+    }
+
+    @MainActor
+    func testCustomMeetingProfileCanBeUpdatedAndDeleted() throws {
+        let suiteName = "RioTests.CustomMeetingProfileMutation.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = MeetingProfileSettings(defaults: defaults)
+        let profile = try XCTUnwrap(
+            settings.addCustomProfile(name: "Old name", guidance: "Old guidance")
+        )
+
+        XCTAssertTrue(
+            settings.updateCustomProfile(
+                id: profile.id,
+                name: "Updated name",
+                guidance: "Updated guidance"
+            )
+        )
+        XCTAssertEqual(settings.selection.name, "Updated name")
+        XCTAssertEqual(settings.selection.guidance, "Updated guidance")
+
+        settings.deleteCustomProfile(id: profile.id)
+        XCTAssertNil(settings.profiles.first(where: { $0.id == profile.id }))
+        XCTAssertEqual(settings.selection, .customerCritical)
+    }
+
+    func testCustomMeetingProfileRejectsUnboundedFieldsAndLegacyBuiltInsStillDecode() throws {
+        XCTAssertNil(
+            MeetingProfile.custom(
+                name: String(repeating: "n", count: MeetingProfile.maximumNameLength + 1),
+                guidance: "Guidance"
+            )
+        )
+        XCTAssertNil(
+            MeetingProfile.custom(
+                name: "Name",
+                guidance: String(repeating: "g", count: MeetingProfile.maximumGuidanceLength + 1)
+            )
+        )
+
+        let legacy = try JSONDecoder().decode(
+            MeetingProfile.self,
+            from: Data("\"internalTechnical\"".utf8)
+        )
+        XCTAssertEqual(legacy, .internalTechnical)
+    }
+
+    @MainActor
     func testTranscriptionVocabularyIsBoundedAndPersistsAsConfiguration() {
         let suiteName = "RioTests.TranscriptionVocabulary.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

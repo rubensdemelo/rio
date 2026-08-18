@@ -119,7 +119,7 @@ enum OpenAIInsightPrompt {
 
     static func instructions(for profile: MeetingProfile) -> String {
         let profileGuidance: String
-        switch profile {
+        switch profile.builtIn {
         case .customerCritical:
             profileGuidance = """
             This is a customer-critical meeting. Use a high evidence threshold: surface only claims directly supported by the meeting text, distinguish facts from hypotheses, and prioritize confirmed decisions, customer commitments, risks, and unanswered questions. Never present a diagnosis or promise as established when the text is uncertain.
@@ -127,6 +127,11 @@ enum OpenAIInsightPrompt {
         case .internalTechnical:
             profileGuidance = """
             This is an internal technical meeting. Preserve useful technical facts from the meeting text, including errors, versions, environments, commands, changes, failed checks, hypotheses, and terminology. Prefer precise technical signals and open questions over broad executive summaries. The completed transcript is the primary knowledge source, so do not discard a supported technical detail merely because it is not an action or decision.
+            """
+        case nil:
+            profileGuidance = """
+            This is a custom meeting profile named \"\(profile.name)\". Follow this user-configured guidance:
+            \(profile.guidance)
             """
         }
 

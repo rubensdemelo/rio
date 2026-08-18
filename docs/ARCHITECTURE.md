@@ -39,15 +39,16 @@ live SwiftUI insight cards
 Old audio buffers and temporary text are continuously discarded. Bounded audio batches are transmitted to OpenAI only for transcription; bounded temporary text is transmitted only for the active insight request. Finalized transcript segments are collected for the active meeting and saved with its generated insight cards when the session stops. Meeting records expire after two days.
 Stopping the session clears all remaining temporary meeting data after creating the bounded local meeting snapshot.
 
-Each session carries an immutable `MeetingProfile` snapshot
-(`customerCritical` or `internalTechnical`) from the pre-session UI. The
+Each session carries an immutable `MeetingProfile` snapshot from the
+pre-session UI. Rio ships `customerCritical` and `internalTechnical` profiles;
+users can also persist bounded custom profiles with a name and guidance. The
 snapshot is passed to the insight adapter, which selects profile-specific
 developer instructions while keeping the same strict schema, validation, owner
 rule, bounded card count, and deduplication behavior. It is also saved with the
 bounded meeting-history record. Internal technical meetings open their saved
-record on the transcript view; customer-critical meetings open on insights.
-This is presentation and model guidance, not a relaxation of the no-live-
-transcript or data-retention boundaries.
+record on the transcript view; customer-critical and custom meetings open on
+insights. This is presentation and model guidance, not a relaxation of the
+no-live-transcript or data-retention boundaries.
 ```
 
 ## Native technology choices

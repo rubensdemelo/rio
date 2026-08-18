@@ -122,11 +122,17 @@ private struct RioMenuBarMenu<Controller: SessionShellControlling>: View {
         )
 
         Picker("Meeting profile", selection: $meetingProfileSettings.selection) {
-            ForEach(MeetingProfile.allCases) { profile in
+            ForEach(meetingProfileSettings.profiles) { profile in
                 Text(profile.title).tag(profile)
             }
         }
         .disabled(!isStartAction)
+
+        Button("Configure Meeting Profiles…") {
+            openWindow(id: "main")
+            NSApp.activate(ignoringOtherApps: true)
+            panelRouter.showProfiles()
+        }
 
         Divider()
 

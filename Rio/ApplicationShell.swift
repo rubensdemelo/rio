@@ -6,6 +6,7 @@ import SwiftUI
 final class RioPanelRouter: ObservableObject {
     enum Panel: String, Identifiable {
         case provider
+        case profiles
 
         var id: String { rawValue }
     }
@@ -14,6 +15,10 @@ final class RioPanelRouter: ObservableObject {
 
     func showProvider() {
         presentedPanel = .provider
+    }
+
+    func showProfiles() {
+        presentedPanel = .profiles
     }
 
 }
@@ -274,6 +279,8 @@ struct RioView<Controller: SessionShellControlling>: View {
                 OpenAIProviderSetupView {
                     Task { await controller.checkReadiness() }
                 }
+            case .profiles:
+                MeetingProfileSettingsView()
             }
         }
     }
@@ -386,13 +393,24 @@ struct RioView<Controller: SessionShellControlling>: View {
                 Spacer()
             }
 
-            Picker("Meeting profile", selection: $meetingProfileSettings.selection) {
-                ForEach(MeetingProfile.allCases) { profile in
-                    Text(profile.title).tag(profile)
+            HStack(spacing: 10) {
+                Picker("Meeting profile", selection: $meetingProfileSettings.selection) {
+                    ForEach(meetingProfileSettings.profiles) { profile in
+                        Text(profile.title).tag(profile)
+                    }
                 }
+                .pickerStyle(.segmented)
+                .disabled(!isStartAction)
+
+                Button {
+                    panelRouter.showProfiles()
+                } label: {
+                    Image(systemName: "slider.horizontal.3")
+                }
+                .buttonStyle(.borderless)
+                .help("Configure meeting profiles")
+                .accessibilityLabel("Configure meeting profiles")
             }
-            .pickerStyle(.segmented)
-            .disabled(!isStartAction)
             .help(meetingProfileSettings.selection.detail)
 
             Text(meetingProfileSettings.selection.detail)
@@ -761,6 +779,171 @@ private struct OpenAIProviderSetupCard: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(Color.accentColor.opacity(0.3), lineWidth: 1)
         }
+    }
+}
+
+private struct MeetingProfileSettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @EnvironmentObject private var meetingProfileSettings: MeetingProfileSettings
+    @State private var newName = ""
+    @State private var newGuidance = ""
+    @State private var addError: String?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Meeting profiles")
+                    .font(.title2.weight(.bold))
+                Text("Create profiles with a name and guidance that shape Rio’s live insights. The selected profile is fixed when a meeting starts.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 14) {
+                    ForEach(meetingProfileSettings.profiles) { profile in
+                        MeetingProfileEditorRow(profile: profile)
+                    }
+                }
+            }
+            .frame(maxHeight: 340)
+
+            Divider()
+
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Add a custom profile")
+                    .font(.headline)
+
+                TextField("Profile name", text: $newName)
+                    .textFieldStyle(.roundedBorder)
+
+                TextEditor(text: $newGuidance)
+                    .font(.body)
+                    .frame(height: 72)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.secondary.opacity(0.35))
+                    }
+                    .accessibilityLabel("Custom profile guidance")
+
+                HStack {
+                    if let addError {
+                        Text(addError)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                    Spacer()
+                    Button("Add Profile") {
+                        addProfile()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(MeetingProfile.custom(name: newName, guidance: newGuidance) == nil)
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(24)
+        .frame(width: 560, height: 620)
+    }
+
+    private func addProfile() {
+        guard meetingProfileSettings.addCustomProfile(name: newName, guidance: newGuidance) != nil else {
+            addError = "Use a nonempty name and guidance within the field limits."
+            return
+        }
+
+        newName = ""
+        newGuidance = ""
+        addError = nil
+    }
+}
+
+private struct MeetingProfileEditorRow: View {
+    let profile: MeetingProfile
+
+    @EnvironmentObject private var meetingProfileSettings: MeetingProfileSettings
+    @State private var name: String
+    @State private var guidance: String
+    @State private var saveError: String?
+
+    init(profile: MeetingProfile) {
+        self.profile = profile
+        _name = State(initialValue: profile.name)
+        _guidance = State(initialValue: profile.guidance)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(profile.isBuiltIn ? "Built-in profile" : "Custom profile")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if !profile.isBuiltIn {
+                    Button("Delete", role: .destructive) {
+                        meetingProfileSettings.deleteCustomProfile(id: profile.id)
+                    }
+                    .controlSize(.small)
+                }
+            }
+
+            if profile.isBuiltIn {
+                Text(profile.name)
+                    .font(.body.weight(.medium))
+                Text(profile.guidance)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                TextField("Profile name", text: $name)
+                    .textFieldStyle(.roundedBorder)
+
+                TextEditor(text: $guidance)
+                    .font(.body)
+                    .frame(height: 72)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.secondary.opacity(0.35))
+                    }
+
+                HStack {
+                    if let saveError {
+                        Text(saveError)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                    Spacer()
+                    Button("Save changes") {
+                        saveProfile()
+                    }
+                    .controlSize(.small)
+                    .disabled(MeetingProfile.custom(name: name, guidance: guidance) == nil)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+    }
+
+    private func saveProfile() {
+        guard meetingProfileSettings.updateCustomProfile(
+            id: profile.id,
+            name: name,
+            guidance: guidance
+        ) else {
+            saveError = "Use a nonempty name and guidance within the field limits."
+            return
+        }
+        saveError = nil
     }
 }
 
