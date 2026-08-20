@@ -314,6 +314,16 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertFalse(presentation.detail.contains("System Settings →"))
     }
 
+    func testSystemAudioCaptureFailureDoesNotClaimPermissionIsMissing() {
+        let presentation = SessionStatusPresentation(
+            status: .unavailable,
+            unavailableReason: .systemAudioCaptureFailed
+        )
+
+        XCTAssertTrue(presentation.detail.contains("could not start system audio capture"))
+        XCTAssertFalse(presentation.detail.contains("needs System Audio Recording access"))
+    }
+
     func testVoiceFeedbackUsesNonContentSpeechActivityInsteadOfTranscript() {
         let presentation = VoiceFeedbackPresentation(
             status: .listening,

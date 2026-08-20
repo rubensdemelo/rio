@@ -41,8 +41,9 @@ Stopping the session clears all remaining temporary meeting data after creating 
 
 Each session carries an immutable `MeetingProfile` snapshot from the
 pre-session UI. Rio ships `customerCritical` and `internalTechnical` profiles;
-users can also persist bounded custom profiles with a name and guidance. The
-snapshot is passed to the insight adapter, which selects profile-specific
+users can also persist bounded custom profiles with a name, guidance, insight
+pace, and technical vocabulary. The snapshot is passed to the insight adapter,
+which selects profile-specific
 developer instructions while keeping the same strict schema, validation, owner
 rule, bounded card count, and deduplication behavior. It is also saved with the
 bounded meeting-history record. Internal technical meetings open their saved
@@ -84,10 +85,11 @@ display-capture API.
 
 Use OpenAI's `gpt-4o-transcribe` through `POST /v1/audio/transcriptions`. The adapter converts bounded interleaved float audio to PCM16 WAV bytes in memory, identifies the expected English input language to improve accuracy and latency, sends a multipart request, and yields only nonempty finalized text. No WAV data is written to disk.
 
-An optional bounded user-provided technical-vocabulary prompt supplies static
-product names, acronyms, versions, and error-code prefixes to transcription.
-It is local configuration applied to the next session, never derived from
-meeting text, and must not contain meeting notes or other meeting content.
+Each meeting profile carries an optional bounded technical-vocabulary prompt
+with static product names, acronyms, versions, and error-code prefixes for
+transcription. It is local configuration applied to the next session, never
+derived from meeting text, and must not contain meeting notes or other meeting
+content.
 
 The collector keeps accepting capture chunks while a single request is in
 flight. Its pending request queue is bounded to two batches. If another batch
@@ -97,11 +99,12 @@ continuous finalized transcript prefix as incomplete and stops capture, so Rio
 never resumes after a hidden transcript gap and never accumulates unbounded
 audio in memory.
 
-The transcription batch duration is selected from the persisted `ListeningCadence`
-preference: 15, 30, or 45 seconds. The setting is applied before a new session
-starts and is not changed during an active session. Larger batches reduce request
-frequency and increase the amount of temporary in-memory audio held before a
-request, while delaying finalized text and insight generation.
+The transcription batch duration is selected from the active profile's
+persisted `ListeningCadence` value: 15, 30, or 45 seconds. The setting is
+applied before a new session starts and is not changed during an active
+session. Larger batches reduce request frequency and increase the amount of
+temporary in-memory audio held before a request, while delaying finalized text
+and insight generation.
 
 The API key is the preflight requirement. A rejected key is unavailable; transient network and service failures are explicit transcription failures. TTS is not part of the pipeline.
 

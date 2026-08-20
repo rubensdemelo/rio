@@ -1,7 +1,26 @@
 import XCTest
 import Observation
+import CoreAudio
 
 final class CoreContractsTests: XCTestCase {
+    func testCoreAudioSetupFailureDoesNotPretendSystemAudioPermissionIsMissing() {
+        XCTAssertEqual(
+            CoreAudioCaptureError.tapCreationFailed.pipelineFailure,
+            .unavailable(.systemAudioCaptureFailed)
+        )
+        XCTAssertEqual(
+            CoreAudioCaptureError.startFailed(kAudioHardwareUnsupportedOperationError).pipelineFailure,
+            .unavailable(.systemAudioCaptureFailed)
+        )
+    }
+
+    func testCoreAudioPermissionStatusStillReportsPermissionDenial() {
+        XCTAssertEqual(
+            CoreAudioCaptureError.startFailed(kAudioDevicePermissionsError).pipelineFailure,
+            .unavailable(.systemAudioPermissionDenied)
+        )
+    }
+
     @MainActor
     func testMeetingProfileSettingsPersistsTheSelectedProfile() {
         let suiteName = "RioTests.MeetingProfileSettings.\(UUID().uuidString)"
@@ -64,6 +83,28 @@ final class CoreContractsTests: XCTestCase {
         settings.deleteCustomProfile(id: profile.id)
         XCTAssertNil(settings.profiles.first(where: { $0.id == profile.id }))
         XCTAssertEqual(settings.selection, .customerCritical)
+    }
+
+    @MainActor
+    func testProfileConfigurationPersistsPaceAndVocabularyForBuiltInAndCustomProfiles() throws {
+        let suiteName = "RioTests.MeetingProfileConfiguration.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = MeetingProfileSettings(defaults: defaults)
+        XCTAssertTrue(
+            settings.updateProfileConfiguration(
+                id: MeetingProfile.customerCritical.id,
+                insightPace: .fifteenSeconds,
+                technicalVocabulary: "Db2, IRLM"
+            )
+        )
+        XCTAssertEqual(settings.selection.insightPace, .fifteenSeconds)
+        XCTAssertEqual(settings.selection.technicalVocabulary, "Db2, IRLM")
+
+        let reloaded = MeetingProfileSettings(defaults: defaults)
+        XCTAssertEqual(reloaded.selection.insightPace, .fifteenSeconds)
+        XCTAssertEqual(reloaded.selection.technicalVocabulary, "Db2, IRLM")
     }
 
     func testCustomMeetingProfileRejectsUnboundedFieldsAndLegacyBuiltInsStillDecode() throws {

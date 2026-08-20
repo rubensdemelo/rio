@@ -252,6 +252,8 @@ actor OpenAITranscriptionAdapter: SessionSpeechRecognizer {
     private let transcriptionPromptProvider: @Sendable () -> String?
     private let client: any OpenAIHTTPClient
     private var batchDuration: Duration
+    private var configuredTranscriptionPrompt: String?
+    private var hasConfiguredTranscriptionPrompt = false
     private var processingTask: Task<Void, Never>?
     private var queue: OpenAITranscriptionQueue?
     private var nextBatchSequenceNumber: UInt64 = 0
@@ -274,9 +276,15 @@ actor OpenAITranscriptionAdapter: SessionSpeechRecognizer {
         self.batchDuration = batchDuration
     }
 
-    func configure(batchDuration: Duration) async {
+    func configure(batchDuration: Duration, transcriptionPrompt: String?) async {
         guard batchDuration > .zero, processingTask == nil, queue == nil else { return }
         self.batchDuration = batchDuration
+        configuredTranscriptionPrompt = transcriptionPrompt
+        hasConfiguredTranscriptionPrompt = true
+    }
+
+    func configure(batchDuration: Duration) async {
+        await configure(batchDuration: batchDuration, transcriptionPrompt: nil)
     }
 
     func availability() async -> Availability {
@@ -313,7 +321,9 @@ actor OpenAITranscriptionAdapter: SessionSpeechRecognizer {
             configuration: configuration,
             client: client,
             continuation: outputContinuation,
-            prompt: transcriptionPromptProvider()
+            prompt: hasConfiguredTranscriptionPrompt
+                ? configuredTranscriptionPrompt
+                : transcriptionPromptProvider()
         )
         self.queue = queue
         processingTask = Task { [weak self] in

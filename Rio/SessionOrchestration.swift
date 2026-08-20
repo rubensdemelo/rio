@@ -9,7 +9,7 @@ protocol SessionAudioCapture: AudioCapture {
 protocol SessionSpeechRecognizer: TemporarySpeechRecognizer {
     func availability() async -> Availability
     func prepare() async throws(PipelineFailure)
-    func configure(batchDuration: Duration) async
+    func configure(batchDuration: Duration, transcriptionPrompt: String?) async
     func pause() async
 }
 
@@ -143,12 +143,27 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         )
     }
 
+    func configure(profile: MeetingProfile) async {
+        guard activeSessionID == nil else { return }
+        await speechRecognizer.configure(
+            batchDuration: profile.insightPace.audioBatchDuration,
+            transcriptionPrompt: profile.transcriptionPrompt
+        )
+        configuredProfile = profile
+        if let profileGenerator = insightGenerator as? any ProfileConfigurableInsightGenerator {
+            await profileGenerator.configure(profile: profile)
+        }
+    }
+
     func configure(
         cadence: ListeningCadence,
         profile: MeetingProfile
     ) async {
         guard activeSessionID == nil else { return }
-        await speechRecognizer.configure(batchDuration: cadence.audioBatchDuration)
+        await speechRecognizer.configure(
+            batchDuration: cadence.audioBatchDuration,
+            transcriptionPrompt: profile.transcriptionPrompt
+        )
         configuredProfile = profile
         if let profileGenerator = insightGenerator as? any ProfileConfigurableInsightGenerator {
             await profileGenerator.configure(profile: profile)

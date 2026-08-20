@@ -24,6 +24,26 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertEqual(historyRecorder.records().first?.profile, .internalTechnical)
     }
 
+    func testConfiguredProfileAppliesItsTranscriptionSettings() async throws {
+        let speech = TestSessionSpeechRecognizer()
+        let profile = try XCTUnwrap(
+            MeetingProfile.custom(
+                name: "Incident review",
+                guidance: "Prioritize evidence.",
+                insightPace: .fortyFiveSeconds,
+                technicalVocabulary: "z/OS, IRLM"
+            )
+        )
+        let coordinator = makeCoordinator(speech: speech)
+
+        await coordinator.configure(profile: profile)
+
+        let batchDuration = await speech.batchDuration()
+        let transcriptionPrompt = await speech.transcriptionPrompt()
+        XCTAssertEqual(batchDuration, .seconds(45))
+        XCTAssertEqual(transcriptionPrompt, "z/OS, IRLM")
+    }
+
     func testAcceptedFinalizedSpeechSegmentsAreForwardedExactlyOnce() async throws {
         let speech = TestSessionSpeechRecognizer()
         let transcriptCollector = TestTranscriptCollector()
@@ -929,6 +949,7 @@ actor TestSessionSpeechRecognizer: SessionSpeechRecognizer {
     private var stops = 0
     private var cancellations = 0
     private var configuredBatchDuration: Duration?
+    private var configuredTranscriptionPrompt: String?
 
     init(
         availability: Availability = .available,
@@ -948,8 +969,9 @@ actor TestSessionSpeechRecognizer: SessionSpeechRecognizer {
         }
     }
 
-    func configure(batchDuration: Duration) async {
+    func configure(batchDuration: Duration, transcriptionPrompt: String?) async {
         configuredBatchDuration = batchDuration
+        configuredTranscriptionPrompt = transcriptionPrompt
     }
 
     func pause() async {
@@ -983,6 +1005,7 @@ actor TestSessionSpeechRecognizer: SessionSpeechRecognizer {
     func cancelCount() -> Int { cancellations }
     func lastStream() -> TestStream<FinalizedSpeechSegment>? { currentStream }
     func batchDuration() -> Duration? { configuredBatchDuration }
+    func transcriptionPrompt() -> String? { configuredTranscriptionPrompt }
 }
 
 final class TestMeetingContextFactory: MeetingContextFactory, @unchecked Sendable {

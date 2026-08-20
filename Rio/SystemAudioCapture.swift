@@ -180,13 +180,28 @@ private final class CoreAudioCaptureResources: @unchecked Sendable {
     }
 }
 
-private enum CoreAudioCaptureError: Error {
+enum CoreAudioCaptureError: Error, Equatable {
     case noOutputDevice
     case noCurrentProcess
     case tapCreationFailed
     case aggregateCreationFailed
-    case ioProcCreationFailed
-    case startFailed
+    case ioProcCreationFailed(OSStatus)
+    case startFailed(OSStatus)
+
+    var pipelineFailure: PipelineFailure {
+        switch self {
+        case .noOutputDevice:
+            return .unavailable(.systemAudioUnavailable)
+        case .ioProcCreationFailed(let status)
+            where status == kAudioDevicePermissionsError,
+             .startFailed(let status)
+            where status == kAudioDevicePermissionsError:
+            return .unavailable(.systemAudioPermissionDenied)
+        case .noCurrentProcess, .tapCreationFailed, .aggregateCreationFailed,
+             .ioProcCreationFailed, .startFailed:
+            return .unavailable(.systemAudioCaptureFailed)
+        }
+    }
 }
 
 /// Captures system/meeting audio with Core Audio taps without creating a
@@ -278,14 +293,9 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
             await finish(throwing: failure)
             throw failure
         } catch let error as CoreAudioCaptureError {
-            await finish(throwing: .unavailable(.systemAudioPermissionDenied))
-            switch error {
-            case .noOutputDevice:
-                throw .unavailable(.systemAudioUnavailable)
-            case .noCurrentProcess, .tapCreationFailed, .aggregateCreationFailed,
-                 .ioProcCreationFailed, .startFailed:
-                throw .unavailable(.systemAudioPermissionDenied)
-            }
+            let failure = error.pipelineFailure
+            await finish(throwing: failure)
+            throw failure
         } catch {
             await finish(throwing: .stage(.audioCapture, .failed))
             throw .stage(.audioCapture, .failed)
@@ -350,13 +360,13 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
                 callbackState.receive(inputData)
             }
             guard ioStatus == kAudioHardwareNoError, let ioProcID else {
-                throw CoreAudioCaptureError.ioProcCreationFailed
+                throw CoreAudioCaptureError.ioProcCreationFailed(ioStatus)
             }
 
             let startStatus = AudioDeviceStart(createdAggregate.id, ioProcID)
             guard startStatus == kAudioHardwareNoError else {
                 _ = AudioDeviceDestroyIOProcID(createdAggregate.id, ioProcID)
-                throw CoreAudioCaptureError.startFailed
+                throw CoreAudioCaptureError.startFailed(startStatus)
             }
 
             return CoreAudioCaptureResources(

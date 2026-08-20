@@ -16,7 +16,6 @@ final class LiveSessionController: SessionShellControlling {
     let lifecycle: SessionLifecycleCoordinator
     let insightStore: InMemoryInsightStore
     private let insightHistory: InsightHistoryStore?
-    private let listeningCadenceSettings: ListeningCadenceSettings?
     private let meetingProfileSettings: MeetingProfileSettings?
 
     private var monitoringTask: Task<Void, Never>?
@@ -26,13 +25,11 @@ final class LiveSessionController: SessionShellControlling {
         lifecycle: SessionLifecycleCoordinator,
         insightStore: InMemoryInsightStore,
         insightHistory: InsightHistoryStore? = nil,
-        listeningCadenceSettings: ListeningCadenceSettings? = nil,
         meetingProfileSettings: MeetingProfileSettings? = nil
     ) {
         self.lifecycle = lifecycle
         self.insightStore = insightStore
         self.insightHistory = insightHistory
-        self.listeningCadenceSettings = listeningCadenceSettings
         self.meetingProfileSettings = meetingProfileSettings
         observeInsightStore()
         status = lifecycle.status
@@ -101,7 +98,6 @@ final class LiveSessionController: SessionShellControlling {
             unavailableReason = nil
             do {
                 await lifecycle.configure(
-                    cadence: listeningCadenceSettings?.selection ?? .thirtySeconds,
                     profile: meetingProfileSettings?.selection ?? .customerCritical
                 )
                 try await lifecycle.start()
@@ -222,13 +218,12 @@ enum RioCompositionRoot {
     static func makeLiveController(
         insightHistory: InsightHistoryStore? = nil,
         meetingHistory: MeetingHistoryStore? = nil,
-        listeningCadenceSettings: ListeningCadenceSettings? = nil,
         meetingProfileSettings: MeetingProfileSettings? = nil
     ) -> LiveSessionController {
         let localeIdentifier = defaultLocaleIdentifier
         let capture = CoreAudioSystemAudioCapture()
         let speechRecognizer = OpenAITranscriptionAdapter(
-            batchDuration: listeningCadenceSettings?.selection.audioBatchDuration
+            batchDuration: meetingProfileSettings?.selection.insightPace.audioBatchDuration
                 ?? ListeningCadence.thirtySeconds.audioBatchDuration
         )
         let contextFactory = BoundedMeetingContextFactory(
@@ -262,7 +257,6 @@ enum RioCompositionRoot {
             lifecycle: lifecycle,
             insightStore: insightStore,
             insightHistory: insightHistory,
-            listeningCadenceSettings: listeningCadenceSettings,
             meetingProfileSettings: meetingProfileSettings
         )
     }

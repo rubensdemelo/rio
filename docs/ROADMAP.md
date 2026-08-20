@@ -76,6 +76,10 @@ Exit criterion: representative meeting fixtures produce concise, non-repetitive 
 
 Implementation status: insight requests now distinguish newly finalized text from retained rolling context and include the bounded current-card snapshot so the model can update or resolve stable keys. Prompt guidance prioritizes concrete incident signals and next-best diagnostic questions. Deterministic request-shape and orchestration coverage passes; live model evaluation against the synthetic incident corpus remains required.
 
+Meeting profiles now also own the insight pace and bounded technical vocabulary
+used for their next listening session; the Provider sheet is limited to API-key
+configuration.
+
 ## Milestone 4: Reliability and product polish
 
 Goal: ship a technical preview that behaves predictably for a full meeting.

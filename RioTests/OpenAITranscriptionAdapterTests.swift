@@ -111,6 +111,23 @@ final class OpenAITranscriptionAdapterTests: XCTestCase {
         XCTAssertGreaterThan(body.count, 64_000)
     }
 
+    func testProfileConfigurationCanClearTheLegacyVocabularyProvider() async throws {
+        let client = RecordingTranscriptionHTTPClient(text: "configured")
+        let adapter = OpenAITranscriptionAdapter(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client,
+            transcriptionPromptProvider: { "legacy vocabulary" }
+        )
+        await adapter.configure(batchDuration: .seconds(1), transcriptionPrompt: nil)
+
+        let stream = try await adapter.recognize(audio: audioStream())
+        for try await _ in stream {}
+
+        let request = await client.request()
+        let body = try XCTUnwrap(request?.httpBody)
+        XCTAssertNil(body.range(of: Data("name=\"prompt\"".utf8)))
+    }
+
     func testBackpressureStopsBeforeCreatingASilentTranscriptGap() async throws {
         let client = BlockingTranscriptionHTTPClient()
         let adapter = OpenAITranscriptionAdapter(

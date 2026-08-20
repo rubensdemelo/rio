@@ -7,29 +7,20 @@ struct RioApp: App {
     @StateObject private var providerSettings: OpenAIProviderSettings
     @StateObject private var meetingHistory: MeetingHistoryStore
     @StateObject private var panelRouter: RioPanelRouter
-    @StateObject private var listeningCadenceSettings: ListeningCadenceSettings
     @StateObject private var meetingProfileSettings: MeetingProfileSettings
-    @StateObject private var transcriptionVocabularySettings: TranscriptionVocabularySettings
 
     init() {
         let meetingHistory = MeetingHistoryStore()
-        let listeningCadenceSettings = ListeningCadenceSettings()
         let meetingProfileSettings = MeetingProfileSettings()
-        let transcriptionVocabularySettings = TranscriptionVocabularySettings()
         let sessionController = RioCompositionRoot.makeLiveController(
             meetingHistory: meetingHistory,
-            listeningCadenceSettings: listeningCadenceSettings,
             meetingProfileSettings: meetingProfileSettings
         )
         _sessionController = StateObject(wrappedValue: sessionController)
         _providerSettings = StateObject(wrappedValue: OpenAIProviderSettings())
         _meetingHistory = StateObject(wrappedValue: meetingHistory)
         _panelRouter = StateObject(wrappedValue: RioPanelRouter())
-        _listeningCadenceSettings = StateObject(wrappedValue: listeningCadenceSettings)
         _meetingProfileSettings = StateObject(wrappedValue: meetingProfileSettings)
-        _transcriptionVocabularySettings = StateObject(
-            wrappedValue: transcriptionVocabularySettings
-        )
 
         Task { @MainActor in
             await sessionController.checkReadiness()
@@ -41,9 +32,7 @@ struct RioApp: App {
             RioView(controller: sessionController)
                 .environmentObject(providerSettings)
                 .environmentObject(panelRouter)
-                .environmentObject(listeningCadenceSettings)
                 .environmentObject(meetingProfileSettings)
-                .environmentObject(transcriptionVocabularySettings)
         }
         .defaultLaunchBehavior(.suppressed)
         .defaultSize(width: 560, height: 96)
@@ -61,9 +50,7 @@ struct RioApp: App {
             RioMenuBarMenu(controller: sessionController)
                 .environmentObject(panelRouter)
                 .environmentObject(providerSettings)
-                .environmentObject(listeningCadenceSettings)
                 .environmentObject(meetingProfileSettings)
-                .environmentObject(transcriptionVocabularySettings)
         }
         .menuBarExtraStyle(.menu)
     }

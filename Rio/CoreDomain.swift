@@ -14,23 +14,32 @@ struct MeetingProfile: Codable, Hashable, Identifiable, Sendable {
     let name: String
     let guidance: String
     let builtIn: BuiltIn?
+    let insightPace: ListeningCadence
+    let technicalVocabulary: String
 
     var title: String { name }
     var detail: String { guidance }
     var isBuiltIn: Bool { builtIn != nil }
+    var transcriptionPrompt: String? {
+        TranscriptionVocabularyConfiguration.normalized(technicalVocabulary)
+    }
 
     static let customerCritical = MeetingProfile(
         id: BuiltIn.customerCritical.rawValue,
         name: "Customer-critical",
         guidance: "Prioritizes cautious, evidence-grounded insights for customer conversations.",
-        builtIn: .customerCritical
+        builtIn: .customerCritical,
+        insightPace: .thirtySeconds,
+        technicalVocabulary: ""
     )
 
     static let internalTechnical = MeetingProfile(
         id: BuiltIn.internalTechnical.rawValue,
         name: "Internal technical",
         guidance: "Prioritizes accurate technical speech capture for internal knowledge.",
-        builtIn: .internalTechnical
+        builtIn: .internalTechnical,
+        insightPace: .thirtySeconds,
+        technicalVocabulary: ""
     )
 
     static let builtInProfiles = [customerCritical, internalTechnical]
@@ -38,21 +47,62 @@ struct MeetingProfile: Codable, Hashable, Identifiable, Sendable {
     // Kept as a compatibility view for callers that only need the shipped profiles.
     static var allCases: [MeetingProfile] { builtInProfiles }
 
-    static func custom(name: String, guidance: String, id: String = UUID().uuidString) -> MeetingProfile? {
+    static func custom(
+        name: String,
+        guidance: String,
+        insightPace: ListeningCadence = .thirtySeconds,
+        technicalVocabulary: String = "",
+        id: String = UUID().uuidString
+    ) -> MeetingProfile? {
         guard let name = normalized(name, maximumLength: maximumNameLength),
-              let guidance = normalized(guidance, maximumLength: maximumGuidanceLength)
+              let guidance = normalized(guidance, maximumLength: maximumGuidanceLength),
+              let technicalVocabulary = normalizedVocabulary(technicalVocabulary)
         else {
             return nil
         }
 
-        return MeetingProfile(id: id, name: name, guidance: guidance, builtIn: nil)
+        return MeetingProfile(
+            id: id,
+            name: name,
+            guidance: guidance,
+            builtIn: nil,
+            insightPace: insightPace,
+            technicalVocabulary: technicalVocabulary
+        )
     }
 
-    private init(id: String, name: String, guidance: String, builtIn: BuiltIn?) {
+    private init(
+        id: String,
+        name: String,
+        guidance: String,
+        builtIn: BuiltIn?,
+        insightPace: ListeningCadence,
+        technicalVocabulary: String
+    ) {
         self.id = id
         self.name = name
         self.guidance = guidance
         self.builtIn = builtIn
+        self.insightPace = insightPace
+        self.technicalVocabulary = technicalVocabulary
+    }
+
+    func withConfiguration(
+        insightPace: ListeningCadence,
+        technicalVocabulary: String
+    ) -> MeetingProfile? {
+        guard let technicalVocabulary = Self.normalizedVocabulary(technicalVocabulary) else {
+            return nil
+        }
+
+        return MeetingProfile(
+            id: id,
+            name: name,
+            guidance: guidance,
+            builtIn: builtIn,
+            insightPace: insightPace,
+            technicalVocabulary: technicalVocabulary
+        )
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -60,6 +110,8 @@ struct MeetingProfile: Codable, Hashable, Identifiable, Sendable {
         case name
         case guidance
         case builtIn
+        case insightPace
+        case technicalVocabulary
     }
 
     init(from decoder: Decoder) throws {
@@ -81,13 +133,18 @@ struct MeetingProfile: Codable, Hashable, Identifiable, Sendable {
         let name = try container.decode(String.self, forKey: .name)
         let guidance = try container.decode(String.self, forKey: .guidance)
         let builtIn = try container.decodeIfPresent(BuiltIn.self, forKey: .builtIn)
+        let insightPace = try container.decodeIfPresent(ListeningCadence.self, forKey: .insightPace)
+            ?? .thirtySeconds
+        let technicalVocabulary = try container.decodeIfPresent(String.self, forKey: .technicalVocabulary)
+            ?? ""
 
         guard !id.isEmpty,
               let normalizedName = Self.normalized(name, maximumLength: Self.maximumNameLength),
               let normalizedGuidance = Self.normalized(
                   guidance,
                   maximumLength: Self.maximumGuidanceLength
-              )
+              ),
+              let normalizedTechnicalVocabulary = Self.normalizedVocabulary(technicalVocabulary)
         else {
             throw DecodingError.dataCorruptedError(
                 forKey: .name,
@@ -100,7 +157,9 @@ struct MeetingProfile: Codable, Hashable, Identifiable, Sendable {
             id: id,
             name: normalizedName,
             guidance: normalizedGuidance,
-            builtIn: builtIn
+            builtIn: builtIn,
+            insightPace: insightPace,
+            technicalVocabulary: normalizedTechnicalVocabulary
         )
     }
 
@@ -109,12 +168,21 @@ struct MeetingProfile: Codable, Hashable, Identifiable, Sendable {
         guard !trimmed.isEmpty, trimmed.count <= maximumLength else { return nil }
         return trimmed
     }
+
+    private static func normalizedVocabulary(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count <= TranscriptionVocabularyConfiguration.maximumPromptLength else {
+            return nil
+        }
+        return trimmed
+    }
 }
 
 @MainActor
 final class MeetingProfileSettings: ObservableObject {
     private static let storageKey = "meetingProfile"
     private static let profilesStorageKey = "meetingProfiles"
+    private static let legacyConfigurationMigrationKey = "meetingProfileConfigurationMigrationCompleted"
 
     @Published var selection: MeetingProfile {
         didSet { defaults.set(selection.id, forKey: Self.storageKey) }
@@ -133,8 +201,18 @@ final class MeetingProfileSettings: ObservableObject {
     }
 
     @discardableResult
-    func addCustomProfile(name: String, guidance: String) -> MeetingProfile? {
-        guard let profile = MeetingProfile.custom(name: name, guidance: guidance),
+    func addCustomProfile(
+        name: String,
+        guidance: String,
+        insightPace: ListeningCadence = .thirtySeconds,
+        technicalVocabulary: String = ""
+    ) -> MeetingProfile? {
+        guard let profile = MeetingProfile.custom(
+            name: name,
+            guidance: guidance,
+            insightPace: insightPace,
+            technicalVocabulary: technicalVocabulary
+        ),
               !profiles.contains(where: { $0.id == profile.id })
         else {
             return nil
@@ -147,10 +225,45 @@ final class MeetingProfileSettings: ObservableObject {
     }
 
     @discardableResult
-    func updateCustomProfile(id: String, name: String, guidance: String) -> Bool {
+    func updateCustomProfile(
+        id: String,
+        name: String,
+        guidance: String,
+        insightPace: ListeningCadence? = nil,
+        technicalVocabulary: String? = nil
+    ) -> Bool {
         guard let existingIndex = profiles.firstIndex(where: { $0.id == id }),
               !profiles[existingIndex].isBuiltIn,
-              let updated = MeetingProfile.custom(name: name, guidance: guidance, id: id)
+              let updated = MeetingProfile.custom(
+                  name: name,
+                  guidance: guidance,
+                  insightPace: insightPace ?? profiles[existingIndex].insightPace,
+                  technicalVocabulary: technicalVocabulary ?? profiles[existingIndex].technicalVocabulary,
+                  id: id
+              )
+        else {
+            return false
+        }
+
+        profiles[existingIndex] = updated
+        if selection.id == id {
+            selection = updated
+        }
+        persistProfiles()
+        return true
+    }
+
+    @discardableResult
+    func updateProfileConfiguration(
+        id: String,
+        insightPace: ListeningCadence,
+        technicalVocabulary: String
+    ) -> Bool {
+        guard let existingIndex = profiles.firstIndex(where: { $0.id == id }),
+              let updated = profiles[existingIndex].withConfiguration(
+                  insightPace: insightPace,
+                  technicalVocabulary: technicalVocabulary
+              )
         else {
             return false
         }
@@ -179,21 +292,64 @@ final class MeetingProfileSettings: ObservableObject {
         guard let data = defaults.data(forKey: profilesStorageKey),
               let storedProfiles = try? JSONDecoder().decode([MeetingProfile].self, from: data)
         else {
-            return MeetingProfile.builtInProfiles
+            return migrateLegacyConfiguration(
+                MeetingProfile.builtInProfiles,
+                defaults: defaults
+            )
         }
 
-        var seenIDs = Set(MeetingProfile.builtInProfiles.map(\.id))
+        var builtInProfiles = MeetingProfile.builtInProfiles
+        for storedProfile in storedProfiles where storedProfile.isBuiltIn {
+            guard let builtInIndex = builtInProfiles.firstIndex(where: { $0.id == storedProfile.id }) else {
+                continue
+            }
+            builtInProfiles[builtInIndex] = builtInProfiles[builtInIndex].withConfiguration(
+                insightPace: storedProfile.insightPace,
+                technicalVocabulary: storedProfile.technicalVocabulary
+            ) ?? builtInProfiles[builtInIndex]
+        }
+
+        var seenIDs = Set(builtInProfiles.map(\.id))
         let customProfiles = storedProfiles.filter { profile in
             guard !profile.isBuiltIn, !seenIDs.contains(profile.id) else { return false }
             seenIDs.insert(profile.id)
             return true
         }
-        return MeetingProfile.builtInProfiles + customProfiles
+        return migrateLegacyConfiguration(
+            builtInProfiles + customProfiles,
+            defaults: defaults
+        )
+    }
+
+    private static func migrateLegacyConfiguration(
+        _ profiles: [MeetingProfile],
+        defaults: UserDefaults
+    ) -> [MeetingProfile] {
+        guard !defaults.bool(forKey: legacyConfigurationMigrationKey) else {
+            return profiles
+        }
+
+        let legacyCadence = defaults.object(forKey: ListeningCadenceSettings.storageKey)
+            .flatMap { ($0 as? Int).flatMap(ListeningCadence.init(rawValue:)) }
+            ?? .thirtySeconds
+        let legacyVocabulary = defaults.string(forKey: TranscriptionVocabularyConfiguration.storageKey) ?? ""
+        defaults.set(true, forKey: legacyConfigurationMigrationKey)
+        guard legacyCadence != .thirtySeconds || !legacyVocabulary.isEmpty else { return profiles }
+
+        let migratedProfiles = profiles.compactMap {
+            $0.withConfiguration(
+                insightPace: legacyCadence,
+                technicalVocabulary: legacyVocabulary
+            )
+        }
+        if let data = try? JSONEncoder().encode(migratedProfiles) {
+            defaults.set(data, forKey: profilesStorageKey)
+        }
+        return migratedProfiles
     }
 
     private func persistProfiles() {
-        let customProfiles = profiles.filter { !$0.isBuiltIn }
-        guard let data = try? JSONEncoder().encode(customProfiles) else { return }
+        guard let data = try? JSONEncoder().encode(profiles) else { return }
         defaults.set(data, forKey: Self.profilesStorageKey)
     }
 }
@@ -242,7 +398,7 @@ final class TranscriptionVocabularySettings: ObservableObject {
     }
 }
 
-enum ListeningCadence: Int, CaseIterable, Hashable, Identifiable, Sendable {
+enum ListeningCadence: Int, CaseIterable, Codable, Hashable, Identifiable, Sendable {
     case fifteenSeconds = 15
     case thirtySeconds = 30
     case fortyFiveSeconds = 45
@@ -271,7 +427,7 @@ enum ListeningCadence: Int, CaseIterable, Hashable, Identifiable, Sendable {
 
 @MainActor
 final class ListeningCadenceSettings: ObservableObject {
-    private static let storageKey = "listeningCadenceSeconds"
+    static let storageKey = "listeningCadenceSeconds"
 
     @Published var selection: ListeningCadence {
         didSet {
@@ -427,6 +583,7 @@ enum UnavailableReason: Sendable, Equatable {
     case microphonePermissionDenied
     case audioInputUnavailable
     case systemAudioPermissionDenied
+    case systemAudioCaptureFailed
     case systemAudioUnavailable
     case openAIAPIKeyMissing
     case openAIAPIKeyInvalid

@@ -787,6 +787,8 @@ private struct MeetingProfileSettingsView: View {
     @EnvironmentObject private var meetingProfileSettings: MeetingProfileSettings
     @State private var newName = ""
     @State private var newGuidance = ""
+    @State private var newInsightPace: ListeningCadence = .thirtySeconds
+    @State private var newTechnicalVocabulary = ""
     @State private var addError: String?
 
     var body: some View {
@@ -794,7 +796,7 @@ private struct MeetingProfileSettingsView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Meeting profiles")
                     .font(.title2.weight(.bold))
-                Text("Create profiles with a name and guidance that shape Rio’s live insights. The selected profile is fixed when a meeting starts.")
+                Text("Create profiles with guidance, insight pace, and technical vocabulary. The selected profile is fixed when a meeting starts.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -807,7 +809,7 @@ private struct MeetingProfileSettingsView: View {
                     }
                 }
             }
-            .frame(maxHeight: 340)
+            .frame(maxHeight: 520)
 
             Divider()
 
@@ -827,6 +829,38 @@ private struct MeetingProfileSettingsView: View {
                     }
                     .accessibilityLabel("Custom profile guidance")
 
+                Text("Insight pace")
+                    .font(.subheadline.weight(.semibold))
+                Picker("New profile insight pace", selection: $newInsightPace) {
+                    ForEach(ListeningCadence.allCases) { cadence in
+                        Text(cadence.title).tag(cadence)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text(newInsightPace.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text("Technical vocabulary")
+                    .font(.subheadline.weight(.semibold))
+                Text("Optional product names, acronyms, versions, and error-code prefixes. Do not include meeting notes or other meeting content.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                TextEditor(text: $newTechnicalVocabulary)
+                    .font(.body)
+                    .frame(height: 72)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(Color.secondary.opacity(0.35))
+                    }
+                    .accessibilityLabel("New profile technical vocabulary for transcription")
+                Text("Stored locally as profile configuration and applied to the next listening session. \(newTechnicalVocabulary.count)/\(TranscriptionVocabularyConfiguration.maximumPromptLength) characters.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 HStack {
                     if let addError {
                         Text(addError)
@@ -838,7 +872,14 @@ private struct MeetingProfileSettingsView: View {
                         addProfile()
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(MeetingProfile.custom(name: newName, guidance: newGuidance) == nil)
+                    .disabled(
+                        MeetingProfile.custom(
+                            name: newName,
+                            guidance: newGuidance,
+                            insightPace: newInsightPace,
+                            technicalVocabulary: newTechnicalVocabulary
+                        ) == nil
+                    )
                 }
             }
 
@@ -849,17 +890,24 @@ private struct MeetingProfileSettingsView: View {
             }
         }
         .padding(24)
-        .frame(width: 560, height: 620)
+        .frame(width: 560, height: 820)
     }
 
     private func addProfile() {
-        guard meetingProfileSettings.addCustomProfile(name: newName, guidance: newGuidance) != nil else {
+        guard meetingProfileSettings.addCustomProfile(
+            name: newName,
+            guidance: newGuidance,
+            insightPace: newInsightPace,
+            technicalVocabulary: newTechnicalVocabulary
+        ) != nil else {
             addError = "Use a nonempty name and guidance within the field limits."
             return
         }
 
         newName = ""
         newGuidance = ""
+        newInsightPace = .thirtySeconds
+        newTechnicalVocabulary = ""
         addError = nil
     }
 }
@@ -870,12 +918,16 @@ private struct MeetingProfileEditorRow: View {
     @EnvironmentObject private var meetingProfileSettings: MeetingProfileSettings
     @State private var name: String
     @State private var guidance: String
+    @State private var insightPace: ListeningCadence
+    @State private var technicalVocabulary: String
     @State private var saveError: String?
 
     init(profile: MeetingProfile) {
         self.profile = profile
         _name = State(initialValue: profile.name)
         _guidance = State(initialValue: profile.guidance)
+        _insightPace = State(initialValue: profile.insightPace)
+        _technicalVocabulary = State(initialValue: profile.technicalVocabulary)
     }
 
     var body: some View {
@@ -911,7 +963,41 @@ private struct MeetingProfileEditorRow: View {
                         RoundedRectangle(cornerRadius: 6)
                             .stroke(Color.secondary.opacity(0.35))
                     }
+            }
 
+            Text("Insight pace")
+                .font(.subheadline.weight(.semibold))
+            Picker("Profile insight pace", selection: $insightPace) {
+                ForEach(ListeningCadence.allCases) { cadence in
+                    Text(cadence.title).tag(cadence)
+                }
+            }
+            .pickerStyle(.segmented)
+            Text(insightPace.detail)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Text("Technical vocabulary")
+                .font(.subheadline.weight(.semibold))
+            Text("Optional product names, acronyms, versions, and error-code prefixes. Do not include meeting notes or other meeting content.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            TextEditor(text: $technicalVocabulary)
+                .font(.body)
+                .frame(height: 72)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.secondary.opacity(0.35))
+                }
+                .accessibilityLabel("Profile technical vocabulary for transcription")
+            Text("Stored locally as profile configuration and applied to the next listening session. \(technicalVocabulary.count)/\(TranscriptionVocabularyConfiguration.maximumPromptLength) characters.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if !profile.isBuiltIn {
                 HStack {
                     if let saveError {
                         Text(saveError)
@@ -923,7 +1009,30 @@ private struct MeetingProfileEditorRow: View {
                         saveProfile()
                     }
                     .controlSize(.small)
-                    .disabled(MeetingProfile.custom(name: name, guidance: guidance) == nil)
+                    .disabled(
+                        MeetingProfile.custom(
+                            name: name,
+                            guidance: guidance,
+                            insightPace: insightPace,
+                            technicalVocabulary: technicalVocabulary
+                        ) == nil
+                    )
+                }
+            }
+
+            if profile.isBuiltIn {
+                HStack {
+                    if let saveError {
+                        Text(saveError)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
+                    Spacer()
+                    Button("Save settings") {
+                        saveConfiguration()
+                    }
+                    .controlSize(.small)
+                    .disabled(technicalVocabulary.count > TranscriptionVocabularyConfiguration.maximumPromptLength)
                 }
             }
         }
@@ -938,9 +1047,23 @@ private struct MeetingProfileEditorRow: View {
         guard meetingProfileSettings.updateCustomProfile(
             id: profile.id,
             name: name,
-            guidance: guidance
+            guidance: guidance,
+            insightPace: insightPace,
+            technicalVocabulary: technicalVocabulary
         ) else {
             saveError = "Use a nonempty name and guidance within the field limits."
+            return
+        }
+        saveError = nil
+    }
+
+    private func saveConfiguration() {
+        guard meetingProfileSettings.updateProfileConfiguration(
+            id: profile.id,
+            insightPace: insightPace,
+            technicalVocabulary: technicalVocabulary
+        ) else {
+            saveError = "Technical vocabulary must be within the field limit."
             return
         }
         saveError = nil
@@ -950,8 +1073,6 @@ private struct MeetingProfileEditorRow: View {
 private struct OpenAIProviderSetupView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var providerSettings: OpenAIProviderSettings
-    @EnvironmentObject private var listeningCadenceSettings: ListeningCadenceSettings
-    @EnvironmentObject private var transcriptionVocabularySettings: TranscriptionVocabularySettings
     @State private var isShowingKeyDetails = false
     @State private var isConfirmingDeletion = false
 
@@ -1029,14 +1150,6 @@ private struct OpenAIProviderSetupView: View {
                 }
             }
 
-            Divider()
-
-            listeningCadenceSection
-
-            Divider()
-
-            technicalVocabularySection
-
             HStack {
                 Spacer()
                 Button("Done") { dismiss() }
@@ -1045,57 +1158,6 @@ private struct OpenAIProviderSetupView: View {
         }
     }
 
-    private var listeningCadenceSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Insight pace")
-                .font(.headline)
-            Text("Choose how much meeting audio Rio groups before asking OpenAI for an update. Longer choices use fewer requests and more context, but insights arrive later.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Picker("Audio batch", selection: $listeningCadenceSettings.selection) {
-                ForEach(ListeningCadence.allCases) { cadence in
-                    Text(cadence.title).tag(cadence)
-                }
-            }
-            .pickerStyle(.segmented)
-
-            Text(listeningCadenceSettings.selection.detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            Text("This takes effect the next time you start listening.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private var technicalVocabularySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Technical vocabulary")
-                .font(.headline)
-            Text("Optional terms to guide transcription, such as product names, acronyms, versions, and error-code prefixes. Do not include meeting notes or other meeting content.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            TextEditor(text: $transcriptionVocabularySettings.prompt)
-                .font(.body)
-                .frame(height: 90)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color.secondary.opacity(0.35))
-                }
-                .accessibilityLabel("Technical vocabulary for transcription")
-
-            Text("Stored locally as configuration and sent with each transcription request. \(transcriptionVocabularySettings.prompt.count)/\(TranscriptionVocabularySettings.maximumPromptLength) characters. Changes apply to the next listening session.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
 }
 
 private struct OpenAIAPIKeyDetailsView: View {
@@ -1777,6 +1839,8 @@ private extension UnavailableReason {
             "Connect or enable a microphone, then try again."
         case .systemAudioPermissionDenied:
             "Rio needs System Audio Recording access to listen to meeting audio."
+        case .systemAudioCaptureFailed:
+            "Rio could not start system audio capture. Confirm the System Audio Recording permission is enabled, then restart Rio."
         case .systemAudioUnavailable:
             "Rio could not find an available system audio output. Connect or enable an audio output, then try again."
         case .openAIAPIKeyMissing:
