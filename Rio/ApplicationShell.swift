@@ -1043,6 +1043,7 @@ struct MeetingProfileSettingsView: View {
     @EnvironmentObject private var meetingProfileSettings: MeetingProfileSettings
     @State private var selectedProfileID: String?
     @State private var showingNewProfile = false
+    @State private var profileIDBeforeNew: String?
     @State private var newName = ""
     @State private var newGuidance = ""
     @State private var newInsightPace: ListeningCadence = .thirtySeconds
@@ -1057,6 +1058,7 @@ struct MeetingProfileSettingsView: View {
                         .font(.headline)
                     Spacer()
                     Button {
+                        profileIDBeforeNew = selectedProfileID
                         selectedProfileID = nil
                         showingNewProfile = true
                     } label: {
@@ -1094,8 +1096,20 @@ struct MeetingProfileSettingsView: View {
                          : (selectedProfile?.name ?? "Profile"))
                         .font(.title2.weight(.semibold))
                     Spacer()
-                    Button("Done") { dismiss() }
-                        .keyboardShortcut(.defaultAction)
+                    Button(showingNewProfile || selectedProfile == nil ? "Cancel" : "Done") {
+                        if showingNewProfile || selectedProfile == nil {
+                            if let profileIDBeforeNew {
+                                selectedProfileID = profileIDBeforeNew
+                                self.profileIDBeforeNew = nil
+                                showingNewProfile = false
+                            } else {
+                                dismiss()
+                            }
+                        } else {
+                            dismiss()
+                        }
+                    }
+                        .keyboardShortcut(showingNewProfile || selectedProfile == nil ? .cancelAction : .defaultAction)
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 14)
@@ -1198,6 +1212,7 @@ struct MeetingProfileSettingsView: View {
                 Spacer()
                 Button("Add Profile") { addProfile() }
                     .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
                     .disabled(
                         MeetingProfile.custom(
                             name: newName,
@@ -1238,6 +1253,7 @@ struct MeetingProfileSettingsView: View {
         addError = nil
         selectedProfileID = profile.id
         showingNewProfile = false
+        profileIDBeforeNew = nil
     }
 }
 
