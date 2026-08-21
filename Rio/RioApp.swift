@@ -99,15 +99,30 @@ final class RioStatusItemController: NSObject, ObservableObject, NSMenuDelegate 
         )
         statusItem.button?.imagePosition = .imageOnly
         statusItem.button?.toolTip = "Rio"
+        statusItem.button?.target = self
+        statusItem.button?.action = #selector(statusItemClicked)
+        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
 
         menu.delegate = self
         menu.autoenablesItems = false
-        statusItem.menu = menu
         updateMenu()
     }
 
     func menuWillOpen(_ menu: NSMenu) {
         updateMenu()
+    }
+
+    @objc private func statusItemClicked() {
+        updateMenu()
+        guard let button = statusItem.button else {
+            return
+        }
+
+        menu.popUp(
+            positioning: nil,
+            at: NSPoint(x: button.bounds.midX, y: button.bounds.minY),
+            in: button
+        )
     }
 
     private func updateMenu() {
