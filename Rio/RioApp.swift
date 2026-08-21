@@ -1,8 +1,20 @@
 import AppKit
 import SwiftUI
 
+final class RioAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.regular)
+
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            NSApp.windows.first(where: { $0.title == "Rio" })?.makeKeyAndOrderFront(nil)
+        }
+    }
+}
+
 @main
 struct RioApp: App {
+    @NSApplicationDelegateAdaptor(RioAppDelegate.self) private var appDelegate
     @StateObject private var sessionController: LiveSessionController
     @StateObject private var providerSettings: OpenAIProviderSettings
     @StateObject private var meetingHistory: MeetingHistoryStore
@@ -93,10 +105,11 @@ final class RioStatusItemController: NSObject, ObservableObject, NSMenuDelegate 
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
 
-        statusItem.button?.image = NSImage(
-            systemSymbolName: "waveform.circle.fill",
-            accessibilityDescription: "Rio"
-        )
+        if let rioImage = NSImage(named: "RioMenuBarIcon") ?? NSApp.applicationIconImage {
+            rioImage.isTemplate = true
+            rioImage.accessibilityDescription = "Rio"
+            statusItem.button?.image = rioImage
+        }
         statusItem.button?.imagePosition = .imageOnly
         statusItem.button?.toolTip = "Rio"
         statusItem.button?.target = self
