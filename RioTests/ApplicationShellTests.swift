@@ -12,6 +12,32 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(router.presentedPanel, .profiles)
     }
 
+    func testStatusItemUsesNativeMenuRouting() {
+        let suiteName = "RioTests.StatusItemMenu.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let statusItemController = RioStatusItemController(
+            controller: FakeSessionController(),
+            providerSettings: OpenAIProviderSettings(keyStore: TestOpenAIAPIKeyStore()),
+            meetingProfileSettings: MeetingProfileSettings(defaults: defaults),
+            panelRouter: RioPanelRouter()
+        )
+
+        XCTAssertTrue(statusItemController.statusItem.menu === statusItemController.menu)
+        XCTAssertEqual(statusItemController.menu.items.map(\.title), [
+            "Open Rio",
+            "Start Listening",
+            "Meeting Profile: General meeting guidance",
+            "Manage Profiles…",
+            "Recent Meetings",
+            "Provider & API Key…",
+            "",
+            "Quit Rio",
+        ])
+        XCTAssertTrue(statusItemController.menu.items.filter { $0.action != nil }.allSatisfy { $0.target != nil })
+    }
+
     func testLiveCompositionUsesFixedEnglishUSLocale() {
         XCTAssertEqual(RioCompositionRoot.defaultLocaleIdentifier, "en-US")
     }
