@@ -105,8 +105,8 @@ final class RioStatusItemController: NSObject, ObservableObject, NSMenuDelegate 
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
 
-        if let rioImage = NSImage(named: "RioMenuBarIcon") ?? NSApp.applicationIconImage {
-            rioImage.isTemplate = true
+        if let rioImage = NSApp.applicationIconImage.copy() as? NSImage {
+            rioImage.size = NSSize(width: 18, height: 18)
             rioImage.accessibilityDescription = "Rio"
             statusItem.button?.image = rioImage
         }
