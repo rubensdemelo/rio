@@ -138,6 +138,27 @@ final class OpenAIInsightAdapterTests: XCTestCase {
         XCTAssertFalse(instructions.contains("customer-critical"))
     }
 
+    func testFallbackProfileUsesGeneralMeetingInstructions() async throws {
+        let client = RecordingOpenAIHTTPClient(responseData: makeAPIResponseData())
+        let generator = OpenAIInsightGenerator(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client
+        )
+
+        await generator.configure(profile: .fallback)
+        try await generator.startSession(localeIdentifier: "en-US")
+        _ = try await generator.generate(from: makeBatch(text: "The API returns HTTP 503."))
+
+        let requests = await client.requests()
+        let request = try XCTUnwrap(requests.first)
+        let body = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: Any]
+        )
+        let instructions = try XCTUnwrap(body["instructions"] as? String)
+        XCTAssertTrue(instructions.contains("general meeting guidance"))
+        XCTAssertFalse(instructions.contains("custom meeting profile"))
+    }
+
     func testTranslationPreservesExplicitOwnersOnlyWhenSupportedByMeetingText() async throws {
         let client = RecordingOpenAIHTTPClient(
             responseData: makeAPIResponseData(

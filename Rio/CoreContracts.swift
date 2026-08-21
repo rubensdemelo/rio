@@ -501,7 +501,7 @@ struct MeetingHistoryRecord: Sendable, Equatable {
         transcript: [FinalizedSpeechSegment],
         insights: [InsightCard],
         incompleteTranscript: Bool,
-        profile: MeetingProfile = .customerCritical
+        profile: MeetingProfile = .fallback
     ) {
         self.meetingID = meetingID
         self.startedAt = startedAt

@@ -98,7 +98,7 @@ final class LiveSessionController: SessionShellControlling {
             unavailableReason = nil
             do {
                 await lifecycle.configure(
-                    profile: meetingProfileSettings?.selection ?? .customerCritical
+                    profile: meetingProfileSettings?.selection ?? .fallback
                 )
                 try await lifecycle.start()
                 insightHistorySessionID = UUID()

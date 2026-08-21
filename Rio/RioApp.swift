@@ -108,12 +108,16 @@ private struct RioMenuBarMenu<Controller: SessionShellControlling>: View {
                 ))
         )
 
-        Picker("Meeting profile", selection: $meetingProfileSettings.selection) {
-            ForEach(meetingProfileSettings.profiles) { profile in
-                Text(profile.title).tag(profile)
+        if !meetingProfileSettings.profiles.isEmpty {
+            Picker("Meeting profile", selection: $meetingProfileSettings.selection) {
+                ForEach(meetingProfileSettings.profiles) { profile in
+                    Text(profile.title).tag(profile)
+                }
             }
+            .disabled(!isStartAction)
+        } else {
+            Text("General meeting guidance")
         }
-        .disabled(!isStartAction)
 
         Button("Configure Meeting Profiles…") {
             openWindow(id: "main")

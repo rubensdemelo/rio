@@ -2,6 +2,7 @@ import Combine
 import Foundation
 
 struct MeetingProfile: Codable, Hashable, Identifiable, Sendable {
+    // Kept only so older saved meetings and profile snapshots remain decodable.
     enum BuiltIn: String, Codable, Sendable {
         case customerCritical
         case internalTechnical
@@ -20,10 +21,22 @@ struct MeetingProfile: Codable, Hashable, Identifiable, Sendable {
     var title: String { name }
     var detail: String { guidance }
     var isBuiltIn: Bool { builtIn != nil }
+    var isFallback: Bool { id == Self.fallback.id }
     var transcriptionPrompt: String? {
         TranscriptionVocabularyConfiguration.normalized(technicalVocabulary)
     }
 
+    // Used when no user-created profile exists. It is never shown in profile settings.
+    static let fallback = MeetingProfile(
+        id: "general-meeting",
+        name: "General meeting",
+        guidance: "Surface concise, evidence-grounded insights from the current meeting.",
+        builtIn: nil,
+        insightPace: .thirtySeconds,
+        technicalVocabulary: ""
+    )
+
+    // Legacy snapshots only; these are not shipped or surfaced as profiles.
     static let customerCritical = MeetingProfile(
         id: BuiltIn.customerCritical.rawValue,
         name: "Customer-critical",
@@ -41,11 +54,6 @@ struct MeetingProfile: Codable, Hashable, Identifiable, Sendable {
         insightPace: .thirtySeconds,
         technicalVocabulary: ""
     )
-
-    static let builtInProfiles = [customerCritical, internalTechnical]
-
-    // Kept as a compatibility view for callers that only need the shipped profiles.
-    static var allCases: [MeetingProfile] { builtInProfiles }
 
     static func custom(
         name: String,
@@ -197,7 +205,7 @@ final class MeetingProfileSettings: ObservableObject {
         let loadedProfiles = Self.loadProfiles(defaults: defaults)
         profiles = loadedProfiles
         let selectedID = defaults.string(forKey: Self.storageKey)
-        selection = loadedProfiles.first(where: { $0.id == selectedID }) ?? .customerCritical
+        selection = loadedProfiles.first(where: { $0.id == selectedID }) ?? .fallback
     }
 
     @discardableResult
@@ -284,7 +292,7 @@ final class MeetingProfileSettings: ObservableObject {
         profiles.removeAll { $0.id == id }
         persistProfiles()
         if selection.id == id {
-            selection = .customerCritical
+            selection = .fallback
         }
     }
 
@@ -293,30 +301,19 @@ final class MeetingProfileSettings: ObservableObject {
               let storedProfiles = try? JSONDecoder().decode([MeetingProfile].self, from: data)
         else {
             return migrateLegacyConfiguration(
-                MeetingProfile.builtInProfiles,
+                [],
                 defaults: defaults
             )
         }
 
-        var builtInProfiles = MeetingProfile.builtInProfiles
-        for storedProfile in storedProfiles where storedProfile.isBuiltIn {
-            guard let builtInIndex = builtInProfiles.firstIndex(where: { $0.id == storedProfile.id }) else {
-                continue
-            }
-            builtInProfiles[builtInIndex] = builtInProfiles[builtInIndex].withConfiguration(
-                insightPace: storedProfile.insightPace,
-                technicalVocabulary: storedProfile.technicalVocabulary
-            ) ?? builtInProfiles[builtInIndex]
-        }
-
-        var seenIDs = Set(builtInProfiles.map(\.id))
+        var seenIDs = Set<String>()
         let customProfiles = storedProfiles.filter { profile in
-            guard !profile.isBuiltIn, !seenIDs.contains(profile.id) else { return false }
+            guard !profile.isBuiltIn, !profile.isFallback, !seenIDs.contains(profile.id) else { return false }
             seenIDs.insert(profile.id)
             return true
         }
         return migrateLegacyConfiguration(
-            builtInProfiles + customProfiles,
+            customProfiles,
             defaults: defaults
         )
     }

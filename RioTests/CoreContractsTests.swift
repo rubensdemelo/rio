@@ -22,18 +22,47 @@ final class CoreContractsTests: XCTestCase {
     }
 
     @MainActor
-    func testMeetingProfileSettingsPersistsTheSelectedProfile() {
+    func testMeetingProfileSettingsPersistsTheSelectedProfile() throws {
         let suiteName = "RioTests.MeetingProfileSettings.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = MeetingProfileSettings(defaults: defaults)
-        XCTAssertEqual(settings.selection, .customerCritical)
+        XCTAssertEqual(settings.selection, .fallback)
 
-        settings.selection = .internalTechnical
+        let profile = try XCTUnwrap(
+            settings.addCustomProfile(
+                name: "Incident review",
+                guidance: "Prioritize symptoms and failed checks."
+            )
+        )
+        settings.selection = profile
 
         let reloaded = MeetingProfileSettings(defaults: defaults)
-        XCTAssertEqual(reloaded.selection, .internalTechnical)
+        XCTAssertEqual(reloaded.selection, profile)
+    }
+
+    @MainActor
+    func testStoredBuiltInProfilesAreNotSurfaced() throws {
+        let suiteName = "RioTests.MeetingProfileSettingsMigration.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let customProfile = try XCTUnwrap(
+            MeetingProfile.custom(
+                name: "Incident review",
+                guidance: "Prioritize symptoms and failed checks."
+            )
+        )
+        defaults.set(
+            try JSONEncoder().encode([MeetingProfile.customerCritical, MeetingProfile.internalTechnical, customProfile]),
+            forKey: "meetingProfiles"
+        )
+
+        let settings = MeetingProfileSettings(defaults: defaults)
+
+        XCTAssertEqual(settings.profiles, [customProfile])
+        XCTAssertEqual(settings.selection, .fallback)
     }
 
     @MainActor
@@ -82,19 +111,25 @@ final class CoreContractsTests: XCTestCase {
 
         settings.deleteCustomProfile(id: profile.id)
         XCTAssertNil(settings.profiles.first(where: { $0.id == profile.id }))
-        XCTAssertEqual(settings.selection, .customerCritical)
+        XCTAssertEqual(settings.selection, .fallback)
     }
 
     @MainActor
-    func testProfileConfigurationPersistsPaceAndVocabularyForBuiltInAndCustomProfiles() throws {
+    func testProfileConfigurationPersistsPaceAndVocabularyForCustomProfiles() throws {
         let suiteName = "RioTests.MeetingProfileConfiguration.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
         let settings = MeetingProfileSettings(defaults: defaults)
+        let profile = try XCTUnwrap(
+            settings.addCustomProfile(
+                name: "Technical review",
+                guidance: "Preserve exact technical details."
+            )
+        )
         XCTAssertTrue(
             settings.updateProfileConfiguration(
-                id: MeetingProfile.customerCritical.id,
+                id: profile.id,
                 insightPace: .fifteenSeconds,
                 technicalVocabulary: "Db2, IRLM"
             )

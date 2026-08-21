@@ -61,23 +61,24 @@ Goal: make the insight stream consistently useful instead of merely functional.
 - Tune batching cadence and rolling-context limits.
 - Define and evaluate prompts for important points, decisions, actions, questions, and risks.
 - Implement stable insight keys, deduplication, updates, and resolution.
-- Add Customer-critical and Internal technical meeting profiles with distinct
-  evidence and technical-knowledge evaluation criteria.
+- Add user-created meeting profiles with distinct guidance and evaluation
+  criteria.
 - Enforce the rule against guessed action-item owners.
 - Cap active cards and prioritize newer or unresolved information.
 - Build a small, non-sensitive evaluation corpus from synthetic meeting fixtures.
 - Add the version-controlled synthetic incident-copilot evaluation pack at `docs/evaluation/incident-copilot-mvp/`.
 - Measure time from finalized speech to visible insight.
-- Measure unsupported-claim rate for Customer-critical calls and technical-fact
-  retention plus transcript completeness for Internal technical calls.
+- Measure unsupported-claim rate and technical-fact retention across
+  representative user-created profiles.
 - Handle model refusal, context overflow, transcription, and generation errors.
 
 Exit criterion: representative meeting fixtures produce concise, non-repetitive insights with acceptable latency and no invented owners.
 
 Implementation status: insight requests now distinguish newly finalized text from retained rolling context and include the bounded current-card snapshot so the model can update or resolve stable keys. Prompt guidance prioritizes concrete incident signals and next-best diagnostic questions. Deterministic request-shape and orchestration coverage passes; live model evaluation against the synthetic incident corpus remains required.
 
-Meeting profiles now also own the insight pace and bounded technical vocabulary
-used for their next listening session; the Provider sheet is limited to API-key
+User-created meeting profiles now own the insight pace and bounded technical
+vocabulary used for their next listening session; when no profile exists, Rio
+uses general meeting guidance. The Provider sheet is limited to API-key
 configuration.
 
 ## Milestone 4: Reliability and product polish

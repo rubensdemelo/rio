@@ -1,8 +1,8 @@
 import Foundation
 
 struct OpenAIAPIConfiguration: Sendable, Equatable {
-    static let defaultModel = "gpt-5-mini"
-    static let defaultTranscriptionModel = "gpt-4o-transcribe"
+    static let defaultModel = "gpt-5.6-terra"
+    static let defaultTranscriptionModel = "gpt-transcribe"
 
     let apiKey: String
     let model: String
@@ -115,7 +115,7 @@ private actor InsightGenerationGate {
 }
 
 enum OpenAIInsightPrompt {
-    static let instructions = instructions(for: .customerCritical)
+    static let instructions = instructions(for: .fallback)
 
     static func instructions(for profile: MeetingProfile) -> String {
         let profileGuidance: String
@@ -127,6 +127,10 @@ enum OpenAIInsightPrompt {
         case .internalTechnical:
             profileGuidance = """
             This is an internal technical meeting. Preserve useful technical facts from the meeting text, including errors, versions, environments, commands, changes, failed checks, hypotheses, and terminology. Prefer precise technical signals and open questions over broad executive summaries. The completed transcript is the primary knowledge source, so do not discard a supported technical detail merely because it is not an action or decision.
+            """
+        case nil where profile.isFallback:
+            profileGuidance = """
+            Use general meeting guidance: surface concise, evidence-grounded insights from the current meeting. Prioritize concrete decisions, commitments, risks, questions, and important technical facts without assuming a specialized meeting context.
             """
         case nil:
             profileGuidance = """
@@ -444,7 +448,7 @@ actor OpenAIInsightGenerator: ProfileConfigurableInsightGenerator {
     private let configurationProvider: @Sendable () -> OpenAIAPIConfiguration?
     private let client: any OpenAIHTTPClient
     private let baseInstructions: String?
-    private var profile: MeetingProfile = .customerCritical
+    private var profile: MeetingProfile = .fallback
     private let generationGate = InsightGenerationGate()
     private var isSessionActive = false
     private var nextGenerationID = 0

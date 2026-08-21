@@ -34,14 +34,15 @@ capture starts remain actionable so the user can complete the permission flow.
 If setup is incomplete, the main window shows the prerequisite guidance and the
 menu-bar action stays unavailable until the blocking checks pass.
 
-Before starting a session, the user chooses one configured meeting profile.
-Rio ships two profiles, and the user can create, edit, or delete custom
-profiles with a name and bounded guidance:
+Before starting a session, the user may choose one configured custom meeting
+profile. Rio does not ship built-in profiles. If no custom profile exists, Rio
+uses general meeting guidance. Custom profiles have a name and bounded guidance
+and can be created, edited, or deleted.
 
-- Customer-critical: the live insight stream uses a high evidence threshold and prioritizes confirmed decisions, customer commitments, risks, and unanswered questions. Rio distinguishes supported facts from hypotheses and does not present a diagnosis or promise as established when the meeting text is uncertain.
-- Internal technical: the completed transcript is the primary knowledge source. The insight stream preserves supported errors, versions, environments, commands, changes, failed checks, hypotheses, and technical terminology instead of reducing the meeting to broad summaries.
-
-The selected profile is fixed for the session, saved with the completed two-day meeting record, and defaults to Customer-critical for new installations. The profile changes model instructions and Recent Meetings presentation; it does not relax validation, deduplication, privacy, retention, or the no-live-transcript boundary.
+The selected profile (or general meeting guidance) is fixed for the session and
+saved with the completed two-day meeting record. A custom profile changes model
+instructions and Recent Meetings presentation; it does not relax validation,
+deduplication, privacy, retention, or the no-live-transcript boundary.
 
 Profile names, guidance, insight pace, and technical vocabulary are local
 configuration. They are included in the active session's profile snapshot and
@@ -66,13 +67,13 @@ content.
 
 Meeting profile settings let the user create, edit, and delete custom profiles.
 Each custom profile has a nonempty name and bounded guidance, plus its own
-insight pace and technical vocabulary; built-in profiles remain available and
-cannot be deleted.
+insight pace and technical vocabulary. When no custom profile exists, the
+settings view shows the general-guidance empty state.
 
 When the user starts listening:
 
 1. Rio captures system/meeting audio, including browser-based calls.
-2. Rio groups live audio into bounded, in-memory WAV chunks and sends them to OpenAI's `gpt-4o-transcribe` API for temporary finalized text.
+2. Rio groups live audio into bounded, in-memory WAV chunks and sends them to OpenAI's `gpt-transcribe` API for temporary finalized text.
 3. A bounded rolling text window is sent to OpenAI's Responses API.
 4. The API receives the bounded recent context, a distinct new-finalized-text slice, and the bounded current insight cards, then returns structured incident-signal and insight updates. This lets it update or resolve stable keys instead of re-summarizing repeated rolling context.
 5. The UI adds, updates, or removes concise cards as the support call develops.
@@ -99,7 +100,7 @@ Rio must not guess an action-item owner. Owner attribution is validated only whe
 
 ## OpenAI API
 
-Rio uses OpenAI's `gpt-4o-transcribe` API for speech-to-text and the Responses API for meeting understanding. Insight requests use a strict JSON Schema and Rio validates the returned updates before rendering cards. OpenAI is the default and only MVP provider. The current defaults are `gpt-5-mini` for insights and `gpt-4o-transcribe` for transcription.
+Rio uses OpenAI's `gpt-transcribe` API for speech-to-text and the Responses API for meeting understanding. Insight requests use a strict JSON Schema and Rio validates the returned updates before rendering cards. OpenAI is the default and only MVP provider. The current defaults are `gpt-5.6-terra` for insights and `gpt-transcribe` for transcription.
 
 Before listening, Rio checks system audio availability and whether the user has added an OpenAI API key in Provider settings. The key is stored only in the user's macOS Keychain, never in the app bundle, preferences, logs, or an environment variable. A missing or rejected key blocks listening with direct guidance. The UI retains the direct button to the System Audio Recording privacy pane. There are no macOS speech assets to install.
 
@@ -116,7 +117,7 @@ Transcription is a cloud stage: Rio sends bounded in-memory WAV chunks to OpenAI
 - All temporary meeting text is discarded when listening stops.
 - Current insight cards disappear from the active session when it ends, but Rio stores them with the meeting's finalized transcript locally for up to two days so they remain available through Recent Meetings.
 - The two-day local history contains meeting timing, finalized transcript segments, and generated card category, state, text, and save time; it never contains audio or guessed action-owner metadata.
-- The two-day local history also records the selected meeting profile so a saved meeting can be interpreted in its original mode.
+- The two-day local history also records the selected custom profile, or the general-guidance fallback, so a saved meeting can be interpreted in its original mode.
 - Entries older than two days are removed automatically, and the user can clear the local history at any time.
 - The user-provided OpenAI API key is retained separately in the macOS Keychain as configuration, not meeting data.
 - The bounded user-provided technical vocabulary is retained locally as

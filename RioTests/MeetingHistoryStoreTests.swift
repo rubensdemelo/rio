@@ -179,7 +179,7 @@ final class MeetingHistoryStoreTests: XCTestCase {
         id: UUID,
         endedAt: TimeInterval,
         transcriptText: String = "Transcript",
-        profile: MeetingProfile = .customerCritical
+        profile: MeetingProfile = .fallback
     ) -> SavedMeeting {
         SavedMeeting(
             id: id,

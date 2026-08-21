@@ -104,8 +104,8 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     private var activeMeetingID: UUID?
     private var activeMeetingStartedAt: Date?
     private var incompleteTranscript = false
-    private var configuredProfile: MeetingProfile = .customerCritical
-    private var activeMeetingProfile: MeetingProfile = .customerCritical
+    private var configuredProfile: MeetingProfile = .fallback
+    private var activeMeetingProfile: MeetingProfile = .fallback
 
     init(
         localeIdentifier: String,
@@ -139,7 +139,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     func configure(cadence: ListeningCadence) async {
         await configure(
             cadence: cadence,
-            profile: .customerCritical
+            profile: .fallback
         )
     }
 

@@ -394,13 +394,23 @@ struct RioView<Controller: SessionShellControlling>: View {
             }
 
             HStack(spacing: 10) {
-                Picker("Meeting profile", selection: $meetingProfileSettings.selection) {
-                    ForEach(meetingProfileSettings.profiles) { profile in
-                        Text(profile.title).tag(profile)
+                if meetingProfileSettings.profiles.isEmpty {
+                    Button {
+                        panelRouter.showProfiles()
+                    } label: {
+                        Label("Create a profile", systemImage: "plus")
                     }
+                    .buttonStyle(.bordered)
+                    .help("Rio uses general meeting guidance until you add a profile.")
+                } else {
+                    Picker("Meeting profile", selection: $meetingProfileSettings.selection) {
+                        ForEach(meetingProfileSettings.profiles) { profile in
+                            Text(profile.title).tag(profile)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(!isStartAction)
                 }
-                .pickerStyle(.segmented)
-                .disabled(!isStartAction)
 
                 Button {
                     panelRouter.showProfiles()
@@ -411,9 +421,13 @@ struct RioView<Controller: SessionShellControlling>: View {
                 .help("Configure meeting profiles")
                 .accessibilityLabel("Configure meeting profiles")
             }
-            .help(meetingProfileSettings.selection.detail)
+            .help(meetingProfileSettings.profiles.isEmpty ? "General meeting guidance" : meetingProfileSettings.selection.detail)
 
-            Text(meetingProfileSettings.selection.detail)
+            Text(
+                meetingProfileSettings.profiles.isEmpty
+                    ? "General meeting guidance"
+                    : meetingProfileSettings.selection.detail
+            )
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -785,6 +799,8 @@ private struct OpenAIProviderSetupCard: View {
 private struct MeetingProfileSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var meetingProfileSettings: MeetingProfileSettings
+    @State private var selectedProfileID: String?
+    @State private var showingNewProfile = false
     @State private var newName = ""
     @State private var newGuidance = ""
     @State private var newInsightPace: ListeningCadence = .thirtySeconds
@@ -792,85 +808,153 @@ private struct MeetingProfileSettingsView: View {
     @State private var addError: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Meeting profiles")
-                    .font(.title2.weight(.bold))
-                Text("Create profiles with guidance, insight pace, and technical vocabulary. The selected profile is fixed when a meeting starts.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 14) {
-                    ForEach(meetingProfileSettings.profiles) { profile in
-                        MeetingProfileEditorRow(profile: profile)
-                    }
-                }
-            }
-            .frame(maxHeight: 520)
-
-            Divider()
-
-            VStack(alignment: .leading, spacing: 10) {
-                Text("Add a custom profile")
-                    .font(.headline)
-
-                TextField("Profile name", text: $newName)
-                    .textFieldStyle(.roundedBorder)
-
-                TextEditor(text: $newGuidance)
-                    .font(.body)
-                    .frame(height: 72)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.secondary.opacity(0.35))
-                    }
-                    .accessibilityLabel("Custom profile guidance")
-
-                Text("Insight pace")
-                    .font(.subheadline.weight(.semibold))
-                Picker("New profile insight pace", selection: $newInsightPace) {
-                    ForEach(ListeningCadence.allCases) { cadence in
-                        Text(cadence.title).tag(cadence)
-                    }
-                }
-                .pickerStyle(.segmented)
-                Text(newInsightPace.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text("Technical vocabulary")
-                    .font(.subheadline.weight(.semibold))
-                Text("Optional product names, acronyms, versions, and error-code prefixes. Do not include meeting notes or other meeting content.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                TextEditor(text: $newTechnicalVocabulary)
-                    .font(.body)
-                    .frame(height: 72)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.secondary.opacity(0.35))
-                    }
-                    .accessibilityLabel("New profile technical vocabulary for transcription")
-                Text("Stored locally as profile configuration and applied to the next listening session. \(newTechnicalVocabulary.count)/\(TranscriptionVocabularyConfiguration.maximumPromptLength) characters.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
+        NavigationSplitView {
+            VStack(spacing: 0) {
                 HStack {
-                    if let addError {
-                        Text(addError)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
+                    Text("Custom profiles")
+                        .font(.headline)
                     Spacer()
-                    Button("Add Profile") {
-                        addProfile()
+                    Button {
+                        selectedProfileID = nil
+                        showingNewProfile = true
+                    } label: {
+                        Label("New", systemImage: "plus")
                     }
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help("Create a custom meeting profile")
+                    .accessibilityLabel("New profile")
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+
+                Divider()
+
+                List(selection: $selectedProfileID) {
+                    if meetingProfileSettings.profiles.isEmpty {
+                        Text("No profiles yet")
+                            .foregroundStyle(.secondary)
+                            .listRowSeparator(.hidden)
+                    } else {
+                        ForEach(meetingProfileSettings.profiles) { profile in
+                            Label(profile.name, systemImage: "person.crop.circle")
+                                .tag(profile.id)
+                        }
+                    }
+                }
+                .listStyle(.sidebar)
+            }
+        } detail: {
+            VStack(spacing: 0) {
+                HStack {
+                    Text(showingNewProfile || selectedProfile == nil
+                         ? "New profile"
+                         : (selectedProfile?.name ?? "Profile"))
+                        .font(.title2.weight(.semibold))
+                    Spacer()
+                    Button("Done") { dismiss() }
+                        .keyboardShortcut(.defaultAction)
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 14)
+
+                Divider()
+
+                if showingNewProfile || selectedProfile == nil {
+                    newProfileForm
+                } else if let selectedProfile {
+                    MeetingProfileEditorRow(profile: selectedProfile)
+                        .id(selectedProfile.id)
+                }
+            }
+        }
+        .onAppear {
+            selectInitialProfile()
+        }
+        .onChange(of: selectedProfileID) { _, newValue in
+            if newValue != nil {
+                showingNewProfile = false
+            }
+        }
+        .onChange(of: meetingProfileSettings.profiles) { _, profiles in
+            guard let selectedProfileID else {
+                showingNewProfile = profiles.isEmpty
+                return
+            }
+            guard profiles.contains(where: { $0.id == selectedProfileID }) else {
+                self.selectedProfileID = profiles.first?.id
+                showingNewProfile = profiles.isEmpty
+                return
+            }
+        }
+        .frame(width: 760, height: 560)
+    }
+
+    private var selectedProfile: MeetingProfile? {
+        guard let selectedProfileID else { return nil }
+        return meetingProfileSettings.profiles.first(where: { $0.id == selectedProfileID })
+    }
+
+    private var newProfileForm: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("A profile is saved on this Mac and applied to the next listening session.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+
+            ProfileField(title: "Name") {
+                TextField("e.g. Customer support", text: $newName)
+                    .textFieldStyle(.roundedBorder)
+            }
+
+            ProfileField(title: "Meeting guidance") {
+                ProfileTextEditor(
+                    text: $newGuidance,
+                    placeholder: "Describe what Rio should prioritize in this meeting.",
+                    accessibilityLabel: "New profile guidance"
+                )
+            }
+
+            ProfileField(title: "Insight pace") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Picker("Update insights every", selection: $newInsightPace) {
+                        ForEach(ListeningCadence.allCases) { cadence in
+                            Text(cadence.title).tag(cadence)
+                        }
+                    }
+                    .pickerStyle(.radioGroup)
+                    Text(newInsightPace.detail)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            ProfileField(title: "Technical vocabulary (optional)") {
+                VStack(alignment: .leading, spacing: 6) {
+                    ProfileTextEditor(
+                        text: $newTechnicalVocabulary,
+                        placeholder: "Product names, acronyms, versions, or error-code prefixes",
+                        accessibilityLabel: "New profile technical vocabulary"
+                    )
+                    HStack {
+                        Text("Use terms only, not meeting notes.")
+                        Spacer()
+                        Text("\(newTechnicalVocabulary.count)/\(TranscriptionVocabularyConfiguration.maximumPromptLength)")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            HStack {
+                if let addError {
+                    Text(addError)
+                        .font(.callout)
+                        .foregroundStyle(.red)
+                }
+                Spacer()
+                Button("Add Profile") { addProfile() }
                     .buttonStyle(.borderedProminent)
                     .disabled(
                         MeetingProfile.custom(
@@ -880,26 +964,27 @@ private struct MeetingProfileSettingsView: View {
                             technicalVocabulary: newTechnicalVocabulary
                         ) == nil
                     )
-                }
-            }
-
-            HStack {
-                Spacer()
-                Button("Done") { dismiss() }
-                    .keyboardShortcut(.defaultAction)
             }
         }
-        .padding(24)
-        .frame(width: 560, height: 820)
+        .padding(20)
+    }
+
+    private func selectInitialProfile() {
+        guard selectedProfileID == nil else { return }
+        if let firstProfile = meetingProfileSettings.profiles.first {
+            selectedProfileID = firstProfile.id
+        } else {
+            showingNewProfile = true
+        }
     }
 
     private func addProfile() {
-        guard meetingProfileSettings.addCustomProfile(
+        guard let profile = meetingProfileSettings.addCustomProfile(
             name: newName,
             guidance: newGuidance,
             insightPace: newInsightPace,
             technicalVocabulary: newTechnicalVocabulary
-        ) != nil else {
+        ) else {
             addError = "Use a nonempty name and guidance within the field limits."
             return
         }
@@ -909,6 +994,8 @@ private struct MeetingProfileSettingsView: View {
         newInsightPace = .thirtySeconds
         newTechnicalVocabulary = ""
         addError = nil
+        selectedProfileID = profile.id
+        showingNewProfile = false
     }
 }
 
@@ -931,84 +1018,65 @@ private struct MeetingProfileEditorRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(profile.isBuiltIn ? "Built-in profile" : "Custom profile")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                Spacer()
-                if !profile.isBuiltIn {
-                    Button("Delete", role: .destructive) {
-                        meetingProfileSettings.deleteCustomProfile(id: profile.id)
-                    }
-                    .controlSize(.small)
-                }
-            }
-
-            if profile.isBuiltIn {
-                Text(profile.name)
-                    .font(.body.weight(.medium))
-                Text(profile.guidance)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
+        VStack(alignment: .leading, spacing: 14) {
+            ProfileField(title: "Name") {
                 TextField("Profile name", text: $name)
                     .textFieldStyle(.roundedBorder)
-
-                TextEditor(text: $guidance)
-                    .font(.body)
-                    .frame(height: 72)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(Color.secondary.opacity(0.35))
-                    }
             }
 
-            Text("Insight pace")
-                .font(.subheadline.weight(.semibold))
-            Picker("Profile insight pace", selection: $insightPace) {
-                ForEach(ListeningCadence.allCases) { cadence in
-                    Text(cadence.title).tag(cadence)
+            ProfileField(title: "Meeting guidance") {
+                ProfileTextEditor(
+                    text: $guidance,
+                    placeholder: "Describe what Rio should prioritize in this meeting.",
+                    accessibilityLabel: "Profile guidance"
+                )
+            }
+
+            ProfileField(title: "Insight pace") {
+                VStack(alignment: .leading, spacing: 6) {
+                    Picker("Update insights every", selection: $insightPace) {
+                        ForEach(ListeningCadence.allCases) { cadence in
+                            Text(cadence.title).tag(cadence)
+                        }
+                    }
+                    .pickerStyle(.radioGroup)
+                    Text(insightPace.detail)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
                 }
             }
-            .pickerStyle(.segmented)
-            Text(insightPace.detail)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
 
-            Text("Technical vocabulary")
-                .font(.subheadline.weight(.semibold))
-            Text("Optional product names, acronyms, versions, and error-code prefixes. Do not include meeting notes or other meeting content.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            TextEditor(text: $technicalVocabulary)
-                .font(.body)
-                .frame(height: 72)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 6)
-                        .stroke(Color.secondary.opacity(0.35))
+            ProfileField(title: "Technical vocabulary (optional)") {
+                VStack(alignment: .leading, spacing: 6) {
+                    ProfileTextEditor(
+                        text: $technicalVocabulary,
+                        placeholder: "Product names, acronyms, versions, or error-code prefixes",
+                        accessibilityLabel: "Profile technical vocabulary"
+                    )
+                    HStack {
+                        Text("Use terms only, not meeting notes.")
+                        Spacer()
+                        Text("\(technicalVocabulary.count)/\(TranscriptionVocabularyConfiguration.maximumPromptLength)")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
-                .accessibilityLabel("Profile technical vocabulary for transcription")
-            Text("Stored locally as profile configuration and applied to the next listening session. \(technicalVocabulary.count)/\(TranscriptionVocabularyConfiguration.maximumPromptLength) characters.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            }
 
-            if !profile.isBuiltIn {
-                HStack {
-                    if let saveError {
-                        Text(saveError)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-                    Spacer()
-                    Button("Save changes") {
-                        saveProfile()
-                    }
-                    .controlSize(.small)
+            Spacer(minLength: 0)
+
+            HStack {
+                if let saveError {
+                    Text(saveError)
+                        .font(.callout)
+                        .foregroundStyle(.red)
+                }
+                Spacer()
+                Button("Delete", role: .destructive) {
+                    meetingProfileSettings.deleteCustomProfile(id: profile.id)
+                }
+                Button("Save Changes") { saveProfile() }
+                    .buttonStyle(.borderedProminent)
                     .disabled(
                         MeetingProfile.custom(
                             name: name,
@@ -1017,30 +1085,9 @@ private struct MeetingProfileEditorRow: View {
                             technicalVocabulary: technicalVocabulary
                         ) == nil
                     )
-                }
-            }
-
-            if profile.isBuiltIn {
-                HStack {
-                    if let saveError {
-                        Text(saveError)
-                            .font(.caption)
-                            .foregroundStyle(.red)
-                    }
-                    Spacer()
-                    Button("Save settings") {
-                        saveConfiguration()
-                    }
-                    .controlSize(.small)
-                    .disabled(technicalVocabulary.count > TranscriptionVocabularyConfiguration.maximumPromptLength)
-                }
             }
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
+        .padding(20)
     }
 
     private func saveProfile() {
@@ -1057,16 +1104,31 @@ private struct MeetingProfileEditorRow: View {
         saveError = nil
     }
 
-    private func saveConfiguration() {
-        guard meetingProfileSettings.updateProfileConfiguration(
-            id: profile.id,
-            insightPace: insightPace,
-            technicalVocabulary: technicalVocabulary
-        ) else {
-            saveError = "Technical vocabulary must be within the field limit."
-            return
+}
+
+private struct ProfileField<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.body.weight(.semibold))
+            content()
         }
-        saveError = nil
+    }
+}
+
+private struct ProfileTextEditor: View {
+    @Binding var text: String
+    let placeholder: String
+    let accessibilityLabel: String
+
+    var body: some View {
+        TextField(placeholder, text: $text, axis: .vertical)
+            .lineLimit(2...3)
+            .textFieldStyle(.roundedBorder)
+            .accessibilityLabel(accessibilityLabel)
     }
 }
 

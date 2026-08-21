@@ -30,7 +30,7 @@ struct SavedMeeting: Codable, Equatable, Identifiable, Sendable {
         transcriptSegments: [SavedTranscriptSegment],
         insights: [SavedInsight],
         incompleteTranscript: Bool,
-        profile: MeetingProfile = .customerCritical
+        profile: MeetingProfile = .fallback
     ) {
         self.id = id
         self.startedAt = startedAt

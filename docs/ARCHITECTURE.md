@@ -12,7 +12,7 @@ System/meeting audio ─┘             │
                    bounded in-memory WAV batches
                                     │
                                     v
-                OpenAI /v1/audio/transcriptions (gpt-4o-transcribe)
+                OpenAI /v1/audio/transcriptions (gpt-transcribe)
                                     │
                              finalized text only
                                     │
@@ -40,16 +40,17 @@ Old audio buffers and temporary text are continuously discarded. Bounded audio b
 Stopping the session clears all remaining temporary meeting data after creating the bounded local meeting snapshot.
 
 Each session carries an immutable `MeetingProfile` snapshot from the
-pre-session UI. Rio ships `customerCritical` and `internalTechnical` profiles;
-users can also persist bounded custom profiles with a name, guidance, insight
-pace, and technical vocabulary. The snapshot is passed to the insight adapter,
-which selects profile-specific
-developer instructions while keeping the same strict schema, validation, owner
-rule, bounded card count, and deduplication behavior. It is also saved with the
-bounded meeting-history record. Internal technical meetings open their saved
-record on the transcript view; customer-critical and custom meetings open on
-insights. This is presentation and model guidance, not a relaxation of the
-no-live-transcript or data-retention boundaries.
+pre-session UI. Rio does not ship built-in profiles; users can persist bounded
+custom profiles with a name, guidance, insight pace, and technical vocabulary.
+When none exists, the session carries a general-guidance fallback that is not
+shown as a profile in the UI. The snapshot is passed to the insight adapter,
+which selects profile-specific developer instructions while keeping the same
+strict schema, validation, owner rule, bounded card count, and deduplication
+behavior. It is also saved with the bounded meeting-history record. Legacy
+customer-critical and internal-technical values remain decodable for existing
+saved records but are no longer offered as profiles. This is presentation and
+model guidance, not a relaxation of the no-live-transcript or data-retention
+boundaries.
 ```
 
 ## Native technology choices
@@ -83,7 +84,7 @@ display-capture API.
 
 ### Temporary speech-to-text
 
-Use OpenAI's `gpt-4o-transcribe` through `POST /v1/audio/transcriptions`. The adapter converts bounded interleaved float audio to PCM16 WAV bytes in memory, identifies the expected English input language to improve accuracy and latency, sends a multipart request, and yields only nonempty finalized text. No WAV data is written to disk.
+Use OpenAI's `gpt-transcribe` through `POST /v1/audio/transcriptions`. The adapter converts bounded interleaved float audio to PCM16 WAV bytes in memory, identifies the expected English input language to improve accuracy and latency, sends a multipart request, and yields only nonempty finalized text. No WAV data is written to disk.
 
 Each meeting profile carries an optional bounded technical-vocabulary prompt
 with static product names, acronyms, versions, and error-code prefixes for
@@ -134,14 +135,12 @@ non-transient request failures remain explicit unavailable states.
 
 ### Meeting understanding
 
-Use OpenAI's Responses API with `gpt-5-mini` by default. OpenAI is the default and only MVP provider. The user supplies their own API key in Provider settings; Rio stores it only in the macOS Keychain and never in the bundle, source tree, diagnostics, app preferences, or an environment variable. Transcription uses `gpt-4o-transcribe` by default.
+Use OpenAI's Responses API with `gpt-5.6-terra` by default. OpenAI is the default and only MVP provider. The user supplies their own API key in Provider settings; Rio stores it only in the macOS Keychain and never in the bundle, source tree, diagnostics, app preferences, or an environment variable. Transcription uses `gpt-transcribe` by default.
 
-The customer-critical profile requires cautious, directly supported claims and
-prioritizes decisions, commitments, risks, and open questions. The internal
-technical profile asks the model to retain supported errors, versions,
-environments, commands, changes, failed checks, hypotheses, and terminology;
-the transcript remains the authoritative saved knowledge source. Profile text
-is developer-authored and meeting text remains untrusted prompt input.
+The general fallback and custom profiles supply model guidance through model
+instructions; meeting text remains untrusted prompt input. Legacy
+customer-critical and internal-technical snapshots retain their historical
+instructions when older saved meetings are reopened.
 
 When the application launches and before starting a session, inspect all session
 prerequisites and retain a combined readiness report for the UI. Preflight
