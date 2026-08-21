@@ -8,15 +8,14 @@ DERIVED_DATA_PATH = .build/Iteration
 XCODEBUILD_BASE_FLAGS = -project $(PROJECT) -scheme $(SCHEME) -configuration $(CONFIGURATION) -destination '$(DESTINATION)' -derivedDataPath $(DERIVED_DATA_PATH) SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
 XCODEBUILD_FLAGS = $(XCODEBUILD_BASE_FLAGS)
 
-# Xcode's Run action can use ad-hoc "Sign to Run Locally" signing when the
-# account exposes only the unified Apple Development certificate. Prefer a
-# real Mac Development identity when one is installed, but keep `make final`
-# usable with the same local fallback as Xcode.
-HAS_MAC_DEVELOPMENT_IDENTITY := $(shell security find-identity -v -p codesigning 2>/dev/null | grep -q '"Mac Development:' && echo YES || echo NO)
+# Prefer the full development identity Xcode has installed. On current Xcode
+# versions this may be named Apple Development rather than Mac Development.
+DEVELOPMENT_IDENTITY := $(shell security find-identity -v -p codesigning 2>/dev/null | sed -n 's/.*"\(\(Apple\|Mac\) Development: [^"]*\)".*/\1/p' | head -n 1)
 
-ifeq ($(HAS_MAC_DEVELOPMENT_IDENTITY),YES)
-TEST_XCODEBUILD_FLAGS = $(XCODEBUILD_FLAGS)
-BUILD_XCODEBUILD_FLAGS = $(XCODEBUILD_FLAGS)
+ifneq ($(strip $(DEVELOPMENT_IDENTITY)),)
+STABLE_SIGNING_FLAGS = $(XCODEBUILD_FLAGS) CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY='$(DEVELOPMENT_IDENTITY)' DEVELOPMENT_TEAM=X59V2Q7WB7
+TEST_XCODEBUILD_FLAGS = $(STABLE_SIGNING_FLAGS)
+BUILD_XCODEBUILD_FLAGS = $(STABLE_SIGNING_FLAGS)
 else
 TEST_XCODEBUILD_FLAGS = $(XCODEBUILD_BASE_FLAGS) CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
 BUILD_XCODEBUILD_FLAGS = $(XCODEBUILD_BASE_FLAGS) CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=-

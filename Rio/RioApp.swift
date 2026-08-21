@@ -35,7 +35,7 @@ struct RioApp: App {
                 .environmentObject(meetingProfileSettings)
         }
         .defaultLaunchBehavior(.suppressed)
-        .defaultSize(width: 560, height: 180)
+        .defaultSize(width: 640, height: 480)
         .windowResizability(.contentMinSize)
 
         Window("Recent Meetings", id: "recent-meetings") {
@@ -43,6 +43,13 @@ struct RioApp: App {
                 .environmentObject(meetingHistory)
         }
         .defaultSize(width: 760, height: 620)
+        .windowResizability(.contentMinSize)
+
+        Window("Meeting Profiles", id: "profiles") {
+            MeetingProfileSettingsView()
+                .environmentObject(meetingProfileSettings)
+        }
+        .defaultSize(width: 760, height: 560)
         .windowResizability(.contentMinSize)
 
         MenuBarExtra("Rio", image: "RioMenuBarIcon") {
@@ -98,9 +105,8 @@ private struct RioMenuBarMenu<Controller: SessionShellControlling>: View {
         }
 
         Button("Configure Meeting Profiles…") {
-            openWindow(id: "main")
+            openWindow(id: "profiles")
             NSApp.activate(ignoringOtherApps: true)
-            panelRouter.showProfiles()
         }
 
         Divider()

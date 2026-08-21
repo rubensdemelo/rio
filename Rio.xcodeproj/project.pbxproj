@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 71;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -12,41 +12,41 @@
 		A10000010000000000000003 /* CoreDomain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000007 /* CoreDomain.swift */; };
 		A10000010000000000000004 /* CoreContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000008 /* CoreContracts.swift */; };
 		A10000010000000000000006 /* CoreContractsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000A /* CoreContractsTests.swift */; };
-		A10000010000000000000007 /* CoreDomain.swift in Tests */ = {isa = PBXBuildFile; fileRef = A20000010000000000000007 /* CoreDomain.swift */; };
-		A10000010000000000000008 /* CoreContracts.swift in Tests */ = {isa = PBXBuildFile; fileRef = A20000010000000000000008 /* CoreContracts.swift */; };
-		A10000010000000000000009 /* DeterministicDoubles.swift in Tests */ = {isa = PBXBuildFile; fileRef = A20000010000000000000009 /* DeterministicDoubles.swift */; };
+		A10000010000000000000007 /* CoreDomain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000007 /* CoreDomain.swift */; };
+		A10000010000000000000008 /* CoreContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000008 /* CoreContracts.swift */; };
+		A10000010000000000000009 /* DeterministicDoubles.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000009 /* DeterministicDoubles.swift */; };
 		A1000001000000000000000A /* OpenAIInsightAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000B /* OpenAIInsightAdapter.swift */; };
-		A1000001000000000000000B /* OpenAIInsightAdapter.swift in Tests */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000B /* OpenAIInsightAdapter.swift */; };
+		A1000001000000000000000B /* OpenAIInsightAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000B /* OpenAIInsightAdapter.swift */; };
 		A1000001000000000000000E /* OpenAIInsightAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000D /* OpenAIInsightAdapterTests.swift */; };
 		A1000001000000000000000F /* ApplicationShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000E /* ApplicationShell.swift */; };
-		A10000010000000000000010 /* ApplicationShell.swift in Tests */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000E /* ApplicationShell.swift */; };
+		A10000010000000000000010 /* ApplicationShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000E /* ApplicationShell.swift */; };
 		A10000010000000000000011 /* ApplicationShellTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000F /* ApplicationShellTests.swift */; };
 		A10000010000000000000012 /* MicrophoneCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000010 /* MicrophoneCapture.swift */; };
 		A10000010000000000000013 /* AVFAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000010000000000000011 /* AVFAudio.framework */; };
-		A10000010000000000000014 /* AVFAudio.framework in Test Frameworks */ = {isa = PBXBuildFile; fileRef = A20000010000000000000011 /* AVFAudio.framework */; };
+		A10000010000000000000014 /* AVFAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000010000000000000011 /* AVFAudio.framework */; };
 		A10000010000000000000015 /* MicrophoneCaptureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000012 /* MicrophoneCaptureTests.swift */; };
-		A10000010000000000000016 /* MicrophoneCapture.swift in Tests */ = {isa = PBXBuildFile; fileRef = A20000010000000000000010 /* MicrophoneCapture.swift */; };
+		A10000010000000000000016 /* MicrophoneCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000010 /* MicrophoneCapture.swift */; };
 		A10000010000000000000017 /* OpenAITranscriptionAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000013 /* OpenAITranscriptionAdapter.swift */; };
 		A1000001000000000000001A /* OpenAITranscriptionAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000015 /* OpenAITranscriptionAdapterTests.swift */; };
-		A1000001000000000000001B /* OpenAITranscriptionAdapter.swift in Tests */ = {isa = PBXBuildFile; fileRef = A20000010000000000000013 /* OpenAITranscriptionAdapter.swift */; };
+		A1000001000000000000001B /* OpenAITranscriptionAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000013 /* OpenAITranscriptionAdapter.swift */; };
 		A1000001000000000000001C /* SessionOrchestration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000016 /* SessionOrchestration.swift */; };
-		A1000001000000000000001D /* SessionOrchestration.swift in Tests */ = {isa = PBXBuildFile; fileRef = A20000010000000000000016 /* SessionOrchestration.swift */; };
+		A1000001000000000000001D /* SessionOrchestration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000016 /* SessionOrchestration.swift */; };
 		A1000001000000000000001E /* SessionLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000017 /* SessionLifecycleTests.swift */; };
 		A1000001000000000000001F /* CompositionRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000018 /* CompositionRoot.swift */; };
-		A10000010000000000000020 /* CompositionRoot.swift in Tests */ = {isa = PBXBuildFile; fileRef = A20000010000000000000018 /* CompositionRoot.swift */; };
+		A10000010000000000000020 /* CompositionRoot.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000018 /* CompositionRoot.swift */; };
 		A10000010000000000000021 /* VerticalSliceIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000019 /* VerticalSliceIntegrationTests.swift */; };
 		A10000010000000000000022 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001A /* Assets.xcassets */; };
 		A10000010000000000000023 /* SystemAudioCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001B /* SystemAudioCapture.swift */; };
 		A10000010000000000000024 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000010000000000000020 /* CoreAudio.framework */; };
-		A10000010000000000000025 /* SystemAudioCapture.swift in Tests */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001B /* SystemAudioCapture.swift */; };
-		A10000010000000000000026 /* CoreAudio.framework in Test Frameworks */ = {isa = PBXBuildFile; fileRef = A20000010000000000000020 /* CoreAudio.framework */; };
+		A10000010000000000000025 /* SystemAudioCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001B /* SystemAudioCapture.swift */; };
+		A10000010000000000000026 /* CoreAudio.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000010000000000000020 /* CoreAudio.framework */; };
 		A10000010000000000000027 /* OpenAIKeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001D /* OpenAIKeychainStore.swift */; };
-		A10000010000000000000028 /* OpenAIKeychainStore.swift in Tests */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001D /* OpenAIKeychainStore.swift */; };
+		A10000010000000000000028 /* OpenAIKeychainStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001D /* OpenAIKeychainStore.swift */; };
 		A10000010000000000000029 /* InsightHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001E /* InsightHistoryStore.swift */; };
-		A1000001000000000000002A /* InsightHistoryStore.swift in Tests */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001E /* InsightHistoryStore.swift */; };
+		A1000001000000000000002A /* InsightHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001E /* InsightHistoryStore.swift */; };
 		A1000001000000000000002B /* InsightHistoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000001F /* InsightHistoryStoreTests.swift */; };
 		A1000001000000000000002C /* MeetingHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000021 /* MeetingHistoryStore.swift */; };
-		A1000001000000000000002D /* MeetingHistoryStore.swift in Tests */ = {isa = PBXBuildFile; fileRef = A20000010000000000000021 /* MeetingHistoryStore.swift */; };
+		A1000001000000000000002D /* MeetingHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000021 /* MeetingHistoryStore.swift */; };
 		A1000001000000000000002E /* MeetingHistoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000022 /* MeetingHistoryStoreTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -76,10 +76,10 @@
 		A20000010000000000000019 /* VerticalSliceIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerticalSliceIntegrationTests.swift; sourceTree = "<group>"; };
 		A2000001000000000000001A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A2000001000000000000001B /* SystemAudioCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemAudioCapture.swift; sourceTree = "<group>"; };
-		A20000010000000000000020 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
 		A2000001000000000000001D /* OpenAIKeychainStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIKeychainStore.swift; sourceTree = "<group>"; };
 		A2000001000000000000001E /* InsightHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightHistoryStore.swift; sourceTree = "<group>"; };
 		A2000001000000000000001F /* InsightHistoryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InsightHistoryStoreTests.swift; sourceTree = "<group>"; };
+		A20000010000000000000020 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
 		A20000010000000000000021 /* MeetingHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingHistoryStore.swift; sourceTree = "<group>"; };
 		A20000010000000000000022 /* MeetingHistoryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingHistoryStoreTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -98,8 +98,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A10000010000000000000026 /* CoreAudio.framework in Test Frameworks */,
-				A10000010000000000000014 /* AVFAudio.framework in Test Frameworks */,
+				A10000010000000000000026 /* CoreAudio.framework in Frameworks */,
+				A10000010000000000000014 /* AVFAudio.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -286,27 +286,27 @@
 			files = (
 				A10000010000000000000002 /* RioTests.swift in Sources */,
 				A10000010000000000000006 /* CoreContractsTests.swift in Sources */,
-				A10000010000000000000007 /* CoreDomain.swift in Tests */,
-				A10000010000000000000008 /* CoreContracts.swift in Tests */,
-				A10000010000000000000009 /* DeterministicDoubles.swift in Tests */,
-				A1000001000000000000000B /* OpenAIInsightAdapter.swift in Tests */,
-				A10000010000000000000028 /* OpenAIKeychainStore.swift in Tests */,
-				A1000001000000000000002A /* InsightHistoryStore.swift in Tests */,
+				A10000010000000000000007 /* CoreDomain.swift in Sources */,
+				A10000010000000000000008 /* CoreContracts.swift in Sources */,
+				A10000010000000000000009 /* DeterministicDoubles.swift in Sources */,
+				A1000001000000000000000B /* OpenAIInsightAdapter.swift in Sources */,
+				A10000010000000000000028 /* OpenAIKeychainStore.swift in Sources */,
+				A1000001000000000000002A /* InsightHistoryStore.swift in Sources */,
 				A1000001000000000000000E /* OpenAIInsightAdapterTests.swift in Sources */,
-				A10000010000000000000010 /* ApplicationShell.swift in Tests */,
+				A10000010000000000000010 /* ApplicationShell.swift in Sources */,
 				A10000010000000000000011 /* ApplicationShellTests.swift in Sources */,
-				A10000010000000000000016 /* MicrophoneCapture.swift in Tests */,
+				A10000010000000000000016 /* MicrophoneCapture.swift in Sources */,
 				A10000010000000000000015 /* MicrophoneCaptureTests.swift in Sources */,
-				A1000001000000000000001B /* OpenAITranscriptionAdapter.swift in Tests */,
+				A1000001000000000000001B /* OpenAITranscriptionAdapter.swift in Sources */,
 				A1000001000000000000001A /* OpenAITranscriptionAdapterTests.swift in Sources */,
-				A1000001000000000000001D /* SessionOrchestration.swift in Tests */,
+				A1000001000000000000001D /* SessionOrchestration.swift in Sources */,
 				A1000001000000000000001E /* SessionLifecycleTests.swift in Sources */,
-				A10000010000000000000020 /* CompositionRoot.swift in Tests */,
+				A10000010000000000000020 /* CompositionRoot.swift in Sources */,
 				A10000010000000000000021 /* VerticalSliceIntegrationTests.swift in Sources */,
 				A1000001000000000000002B /* InsightHistoryStoreTests.swift in Sources */,
-				A1000001000000000000002D /* MeetingHistoryStore.swift in Tests */,
+				A1000001000000000000002D /* MeetingHistoryStore.swift in Sources */,
 				A1000001000000000000002E /* MeetingHistoryStoreTests.swift in Sources */,
-				A10000010000000000000025 /* SystemAudioCapture.swift in Tests */,
+				A10000010000000000000025 /* SystemAudioCapture.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -342,9 +342,9 @@
 		A80000010000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Rio/Rio.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				DEVELOPMENT_TEAM = Q857P34S8A;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Rio/Info.plist;
@@ -361,9 +361,9 @@
 		A80000010000000000000004 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Rio/Rio.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				DEVELOPMENT_TEAM = Q857P34S8A;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Rio/Info.plist;
@@ -437,6 +437,5 @@
 		};
 /* End XCConfigurationList section */
 	};
-
 	rootObject = A70000010000000000000001 /* Project object */;
 }

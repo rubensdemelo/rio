@@ -240,6 +240,7 @@ final class FakeSessionController: SessionShellControlling {
 
 struct RioView<Controller: SessionShellControlling>: View {
     @ObservedObject private var controller: Controller
+    @Environment(\.openWindow) private var openWindow
     @EnvironmentObject private var providerSettings: OpenAIProviderSettings
     @EnvironmentObject private var panelRouter: RioPanelRouter
     @EnvironmentObject private var meetingProfileSettings: MeetingProfileSettings
@@ -272,12 +273,18 @@ struct RioView<Controller: SessionShellControlling>: View {
             minWidth: 480,
             idealWidth: 560,
             maxWidth: 720,
-            minHeight: 160,
+            minHeight: shouldShowSetup ? 420 : 180,
             alignment: .topLeading
         )
         .background(Color(nsColor: .windowBackgroundColor))
         .task {
             await controller.checkReadiness()
+        }
+        .onAppear {
+            resizeMainWindowIfNeeded()
+        }
+        .onChange(of: shouldShowSetup) { _, _ in
+            resizeMainWindowIfNeeded()
         }
         .sheet(item: $panelRouter.presentedPanel) { panel in
             switch panel {
@@ -288,6 +295,28 @@ struct RioView<Controller: SessionShellControlling>: View {
             case .profiles:
                 MeetingProfileSettingsView()
             }
+        }
+    }
+
+    private var shouldShowSetup: Bool {
+        !providerSettings.isConfigured || controller.readiness?.isReady == false
+    }
+
+    private func resizeMainWindowIfNeeded() {
+        DispatchQueue.main.async {
+            guard let window = NSApp.windows.first(where: { $0.title == "Rio" }) else {
+                return
+            }
+
+            let targetHeight: CGFloat = shouldShowSetup ? 480 : 240
+            guard abs(window.frame.height - targetHeight) > 1 else {
+                return
+            }
+
+            var frame = window.frame
+            frame.origin.y += frame.height - targetHeight
+            frame.size.height = targetHeight
+            window.setFrame(frame, display: true, animate: true)
         }
     }
 
@@ -442,7 +471,7 @@ struct RioView<Controller: SessionShellControlling>: View {
             }
 
             Button {
-                panelRouter.showProfiles()
+                openWindow(id: "profiles")
             } label: {
                 Image(systemName: "slider.horizontal.3")
             }
@@ -840,7 +869,7 @@ private struct ListeningSetupView: View {
     }
 }
 
-private struct MeetingProfileSettingsView: View {
+struct MeetingProfileSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var meetingProfileSettings: MeetingProfileSettings
     @State private var selectedProfileID: String?
