@@ -249,8 +249,8 @@ struct RioView<Controller: SessionShellControlling>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            sessionControls
+        VStack(alignment: .leading, spacing: 18) {
+            sessionHeader
 
             if showsSessionStatus {
                 sessionStatus
@@ -267,8 +267,14 @@ struct RioView<Controller: SessionShellControlling>: View {
 
             content
         }
-        .padding(16)
-        .frame(minWidth: 480, idealWidth: 560, maxWidth: 640, alignment: .topLeading)
+        .padding(20)
+        .frame(
+            minWidth: 480,
+            idealWidth: 560,
+            maxWidth: 720,
+            minHeight: 160,
+            alignment: .topLeading
+        )
         .background(Color(nsColor: .windowBackgroundColor))
         .task {
             await controller.checkReadiness()
@@ -282,6 +288,46 @@ struct RioView<Controller: SessionShellControlling>: View {
             case .profiles:
                 MeetingProfileSettingsView()
             }
+        }
+    }
+
+    private var sessionHeader: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Rio")
+                        .font(.title2.weight(.semibold))
+
+                    Text(sessionSummary)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer(minLength: 20)
+
+                primaryAction
+            }
+
+            meetingProfileControl
+        }
+    }
+
+    private var sessionSummary: String {
+        switch controller.status {
+        case .stopped:
+            "Ready to listen"
+        case .checkingAvailability:
+            "Checking listening availability"
+        case .listening:
+            "Listening"
+        case .processing:
+            "Processing meeting audio"
+        case .paused:
+            "Listening paused"
+        case .interrupted:
+            "Listening was interrupted"
+        case .unavailable:
+            "Listening unavailable"
         }
     }
 
@@ -361,77 +407,50 @@ struct RioView<Controller: SessionShellControlling>: View {
 
     @ViewBuilder
     private var content: some View {
-        if !providerSettings.isConfigured {
-            OpenAIProviderSetupCard {
-                panelRouter.showProvider()
-            }
-        }
-
-        if let readiness = controller.readiness, !readiness.isReady {
-            PrerequisiteChecklistView(report: readiness)
+        if !providerSettings.isConfigured || controller.readiness?.isReady == false {
+            ListeningSetupView(
+                showsProviderSetup: !providerSettings.isConfigured,
+                readiness: controller.readiness,
+                openProviderSetup: {
+                    panelRouter.showProvider()
+                }
+            )
         }
 
         if !controller.cards.isEmpty {
-            ScrollView {
-                LazyVStack(spacing: 12) {
-                    ForEach(controller.cards, id: \.stableKey) { card in
-                        InsightCardView(card: card)
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-            .frame(maxHeight: 520)
-            .accessibilityLabel("Meeting insights")
+            InsightStreamView(cards: controller.cards)
         }
     }
 
-    private var sessionControls: some View {
-        VStack(spacing: 12) {
-            HStack {
-                Spacer()
-                primaryAction
-                Spacer()
-            }
-
-            HStack(spacing: 10) {
-                if meetingProfileSettings.profiles.isEmpty {
-                    Button {
-                        panelRouter.showProfiles()
-                    } label: {
-                        Label("Create a profile", systemImage: "plus")
-                    }
-                    .buttonStyle(.bordered)
-                    .help("Rio uses general meeting guidance until you add a profile.")
-                } else {
-                    Picker("Meeting profile", selection: $meetingProfileSettings.selection) {
-                        ForEach(meetingProfileSettings.profiles) { profile in
-                            Text(profile.title).tag(profile)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .disabled(!isStartAction)
-                }
-
-                Button {
-                    panelRouter.showProfiles()
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                }
-                .buttonStyle(.borderless)
-                .help("Configure meeting profiles")
-                .accessibilityLabel("Configure meeting profiles")
-            }
-            .help(meetingProfileSettings.profiles.isEmpty ? "General meeting guidance" : meetingProfileSettings.selection.detail)
-
-            Text(
-                meetingProfileSettings.profiles.isEmpty
-                    ? "General meeting guidance"
-                    : meetingProfileSettings.selection.detail
-            )
-                .font(.caption)
+    private var meetingProfileControl: some View {
+        HStack(spacing: 10) {
+            Text("Meeting profile")
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
+
+            if meetingProfileSettings.profiles.isEmpty {
+                Text("General meeting guidance")
+                    .font(.subheadline)
+            } else {
+                Picker("Meeting profile", selection: $meetingProfileSettings.selection) {
+                    ForEach(meetingProfileSettings.profiles) { profile in
+                        Text(profile.title).tag(profile)
+                    }
+                }
+                .labelsHidden()
+                .disabled(!isStartAction)
+            }
+
+            Button {
+                panelRouter.showProfiles()
+            } label: {
+                Image(systemName: "slider.horizontal.3")
+            }
+            .buttonStyle(.borderless)
+            .help("Configure meeting profiles")
+            .accessibilityLabel("Configure meeting profiles")
         }
+        .help(meetingProfileSettings.profiles.isEmpty ? "Rio uses general meeting guidance until you add a profile." : meetingProfileSettings.selection.detail)
     }
 
     private var primaryAction: some View {
@@ -578,15 +597,13 @@ struct VoiceFeedbackPresentation: Equatable {
     }
 
     private static func speechDetail(for feedback: SessionFeedbackSnapshot) -> String {
-        let count = feedback.finalizedSpeechSegmentCount
-        guard count > 0 else {
-            return "Transcription is active. Collecting finalized message chunks for insights."
+        guard feedback.finalizedSpeechSegmentCount > 0 else {
+            return "Transcription is active. Waiting for finalized meeting audio."
         }
-        let noun = count == 1 ? "chunk" : "chunks"
         let progress = feedback.latestFinalizedSpeechEndOffset.map {
             " Latest finalized speech: \(Self.elapsedTimestamp($0))."
         } ?? ""
-        return "Transcription is active. \(count) message \(noun) collected.\(progress)"
+        return "Transcription is active.\(progress)"
     }
 
     private static func elapsedTimestamp(_ duration: Duration) -> String {
@@ -721,43 +738,44 @@ private struct AudioInputMeterView: View {
     }
 }
 
-private struct PrerequisiteChecklistView: View {
-    let report: SessionReadiness
+private struct ListeningSetupView: View {
+    let showsProviderSetup: Bool
+    let readiness: SessionReadiness?
+    let openProviderSetup: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 0) {
             Text("Before listening")
                 .font(.title3.weight(.semibold))
+                .padding(.bottom, 12)
 
-            ForEach(report.checks) { check in
-                let presentation = PrerequisiteCheckPresentation(check: check)
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: presentation.symbolName)
-                        .foregroundStyle(presentation.tint)
-                        .frame(width: 18)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(presentation.title)
-                            .font(.body.weight(.medium))
-                        Text(presentation.detail)
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .lineSpacing(1)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        if check.kind == .meetingAudio,
-                           check.reason == .systemAudioPermissionDenied {
-                            Button("Open System Audio Recording") {
-                                SystemSettingsOpener.openSystemAudioRecording()
-                            }
-                            .controlSize(.small)
-                        }
-                    }
+            if showsProviderSetup {
+                setupRow(
+                    symbolName: "key.fill",
+                    tint: .accentColor,
+                    title: "OpenAI",
+                    detail: "Add an API key to transcribe meeting audio and generate insights. The key stays in your Mac’s Keychain."
+                ) {
+                    Button("Add API Key", action: openProviderSetup)
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
                 }
-                .accessibilityElement(children: .combine)
+            }
+
+            if showsProviderSetup, !unmetChecks.isEmpty {
+                Divider().padding(.vertical, 12)
+            }
+
+            if !unmetChecks.isEmpty {
+                ForEach(Array(unmetChecks.enumerated()), id: \.element.id) { index, check in
+                    if index > 0 {
+                        Divider().padding(.vertical, 12)
+                    }
+                    prerequisiteRow(check)
+                }
             }
         }
-        .frame(maxWidth: 460, alignment: .leading)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -766,33 +784,59 @@ private struct PrerequisiteChecklistView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Listening prerequisites")
     }
-}
 
-private struct OpenAIProviderSetupCard: View {
-    let openSetup: () -> Void
+    private var unmetChecks: [PrerequisiteCheck] {
+        readiness?.checks.filter {
+            $0.reason != nil && !(showsProviderSetup && $0.kind == .openAI)
+        } ?? []
+    }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Label("Connect OpenAI", systemImage: "key.fill")
-                .font(.title3.weight(.semibold))
-            Text("Bring your own OpenAI API key to transcribe meeting audio and generate insights. The key stays in your Mac’s Keychain.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .lineSpacing(1)
-                .fixedSize(horizontal: false, vertical: true)
-            Button("Add OpenAI API key", action: openSetup)
-                .buttonStyle(.borderedProminent)
+    private func prerequisiteRow(_ check: PrerequisiteCheck) -> some View {
+        let presentation = PrerequisiteCheckPresentation(check: check)
+        return setupRow(
+            symbolName: presentation.symbolName,
+            tint: presentation.tint,
+            title: presentation.title,
+            detail: presentation.detail
+        ) {
+            if check.kind == .meetingAudio,
+               check.reason == .systemAudioPermissionDenied {
+                Button("Open System Settings") {
+                    SystemSettingsOpener.openSystemAudioRecording()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color.accentColor.opacity(0.3), lineWidth: 1)
+    }
+
+    private func setupRow<Action: View>(
+        symbolName: String,
+        tint: Color,
+        title: String,
+        detail: String,
+        @ViewBuilder action: () -> Action
+    ) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: symbolName)
+                .font(.body.weight(.medium))
+                .foregroundStyle(tint)
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.body.weight(.medium))
+                Text(detail)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .lineSpacing(1)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 12)
+            action()
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -1709,21 +1753,56 @@ struct PrerequisiteCheckPresentation: Equatable {
     }
 }
 
+private struct InsightStreamView: View {
+    let cards: [InsightCard]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Insights")
+                .font(.title3.weight(.semibold))
+                .padding(.horizontal, 16)
+                .padding(.vertical, 13)
+
+            Divider()
+
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(Array(cards.enumerated()), id: \.element.stableKey) { index, card in
+                        InsightCardView(card: card)
+
+                        if index != cards.count - 1 {
+                            Divider()
+                                .padding(.leading, 16)
+                        }
+                    }
+                }
+            }
+            .frame(maxHeight: 520)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(nsColor: .controlBackgroundColor))
+        )
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Meeting insights")
+    }
+}
+
 private struct InsightCardView: View {
     let card: InsightCard
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Label(card.category.displayName, systemImage: card.category.symbolName)
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(card.category.tint)
+                    .foregroundStyle(.secondary)
 
                 Spacer()
 
                 Text(card.state.displayName)
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(card.state == .resolved ? .tertiary : .secondary)
             }
 
             Text(card.text)
@@ -1731,15 +1810,8 @@ private struct InsightCardView: View {
                 .foregroundStyle(card.state == .resolved ? .secondary : .primary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(card.category.tint.opacity(0.22), lineWidth: 1)
-        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
         .opacity(card.state == .resolved ? 0.72 : 1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(card.accessibilityDescription)

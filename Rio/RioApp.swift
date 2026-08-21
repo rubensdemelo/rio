@@ -35,16 +35,15 @@ struct RioApp: App {
                 .environmentObject(meetingProfileSettings)
         }
         .defaultLaunchBehavior(.suppressed)
-        .defaultSize(width: 560, height: 96)
-        .windowResizability(.contentSize)
+        .defaultSize(width: 560, height: 180)
+        .windowResizability(.contentMinSize)
 
         Window("Recent Meetings", id: "recent-meetings") {
             RecentMeetingsView()
                 .environmentObject(meetingHistory)
-                .background(FloatingWindowBehavior())
         }
         .defaultSize(width: 760, height: 620)
-        .windowResizability(.contentSize)
+        .windowResizability(.contentMinSize)
 
         MenuBarExtra("Rio", image: "RioMenuBarIcon") {
             RioMenuBarMenu(controller: sessionController)
@@ -53,27 +52,6 @@ struct RioApp: App {
                 .environmentObject(meetingProfileSettings)
         }
         .menuBarExtraStyle(.menu)
-    }
-}
-
-/// Makes the recent-meetings companion behave like a floating meeting window.
-private struct FloatingWindowBehavior: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        NSView()
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        configure(nsView.window)
-        DispatchQueue.main.async {
-            configure(nsView.window)
-        }
-    }
-
-    private func configure(_ window: NSWindow?) {
-        guard let window else { return }
-        window.level = .floating
-        window.isMovableByWindowBackground = true
-        window.collectionBehavior.insert(.fullScreenAuxiliary)
     }
 }
 

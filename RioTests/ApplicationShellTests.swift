@@ -339,7 +339,8 @@ final class ApplicationShellTests: XCTestCase {
 
         XCTAssertEqual(presentation.condition, .live)
         XCTAssertEqual(presentation.title, "Meeting audio live")
-        XCTAssertTrue(presentation.detail.contains("3 message chunks collected"))
+        XCTAssertTrue(presentation.detail.contains("Transcription is active"))
+        XCTAssertFalse(presentation.detail.contains("chunks collected"))
         XCTAssertFalse(presentation.detail.contains("transcript"))
     }
 
@@ -357,7 +358,8 @@ final class ApplicationShellTests: XCTestCase {
             )
         )
 
-        XCTAssertTrue(presentation.detail.contains("76 message chunks"))
+        XCTAssertTrue(presentation.detail.contains("Transcription is active"))
+        XCTAssertFalse(presentation.detail.contains("message chunks"))
         XCTAssertTrue(presentation.detail.contains("1:00:20"))
         XCTAssertFalse(presentation.detail.contains("meeting text"))
     }
