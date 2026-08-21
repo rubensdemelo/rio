@@ -16,8 +16,6 @@
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>26.0</string>
-	<key>LSUIElement</key>
-	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Rio needs microphone access to process meeting audio temporarily for live insights.</string>
 	<key>NSAudioCaptureUsageDescription</key>

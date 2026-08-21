@@ -322,6 +322,7 @@ final class ApplicationShellTests: XCTestCase {
 
         XCTAssertTrue(presentation.detail.contains("could not start system audio capture"))
         XCTAssertFalse(presentation.detail.contains("needs System Audio Recording access"))
+        XCTAssertEqual(presentation.recoveryAction, .openSystemAudioRecording)
     }
 
     func testVoiceFeedbackUsesNonContentSpeechActivityInsteadOfTranscript() {

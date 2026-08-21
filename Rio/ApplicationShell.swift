@@ -2,6 +2,11 @@ import Combine
 import AppKit
 import SwiftUI
 
+extension Notification.Name {
+    static let rioOpenProfiles = Notification.Name("Rio.openProfiles")
+    static let rioOpenRecentMeetings = Notification.Name("Rio.openRecentMeetings")
+}
+
 @MainActor
 final class RioPanelRouter: ObservableObject {
     enum Panel: String, Identifiable {
@@ -276,12 +281,18 @@ struct RioView<Controller: SessionShellControlling>: View {
             minHeight: shouldShowSetup ? 420 : 180,
             alignment: .topLeading
         )
-        .background(Color(nsColor: .windowBackgroundColor))
+        .background(.clear)
         .task {
             await controller.checkReadiness()
         }
         .onAppear {
             resizeMainWindowIfNeeded()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .rioOpenProfiles)) { _ in
+            openWindow(id: "profiles")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .rioOpenRecentMeetings)) { _ in
+            openWindow(id: "recent-meetings")
         }
         .onChange(of: shouldShowSetup) { _, _ in
             resizeMainWindowIfNeeded()
@@ -1867,7 +1878,8 @@ struct SessionStatusPresentation: Equatable {
         failure: PipelineFailure? = nil
     ) {
         recoveryAction = status == .unavailable
-            && unavailableReason == .systemAudioPermissionDenied
+            && (unavailableReason == .systemAudioPermissionDenied
+                || unavailableReason == .systemAudioCaptureFailed)
             ? .openSystemAudioRecording
             : nil
 

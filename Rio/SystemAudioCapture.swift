@@ -340,11 +340,15 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
                 kAudioAggregateDeviceNameKey: "Rio System Audio",
                 kAudioAggregateDeviceUIDKey: "app.rio.system-audio.\(UUID().uuidString)",
                 kAudioAggregateDeviceIsPrivateKey: true,
+                kAudioAggregateDeviceTapAutoStartKey: false,
+                kAudioAggregateDeviceTapListKey: [[
+                    kAudioSubTapUIDKey: createdTap.uid,
+                    kAudioSubTapDriftCompensationKey: true,
+                ]],
             ]) else {
                 throw CoreAudioCaptureError.aggregateCreationFailed
             }
             aggregate = createdAggregate
-            try createdAggregate.setSubtaps([createdTap])
 
             let callbackState = CoreAudioCaptureCallbackState(
                 rawQueue: rawQueue
