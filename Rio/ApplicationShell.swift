@@ -1039,11 +1039,9 @@ private struct ListeningSetupView: View {
 }
 
 struct MeetingProfileSettingsView: View {
-    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var meetingProfileSettings: MeetingProfileSettings
     @State private var selectedProfileID: String?
     @State private var showingNewProfile = false
-    @State private var profileIDBeforeNew: String?
     @State private var newName = ""
     @State private var newGuidance = ""
     @State private var newInsightPace: ListeningCadence = .thirtySeconds
@@ -1058,7 +1056,6 @@ struct MeetingProfileSettingsView: View {
                         .font(.headline)
                     Spacer()
                     Button {
-                        profileIDBeforeNew = selectedProfileID
                         selectedProfileID = nil
                         showingNewProfile = true
                     } label: {
@@ -1090,32 +1087,6 @@ struct MeetingProfileSettingsView: View {
             }
         } detail: {
             VStack(spacing: 0) {
-                HStack {
-                    Text(showingNewProfile || selectedProfile == nil
-                         ? "New profile"
-                         : (selectedProfile?.name ?? "Profile"))
-                        .font(.title2.weight(.semibold))
-                    Spacer()
-                    Button(showingNewProfile || selectedProfile == nil ? "Cancel" : "Done") {
-                        if showingNewProfile || selectedProfile == nil {
-                            if let profileIDBeforeNew {
-                                selectedProfileID = profileIDBeforeNew
-                                self.profileIDBeforeNew = nil
-                                showingNewProfile = false
-                            } else {
-                                dismiss()
-                            }
-                        } else {
-                            dismiss()
-                        }
-                    }
-                        .keyboardShortcut(showingNewProfile || selectedProfile == nil ? .cancelAction : .defaultAction)
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 14)
-
-                Divider()
-
                 if showingNewProfile || selectedProfile == nil {
                     newProfileForm
                 } else if let selectedProfile {
@@ -1188,11 +1159,11 @@ struct MeetingProfileSettingsView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     ProfileTextEditor(
                         text: $newTechnicalVocabulary,
-                        placeholder: "Product names, acronyms, versions, or error-code prefixes",
+                        placeholder: "e.g. SwiftUI, AVAudioEngine, CFErrorDomain",
                         accessibilityLabel: "New profile technical vocabulary"
                     )
                     HStack {
-                        Text("Use terms only, not meeting notes.")
+                        Text("Separate terms with commas or new lines. Terms only, not meeting notes.")
                         Spacer()
                         Text("\(newTechnicalVocabulary.count)/\(TranscriptionVocabularyConfiguration.maximumPromptLength)")
                     }
@@ -1253,7 +1224,6 @@ struct MeetingProfileSettingsView: View {
         addError = nil
         selectedProfileID = profile.id
         showingNewProfile = false
-        profileIDBeforeNew = nil
     }
 }
 
