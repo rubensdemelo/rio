@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import XCTest
 
 final class OpenAIInsightAdapterTests: XCTestCase {
@@ -210,6 +211,68 @@ final class OpenAIInsightAdapterTests: XCTestCase {
         }
     }
 
+    func testHTTPClientPreservesUnauthorizedResponseWhenTransportAlsoTimesOut() async throws {
+        let server = try EarlyUnauthorizedHTTPServer()
+        let url = try await server.start()
+        defer { server.stop() }
+        let client = URLSessionOpenAIHTTPClient(
+            session: URLSession(configuration: .ephemeral)
+        )
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 0.25
+        request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
+        request.httpBody = Data(repeating: 0, count: 1_048_576)
+
+        do {
+            _ = try await client.data(for: request)
+            XCTFail("The unauthorized response must fail")
+        } catch let error as OpenAIHTTPError {
+            guard case .unexpectedStatus(let statusCode) = error else {
+                return XCTFail("Expected the HTTP rejection, received \(error)")
+            }
+            XCTAssertEqual(statusCode, 401)
+        } catch {
+            XCTFail("The timeout hid the HTTP rejection: \(error)")
+        }
+    }
+
+    func testOpenAIFailureDiagnosticContainsOnlySanitizedNonContentMetadata() throws {
+        var request = URLRequest(url: URL(string: "https://api.openai.com/v1/audio/transcriptions")!)
+        request.setValue("Bearer sk-synthetic-secret", forHTTPHeaderField: "Authorization")
+        request.httpBody = Data("synthetic meeting audio".utf8)
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 401,
+            httpVersion: "HTTP/3",
+            headerFields: ["x-request-id": "req_synthetic"]
+        )!
+        let responseData = try JSONSerialization.data(withJSONObject: [
+            "error": [
+                "type": "invalid_request_error",
+                "code": "invalid_api_key",
+                "message": "The key sk-synthetic-secret was rejected for synthetic meeting audio.",
+            ],
+        ])
+
+        let diagnostic = OpenAIRequestDiagnostics.failure(
+            request: request,
+            response: response,
+            responseData: responseData,
+            transportError: URLError(.timedOut)
+        )
+
+        XCTAssertEqual(diagnostic.endpoint, "audio_transcriptions")
+        XCTAssertEqual(diagnostic.statusCode, 401)
+        XCTAssertEqual(diagnostic.transport, "url")
+        XCTAssertEqual(diagnostic.transportCode, URLError.timedOut.rawValue)
+        XCTAssertEqual(diagnostic.requestID, "req_synthetic")
+        XCTAssertEqual(diagnostic.apiErrorType, "invalid_request_error")
+        XCTAssertEqual(diagnostic.apiErrorCode, "invalid_api_key")
+        XCTAssertFalse(String(describing: diagnostic).contains("sk-synthetic-secret"))
+        XCTAssertFalse(String(describing: diagnostic).contains("synthetic meeting audio"))
+    }
+
     func testRateLimitBecomesAnActionableInsightFailure() async throws {
         let client = RecordingOpenAIHTTPClient(statusCode: 429, responseData: Data())
         let generator = OpenAIInsightGenerator(
@@ -385,6 +448,91 @@ final class OpenAIInsightAdapterTests: XCTestCase {
                 ]],
             ]
         )
+    }
+}
+
+private final class EarlyUnauthorizedHTTPServer: @unchecked Sendable {
+    private let listener: NWListener
+    private let queue = DispatchQueue(label: "rio.tests.unauthorized-http-server")
+    private let lock = NSLock()
+    private var connections: [NWConnection] = []
+    private var startContinuation: CheckedContinuation<URL, any Error>?
+
+    init() throws {
+        listener = try NWListener(using: .tcp, on: .any)
+        listener.newConnectionHandler = { [weak self] connection in
+            self?.accept(connection)
+        }
+    }
+
+    func start() async throws -> URL {
+        try await withCheckedThrowingContinuation { continuation in
+            lock.withLock {
+                startContinuation = continuation
+            }
+            listener.stateUpdateHandler = { [weak self] state in
+                self?.handle(state)
+            }
+            listener.start(queue: queue)
+        }
+    }
+
+    func stop() {
+        listener.cancel()
+        let activeConnections = lock.withLock {
+            let active = connections
+            connections.removeAll()
+            return active
+        }
+        activeConnections.forEach { $0.cancel() }
+    }
+
+    private func handle(_ state: NWListener.State) {
+        switch state {
+        case .ready:
+            guard let port = listener.port else { return }
+            resumeStart(with: .success(
+                URL(string: "http://127.0.0.1:\(port.rawValue)/v1/audio/transcriptions")!
+            ))
+        case .failed(let error):
+            resumeStart(with: .failure(error))
+        default:
+            break
+        }
+    }
+
+    private func resumeStart(with result: Result<URL, any Error>) {
+        let continuation = lock.withLock {
+            defer { startContinuation = nil }
+            return startContinuation
+        }
+        continuation?.resume(with: result)
+    }
+
+    private func accept(_ connection: NWConnection) {
+        lock.withLock {
+            connections.append(connection)
+        }
+        connection.start(queue: queue)
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 4_096) {
+            [weak self, weak connection] _, _, _, _ in
+            guard let self, let connection else { return }
+            let body = """
+            {"error":{"type":"invalid_request_error","code":"invalid_api_key","message":"Synthetic secret-bearing message that diagnostics must ignore."}}
+            """
+            let response = """
+            HTTP/1.1 401 Unauthorized\r
+            Content-Type: application/json\r
+            Content-Length: \(body.utf8.count + 32)\r
+            x-request-id: req_synthetic\r
+            Connection: keep-alive\r
+            \r
+            \(body)
+            """
+            connection.send(content: Data(response.utf8), completion: .contentProcessed { _ in
+                _ = self
+            })
+        }
     }
 }
 

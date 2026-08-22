@@ -182,7 +182,7 @@ All queues and buffers are bounded:
 - The local meeting history bounds meeting count, transcript segment count, transcript text bytes, and card count, and removes records older than two days.
 - In-flight API requests are cancelled and their in-memory request context is released when listening stops.
 
-Diagnostics may record durations, queue depth, model availability, and error codes. They must never record audio, transcript text, generated insight text, or other meeting content.
+Diagnostics may record durations, queue depth, model availability, and error codes. Failed OpenAI requests record only a fixed endpoint label, HTTP status, transport category and code, sanitized OpenAI request ID, and sanitized API error type and code. The HTTP transport observes response headers, response data, and task metrics separately so an early server rejection remains available even when URLSession later reports an upload timeout. Diagnostics never record request or response bodies, free-form API error messages, the API key, audio, transcript text, generated insight text, prompts, or other meeting content.
 
 The user-provided API key is held by the macOS Keychain in every build configuration rather than the meeting-data lifecycle and is never copied into `UserDefaults`, files, logs, or environment-dependent runtime configuration. The two-day local meeting history is the only persisted meeting-derived content and lives in an atomically written application-support JSON file.
 

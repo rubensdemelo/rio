@@ -1,4 +1,5 @@
 import Foundation
+import OSLog
 
 struct OpenAIAPIConfiguration: Sendable, Equatable {
     static let defaultModel = "gpt-5.6-terra"
@@ -33,18 +34,267 @@ protocol OpenAIHTTPClient: Sendable {
 }
 
 struct URLSessionOpenAIHTTPClient: OpenAIHTTPClient {
-    private let session: URLSession
+    private let transport: OpenAIURLSessionTransport
 
     init(session: URLSession = .shared) {
-        self.session = session
+        transport = OpenAIURLSessionTransport(configuration: session.configuration)
     }
 
     func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
-        let (data, response) = try await session.data(for: request)
-        guard let response = response as? HTTPURLResponse else {
-            throw OpenAIHTTPError.invalidResponse
+        try await transport.data(for: request)
+    }
+}
+
+private final class OpenAIURLSessionTransport: NSObject, URLSessionDataDelegate, @unchecked Sendable {
+    private struct PendingRequest {
+        let request: URLRequest
+        let continuation: CheckedContinuation<(Data, HTTPURLResponse), any Error>
+        var response: HTTPURLResponse?
+        var responseData = Data()
+    }
+
+    private let lock = NSLock()
+    private var pendingRequests: [Int: PendingRequest] = [:]
+    private var session: URLSession!
+
+    init(configuration: URLSessionConfiguration) {
+        super.init()
+        session = URLSession(configuration: configuration, delegate: self, delegateQueue: nil)
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        let cancellation = OpenAIRequestCancellation()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                let task: URLSessionTask
+                if let body = request.httpBody {
+                    var uploadRequest = request
+                    uploadRequest.httpBody = nil
+                    task = session.uploadTask(with: uploadRequest, from: body)
+                } else {
+                    task = session.dataTask(with: request)
+                }
+                lock.withLock {
+                    pendingRequests[task.taskIdentifier] = PendingRequest(
+                        request: request,
+                        continuation: continuation,
+                        response: nil
+                    )
+                }
+                cancellation.install(task)
+                task.resume()
+            }
+        } onCancel: {
+            cancellation.cancel()
         }
-        return (data, response)
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        didReceive response: URLResponse,
+        completionHandler: @escaping (URLSession.ResponseDisposition) -> Void
+    ) {
+        lock.withLock {
+            guard var pending = pendingRequests[dataTask.taskIdentifier] else { return }
+            pending.response = response as? HTTPURLResponse
+            pendingRequests[dataTask.taskIdentifier] = pending
+        }
+        completionHandler(.allow)
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        dataTask: URLSessionDataTask,
+        didReceive data: Data
+    ) {
+        lock.withLock {
+            guard var pending = pendingRequests[dataTask.taskIdentifier] else { return }
+            pending.responseData.append(data)
+            pendingRequests[dataTask.taskIdentifier] = pending
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didFinishCollecting metrics: URLSessionTaskMetrics
+    ) {
+        guard let response = metrics.transactionMetrics
+            .compactMap({ $0.response as? HTTPURLResponse })
+            .last else {
+            return
+        }
+        lock.withLock {
+            guard var pending = pendingRequests[task.taskIdentifier] else { return }
+            pending.response = response
+            pendingRequests[task.taskIdentifier] = pending
+        }
+    }
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: (any Error)?
+    ) {
+        guard let pending = lock.withLock({
+            pendingRequests.removeValue(forKey: task.taskIdentifier)
+        }) else {
+            return
+        }
+
+        if let response = pending.response,
+           !(200...299).contains(response.statusCode) {
+            OpenAIRequestDiagnostics.logFailure(
+                request: pending.request,
+                response: response,
+                responseData: pending.responseData,
+                transportError: error
+            )
+            pending.continuation.resume(
+                throwing: OpenAIHTTPError.unexpectedStatus(response.statusCode)
+            )
+            return
+        }
+
+        if let error {
+            OpenAIRequestDiagnostics.logFailure(
+                request: pending.request,
+                response: pending.response,
+                responseData: pending.responseData,
+                transportError: error
+            )
+            pending.continuation.resume(throwing: error)
+            return
+        }
+
+        guard let response = pending.response else {
+            OpenAIRequestDiagnostics.logFailure(
+                request: pending.request,
+                response: nil,
+                responseData: pending.responseData,
+                transportError: nil
+            )
+            pending.continuation.resume(throwing: OpenAIHTTPError.invalidResponse)
+            return
+        }
+
+        pending.continuation.resume(returning: (pending.responseData, response))
+    }
+}
+
+private final class OpenAIRequestCancellation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var task: URLSessionTask?
+    private var isCancelled = false
+
+    func install(_ task: URLSessionTask) {
+        let shouldCancel = lock.withLock {
+            self.task = task
+            return isCancelled
+        }
+        if shouldCancel {
+            task.cancel()
+        }
+    }
+
+    func cancel() {
+        let activeTask = lock.withLock {
+            isCancelled = true
+            return self.task
+        }
+        activeTask?.cancel()
+    }
+}
+
+struct OpenAIRequestFailureDiagnostic: Sendable, Equatable {
+    let endpoint: String
+    let statusCode: Int
+    let transport: String
+    let transportCode: Int
+    let requestID: String
+    let apiErrorType: String
+    let apiErrorCode: String
+}
+
+enum OpenAIRequestDiagnostics {
+    private struct APIErrorEnvelope: Decodable {
+        struct APIError: Decodable {
+            let type: String?
+            let code: String?
+        }
+
+        let error: APIError
+    }
+
+    private static let logger = Logger(subsystem: "com.rio.app", category: "openai")
+
+    static func logFailure(
+        request: URLRequest,
+        response: HTTPURLResponse?,
+        responseData: Data,
+        transportError: (any Error)?
+    ) {
+        let diagnostic = failure(
+            request: request,
+            response: response,
+            responseData: responseData,
+            transportError: transportError
+        )
+
+        logger.error(
+            "OpenAI request failed endpoint=\(diagnostic.endpoint, privacy: .public) http_status=\(diagnostic.statusCode) transport=\(diagnostic.transport, privacy: .public) transport_code=\(diagnostic.transportCode) request_id=\(diagnostic.requestID, privacy: .public) api_error_type=\(diagnostic.apiErrorType, privacy: .public) api_error_code=\(diagnostic.apiErrorCode, privacy: .public)"
+        )
+    }
+
+    static func failure(
+        request: URLRequest,
+        response: HTTPURLResponse?,
+        responseData: Data,
+        transportError: (any Error)?
+    ) -> OpenAIRequestFailureDiagnostic {
+        let apiError = try? JSONDecoder().decode(APIErrorEnvelope.self, from: responseData).error
+        let transport = transportDetails(for: transportError)
+        return OpenAIRequestFailureDiagnostic(
+            endpoint: endpointLabel(for: request.url),
+            statusCode: response?.statusCode ?? 0,
+            transport: transport.name,
+            transportCode: transport.code,
+            requestID: safeToken(response?.value(forHTTPHeaderField: "x-request-id")) ?? "none",
+            apiErrorType: safeToken(apiError?.type) ?? "none",
+            apiErrorCode: safeToken(apiError?.code) ?? "none"
+        )
+    }
+
+    private static func endpointLabel(for url: URL?) -> String {
+        switch url?.path {
+        case "/v1/audio/transcriptions": "audio_transcriptions"
+        case "/v1/responses": "responses"
+        default: "unknown"
+        }
+    }
+
+    private static func transportDetails(for error: (any Error)?) -> (name: String, code: Int) {
+        guard let error else { return ("none", 0) }
+        let nsError = error as NSError
+        if nsError.domain == NSURLErrorDomain {
+            return ("url", nsError.code)
+        }
+        return ("other", nsError.code)
+    }
+
+    private static func safeToken(_ value: String?) -> String? {
+        guard let value,
+              !value.isEmpty,
+              value.utf8.count <= 128,
+              value.unicodeScalars.allSatisfy({
+                  CharacterSet.alphanumerics
+                      .union(CharacterSet(charactersIn: "._-"))
+                      .contains($0)
+              }) else {
+            return nil
+        }
+        return value
     }
 }
 
