@@ -218,11 +218,16 @@ enum RioCompositionRoot {
     static func makeLiveController(
         insightHistory: InsightHistoryStore? = nil,
         meetingHistory: MeetingHistoryStore? = nil,
-        meetingProfileSettings: MeetingProfileSettings? = nil
+        meetingProfileSettings: MeetingProfileSettings? = nil,
+        apiKeyStore: any OpenAIAPIKeyStore = KeychainOpenAIAPIKeyStore()
     ) -> LiveSessionController {
         let localeIdentifier = defaultLocaleIdentifier
         let capture = CoreAudioSystemAudioCapture()
+        let configurationProvider: @Sendable () -> OpenAIAPIConfiguration? = {
+            OpenAIAPIConfiguration.stored(keyStore: apiKeyStore)
+        }
         let speechRecognizer = OpenAITranscriptionAdapter(
+            configurationProvider: configurationProvider,
             batchDuration: meetingProfileSettings?.selection.insightPace.audioBatchDuration
                 ?? ListeningCadence.thirtySeconds.audioBatchDuration
         )
@@ -240,7 +245,9 @@ enum RioCompositionRoot {
             }
         )
         let insightStore = InMemoryInsightStore()
-        let insightGenerator: any SessionInsightGenerator = OpenAIInsightGenerator()
+        let insightGenerator: any SessionInsightGenerator = OpenAIInsightGenerator(
+            configurationProvider: configurationProvider
+        )
         let historyRecorder: any MeetingHistoryRecording = meetingHistory.map {
             MeetingHistoryStoreRecorder(store: $0)
         } ?? NoopMeetingHistoryRecorder()

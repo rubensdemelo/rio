@@ -25,12 +25,19 @@ struct RioApp: App {
     init() {
         let meetingHistory = MeetingHistoryStore()
         let meetingProfileSettings = MeetingProfileSettings()
+        let apiKeyStore: any OpenAIAPIKeyStore
+#if DEBUG
+        apiKeyStore = InMemoryOpenAIAPIKeyStore()
+#else
+        apiKeyStore = KeychainOpenAIAPIKeyStore()
+#endif
         let sessionController = RioCompositionRoot.makeLiveController(
             meetingHistory: meetingHistory,
-            meetingProfileSettings: meetingProfileSettings
+            meetingProfileSettings: meetingProfileSettings,
+            apiKeyStore: apiKeyStore
         )
         _sessionController = StateObject(wrappedValue: sessionController)
-        let providerSettings = OpenAIProviderSettings()
+        let providerSettings = OpenAIProviderSettings(keyStore: apiKeyStore)
         _providerSettings = StateObject(wrappedValue: providerSettings)
         _meetingHistory = StateObject(wrappedValue: meetingHistory)
         let panelRouter = RioPanelRouter()

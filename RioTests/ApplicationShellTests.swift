@@ -323,6 +323,17 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertNil(store.storedValue)
     }
 
+    func testInMemoryAPIKeyStoreTrimsAndRemovesTheDevelopmentCredential() throws {
+        let store = InMemoryOpenAIAPIKeyStore()
+
+        XCTAssertNil(try store.load())
+        try store.save("  test-key  ")
+        XCTAssertEqual(try store.load(), "test-key")
+
+        try store.remove()
+        XCTAssertNil(try store.load())
+    }
+
     func testMeetingAudioActionTargetsTheScreenRecordingPrivacyPane() {
         XCTAssertEqual(
             SystemSettingsOpener.systemAudioRecordingURL.absoluteString,

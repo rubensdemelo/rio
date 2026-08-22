@@ -997,7 +997,7 @@ private struct ListeningSetupView: View {
                     symbolName: "key.fill",
                     tint: .accentColor,
                     title: "OpenAI",
-                    detail: "Add an API key to transcribe meeting audio and generate insights. The key stays in your Mac’s Keychain."
+                    detail: "Add an API key to transcribe meeting audio and generate insights."
                 ) {
                     Button("Add API Key", action: openProviderSetup)
                         .buttonStyle(.borderedProminent)
@@ -1461,7 +1461,7 @@ private struct OpenAIProviderSetupView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This removes the key from your login Keychain. You can add it again later.")
+            Text("This removes the current API key. You can add it again later.")
         }
     }
 
@@ -1470,7 +1470,7 @@ private struct OpenAIProviderSetupView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("API Keys")
                     .font(.title2.weight(.bold))
-                Text("Stored only in your login Keychain. They are never shown again.")
+                Text(providerSettings.storageDescription)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -1531,7 +1531,7 @@ private struct OpenAIAPIKeyDetailsView: View {
             VStack(alignment: .leading, spacing: 6) {
                 Text("OpenAI API key")
                     .font(.title2.weight(.bold))
-                Text("Stored only in your login Keychain. It is never shown again.")
+                Text(providerSettings.storageDescription)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -1583,7 +1583,7 @@ private struct OpenAIAPIKeyDetailsView: View {
             }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("This removes the key from your login Keychain. You can add it again later.")
+            Text("This removes the current API key. You can add it again later.")
         }
     }
 }

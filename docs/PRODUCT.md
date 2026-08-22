@@ -102,7 +102,7 @@ Rio must not guess an action-item owner. Owner attribution is validated only whe
 
 Rio uses OpenAI's `gpt-transcribe` API for speech-to-text and the Responses API for meeting understanding. Insight requests use a strict JSON Schema and Rio validates the returned updates before rendering cards. OpenAI is the default and only MVP provider. The current defaults are `gpt-5.6-terra` for insights and `gpt-transcribe` for transcription.
 
-Before listening, Rio checks system audio availability and whether the user has added an OpenAI API key in Provider settings. The key is stored only in the user's macOS Keychain, never in the app bundle, preferences, logs, or an environment variable. A missing or rejected key blocks listening with direct guidance. The UI retains the direct button to the System Audio Recording privacy pane. There are no macOS speech assets to install.
+Before listening, Rio checks system audio availability and whether the user has added an OpenAI API key in Provider settings. The release product stores the key only in the user's macOS Keychain, never in the app bundle, preferences, logs, or an environment variable. Development builds temporarily hold it only in memory so repeated launches do not prompt for Keychain access; that storage is replaced with Keychain storage during final release hardening. A missing or rejected key blocks listening with direct guidance. The UI retains the direct button to the System Audio Recording privacy pane. There are no macOS speech assets to install.
 
 Transcription is a cloud stage: Rio sends bounded in-memory WAV chunks to OpenAI, receives temporary finalized text, and immediately feeds it into the bounded insight context. TTS is not used because Rio never plays or generates meeting audio.
 
@@ -119,7 +119,7 @@ Transcription is a cloud stage: Rio sends bounded in-memory WAV chunks to OpenAI
 - The two-day local history contains meeting timing, finalized transcript segments, and generated card category, state, text, and save time; it never contains audio or guessed action-owner metadata.
 - The two-day local history also records the selected custom profile, or the general-guidance fallback, so a saved meeting can be interpreted in its original mode.
 - Entries older than two days are removed automatically, and the user can clear the local history at any time.
-- The user-provided OpenAI API key is retained separately in the macOS Keychain as configuration, not meeting data.
+- The user-provided OpenAI API key is retained separately in the macOS Keychain as configuration, not meeting data, in release builds. Development builds keep it only in memory and discard it on relaunch.
 - The bounded user-provided technical vocabulary is retained locally as
   configuration, not meeting data; it must not contain meeting notes or other
   meeting content.

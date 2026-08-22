@@ -88,6 +88,32 @@ struct KeychainOpenAIAPIKeyStore: OpenAIAPIKeyStore, Sendable {
     }
 }
 
+/// Development-only storage that avoids Keychain prompts while the app is being built.
+/// The value exists only for the current process and is never persisted.
+final class InMemoryOpenAIAPIKeyStore: OpenAIAPIKeyStore, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedValue: String?
+
+    func load() throws -> String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return storedValue
+    }
+
+    func save(_ key: String) throws {
+        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        lock.lock()
+        storedValue = trimmed.isEmpty ? nil : trimmed
+        lock.unlock()
+    }
+
+    func remove() throws {
+        lock.lock()
+        storedValue = nil
+        lock.unlock()
+    }
+}
+
 @MainActor
 final class OpenAIProviderSettings: ObservableObject {
     @Published var apiKey = ""
@@ -96,6 +122,14 @@ final class OpenAIProviderSettings: ObservableObject {
 
     let providerName = "OpenAI"
     private let keyStore: any OpenAIAPIKeyStore
+
+    var storageDescription: String {
+#if DEBUG
+        "Held only in memory during development. Enter it again after relaunch."
+#else
+        "Stored only in your login Keychain. It is never shown again."
+#endif
+    }
 
     init(keyStore: any OpenAIAPIKeyStore = KeychainOpenAIAPIKeyStore()) {
         self.keyStore = keyStore
@@ -110,7 +144,7 @@ final class OpenAIProviderSettings: ObservableObject {
             reload()
             return true
         } catch {
-            errorMessage = "Rio could not save your API key to the Keychain."
+            errorMessage = "Rio could not save your API key."
             return false
         }
     }
@@ -122,7 +156,7 @@ final class OpenAIProviderSettings: ObservableObject {
             errorMessage = nil
             isConfigured = false
         } catch {
-            errorMessage = "Rio could not remove your API key from the Keychain."
+            errorMessage = "Rio could not remove your API key."
         }
     }
 
@@ -132,7 +166,7 @@ final class OpenAIProviderSettings: ObservableObject {
             errorMessage = nil
         } catch {
             isConfigured = false
-            errorMessage = "Rio could not access your API key in the Keychain."
+            errorMessage = "Rio could not access your API key."
         }
     }
 }
