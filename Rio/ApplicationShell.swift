@@ -2,14 +2,26 @@ import Combine
 import AppKit
 import SwiftUI
 
-extension Notification.Name {
-    static let rioOpenProfiles = Notification.Name("Rio.openProfiles")
-    static let rioOpenRecentMeetings = Notification.Name("Rio.openRecentMeetings")
-}
-
 enum RioLaunchPresentation {
     static let activationPolicy: NSApplication.ActivationPolicy = .accessory
     static let opensMainWindowOnLaunch = false
+}
+
+enum RioWindow: String {
+    case main
+    case profiles
+    case recentMeetings = "recent-meetings"
+}
+
+@MainActor
+struct RioMenuWindowRouter {
+    let openWindow: (String) -> Void
+    let activate: () -> Void
+
+    func open(_ window: RioWindow) {
+        openWindow(window.rawValue)
+        activate()
+    }
 }
 
 @MainActor
@@ -31,155 +43,6 @@ final class RioPanelRouter: ObservableObject {
         presentedPanel = .profiles
     }
 
-}
-
-@MainActor
-final class RioStatusItemController: NSObject, ObservableObject, NSMenuDelegate {
-    private let controller: any SessionShellControlling
-    private let providerSettings: OpenAIProviderSettings
-    private let meetingProfileSettings: MeetingProfileSettings
-    private let panelRouter: RioPanelRouter
-    private(set) var statusItem: NSStatusItem
-    private(set) var menu = NSMenu()
-
-    private lazy var startItem = NSMenuItem(
-        title: "Start Listening",
-        action: #selector(startListening),
-        keyEquivalent: ""
-    )
-
-    init(
-        controller: any SessionShellControlling,
-        providerSettings: OpenAIProviderSettings,
-        meetingProfileSettings: MeetingProfileSettings,
-        panelRouter: RioPanelRouter
-    ) {
-        self.controller = controller
-        self.providerSettings = providerSettings
-        self.meetingProfileSettings = meetingProfileSettings
-        self.panelRouter = panelRouter
-        self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        super.init()
-
-        let rioImage = (NSImage(named: "RioMenuBarIcon")?.copy() as? NSImage)
-            ?? NSImage(systemSymbolName: "waveform", accessibilityDescription: "Rio")
-        rioImage?.isTemplate = true
-        rioImage?.size = NSSize(width: 18, height: 18)
-        rioImage?.accessibilityDescription = "Rio"
-        statusItem.button?.image = rioImage
-        statusItem.button?.imagePosition = .imageOnly
-        statusItem.button?.toolTip = "Rio"
-        menu.delegate = self
-        menu.autoenablesItems = false
-        updateMenu()
-        statusItem.menu = menu
-    }
-
-    func menuWillOpen(_ menu: NSMenu) {
-        updateMenu()
-    }
-
-    private func updateMenu() {
-        menu.removeAllItems()
-
-        let openItem = NSMenuItem(
-            title: "Open Rio",
-            action: #selector(openRio),
-            keyEquivalent: ""
-        )
-        openItem.target = self
-        menu.addItem(openItem)
-
-        startItem.title = controller.primaryActionTitle
-        startItem.image = NSImage(
-            systemSymbolName: controller.status == .listening || controller.status == .processing
-                ? "stop.fill"
-                : "record.circle",
-            accessibilityDescription: nil
-        )
-        startItem.target = self
-        startItem.isEnabled = !controller.isPerformingPrimaryAction
-            && controller.status != .checkingAvailability
-            && (!isStartAction || (providerSettings.isConfigured && controller.isReadyToStartListening))
-        menu.addItem(startItem)
-
-        let manageProfilesItem = NSMenuItem(
-            title: "Manage Profiles…",
-            action: #selector(manageProfiles),
-            keyEquivalent: ""
-        )
-        manageProfilesItem.target = self
-        menu.addItem(manageProfilesItem)
-
-        let recentItem = NSMenuItem(
-            title: "Recent Meetings",
-            action: #selector(openRecentMeetings),
-            keyEquivalent: ""
-        )
-        recentItem.target = self
-        menu.addItem(recentItem)
-
-        let providerItem = NSMenuItem(
-            title: "Provider & API Key…",
-            action: #selector(openProviderSettings),
-            keyEquivalent: ""
-        )
-        providerItem.target = self
-        menu.addItem(providerItem)
-
-        menu.addItem(.separator())
-
-        let quitItem = NSMenuItem(title: "Quit Rio", action: #selector(quitRio), keyEquivalent: "q")
-        quitItem.target = self
-        menu.addItem(quitItem)
-    }
-
-    @objc private func startListening() {
-        Task { @MainActor in
-            await controller.performPrimaryAction()
-            updateMenu()
-        }
-    }
-
-    @objc private func openRio() {
-        activateMainWindow()
-    }
-
-    @objc private func manageProfiles() {
-        NotificationCenter.default.post(name: .rioOpenProfiles, object: nil)
-        activateMainWindow()
-    }
-
-    @objc private func openRecentMeetings() {
-        NotificationCenter.default.post(name: .rioOpenRecentMeetings, object: nil)
-        activateMainWindow()
-    }
-
-    @objc private func openProviderSettings() {
-        activateMainWindow()
-        panelRouter.showProvider()
-    }
-
-    @objc private func quitRio() {
-        NSApplication.shared.terminate(nil)
-    }
-
-    private func activateMainWindow() {
-        NSApp.activate(ignoringOtherApps: true)
-        guard let window = NSApp.windows.first(where: { $0.title == "Rio" }) else {
-            return
-        }
-        window.makeKeyAndOrderFront(nil)
-    }
-
-    private var isStartAction: Bool {
-        switch controller.status {
-        case .stopped, .interrupted, .unavailable:
-            true
-        case .checkingAvailability, .listening, .processing, .paused:
-            false
-        }
-    }
 }
 
 enum SystemSettingsOpener {
@@ -236,6 +99,90 @@ protocol SessionShellControlling: ObservableObject {
     func checkReadiness() async
     func performPrimaryAction() async
     func performPauseAction() async
+}
+
+struct RioMenuBarContent<Controller: SessionShellControlling>: View {
+    @ObservedObject private var controller: Controller
+    @ObservedObject private var providerSettings: OpenAIProviderSettings
+    @ObservedObject private var panelRouter: RioPanelRouter
+    @Environment(\.openWindow) private var openWindow
+
+    init(
+        controller: Controller,
+        providerSettings: OpenAIProviderSettings,
+        panelRouter: RioPanelRouter
+    ) {
+        self.controller = controller
+        self.providerSettings = providerSettings
+        self.panelRouter = panelRouter
+    }
+
+    var body: some View {
+        Button("Open Rio") {
+            windowRouter.open(.main)
+        }
+
+        Button {
+            Task { await controller.performPrimaryAction() }
+        } label: {
+            Label(controller.primaryActionTitle, systemImage: primaryActionSystemImage)
+        }
+        .disabled(!primaryActionIsEnabled)
+
+        if !providerSettings.isConfigured {
+            Text("Add an OpenAI API key to start listening")
+        } else if isStartAction && !controller.isReadyToStartListening {
+            Text("Open Rio to finish listening setup")
+        }
+
+        Button("Manage Profiles…") {
+            windowRouter.open(.profiles)
+        }
+
+        Button("Recent Meetings") {
+            windowRouter.open(.recentMeetings)
+        }
+
+        Button("Provider & API Key…") {
+            panelRouter.showProvider()
+            windowRouter.open(.main)
+        }
+
+        Divider()
+
+        Button("Quit Rio") {
+            NSApp.terminate(nil)
+        }
+        .keyboardShortcut("q")
+    }
+
+    private var windowRouter: RioMenuWindowRouter {
+        RioMenuWindowRouter(
+            openWindow: { openWindow(id: $0) },
+            activate: { NSApp.activate(ignoringOtherApps: true) }
+        )
+    }
+
+    private var primaryActionIsEnabled: Bool {
+        !controller.isPerformingPrimaryAction
+            && controller.status != .checkingAvailability
+            && (!isStartAction || (providerSettings.isConfigured && controller.isReadyToStartListening))
+    }
+
+    private var primaryActionSystemImage: String {
+        controller.status == .listening || controller.status == .processing
+            ? "stop.fill"
+            : "record.circle"
+    }
+
+    private var isStartAction: Bool {
+        switch controller.status {
+        case .stopped, .interrupted, .unavailable:
+            true
+        case .checkingAvailability, .listening, .processing, .paused:
+            false
+        }
+    }
 }
 
 @MainActor
@@ -477,12 +424,6 @@ struct RioView<Controller: SessionShellControlling>: View {
         }
         .onAppear {
             resizeMainWindowIfNeeded()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .rioOpenProfiles)) { _ in
-            openWindow(id: "profiles")
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .rioOpenRecentMeetings)) { _ in
-            openWindow(id: "recent-meetings")
         }
         .onChange(of: shouldShowSetup) { _, _ in
             resizeMainWindowIfNeeded()

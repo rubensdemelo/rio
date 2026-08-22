@@ -18,30 +18,20 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(router.presentedPanel, .profiles)
     }
 
-    func testStatusItemUsesNativeMenuRouting() {
-        let suiteName = "RioTests.StatusItemMenu.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let statusItemController = RioStatusItemController(
-            controller: FakeSessionController(),
-            providerSettings: OpenAIProviderSettings(keyStore: TestOpenAIAPIKeyStore()),
-            meetingProfileSettings: MeetingProfileSettings(defaults: defaults),
-            panelRouter: RioPanelRouter()
+    func testMenuWindowRouterCreatesSuppressedWindowsWhenNoneExistYet() {
+        var openedWindowIDs: [String] = []
+        var activationCount = 0
+        let router = RioMenuWindowRouter(
+            openWindow: { openedWindowIDs.append($0) },
+            activate: { activationCount += 1 }
         )
 
-        XCTAssertTrue(statusItemController.statusItem.menu === statusItemController.menu)
-        XCTAssertEqual(statusItemController.statusItem.button?.image?.isTemplate, true)
-        XCTAssertEqual(statusItemController.menu.items.map(\.title), [
-            "Open Rio",
-            "Start Listening",
-            "Manage Profiles…",
-            "Recent Meetings",
-            "Provider & API Key…",
-            "",
-            "Quit Rio",
-        ])
-        XCTAssertTrue(statusItemController.menu.items.filter { $0.action != nil }.allSatisfy { $0.target != nil })
+        router.open(.main)
+        router.open(.profiles)
+        router.open(.recentMeetings)
+
+        XCTAssertEqual(openedWindowIDs, ["main", "profiles", "recent-meetings"])
+        XCTAssertEqual(activationCount, 3)
     }
 
     func testLiveCompositionUsesFixedEnglishUSLocale() {

@@ -15,7 +15,6 @@ struct RioApp: App {
     @StateObject private var meetingHistory: MeetingHistoryStore
     @StateObject private var panelRouter: RioPanelRouter
     @StateObject private var meetingProfileSettings: MeetingProfileSettings
-    @StateObject private var statusItemController: RioStatusItemController
 
     init() {
         let meetingHistory = MeetingHistoryStore()
@@ -33,14 +32,6 @@ struct RioApp: App {
         let panelRouter = RioPanelRouter()
         _panelRouter = StateObject(wrappedValue: panelRouter)
         _meetingProfileSettings = StateObject(wrappedValue: meetingProfileSettings)
-        _statusItemController = StateObject(
-            wrappedValue: RioStatusItemController(
-                controller: sessionController,
-                providerSettings: providerSettings,
-                meetingProfileSettings: meetingProfileSettings,
-                panelRouter: panelRouter
-            )
-        )
 
         Task { @MainActor in
             await sessionController.checkReadiness()
@@ -48,6 +39,18 @@ struct RioApp: App {
     }
 
     var body: some Scene {
+        MenuBarExtra {
+            RioMenuBarContent(
+                controller: sessionController,
+                providerSettings: providerSettings,
+                panelRouter: panelRouter
+            )
+        } label: {
+            Image("RioMenuBarIcon")
+                .accessibilityLabel("Rio")
+        }
+        .menuBarExtraStyle(.menu)
+
         Window("Rio", id: "main") {
             RioView(controller: sessionController)
                 .environmentObject(providerSettings)
