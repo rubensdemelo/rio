@@ -462,7 +462,7 @@ struct RioView<Controller: SessionShellControlling>: View {
             idealWidth: 560,
             maxWidth: 720,
             minHeight: RioMainWindowSizing.minimumContentHeight(
-                apiKeyOnly: !providerSettings.isConfigured,
+                apiKeyOnly: setupNeedsOnlyAPIKey,
                 needsSetup: shouldShowSetup
             ),
             alignment: .topLeading
@@ -499,6 +499,10 @@ struct RioView<Controller: SessionShellControlling>: View {
         !providerSettings.isConfigured || controller.readiness?.isReady == false
     }
 
+    private var setupNeedsOnlyAPIKey: Bool {
+        !providerSettings.isConfigured
+    }
+
     private func resizeMainWindowIfNeeded() {
         DispatchQueue.main.async {
             guard let window = NSApp.windows.first(where: { $0.title == "Rio" }) else {
@@ -506,7 +510,7 @@ struct RioView<Controller: SessionShellControlling>: View {
             }
 
             let targetHeight = RioMainWindowSizing.windowHeight(
-                apiKeyOnly: !providerSettings.isConfigured,
+                apiKeyOnly: setupNeedsOnlyAPIKey,
                 needsSetup: shouldShowSetup
             )
             guard abs(window.frame.height - targetHeight) > 1 else {
@@ -521,13 +525,17 @@ struct RioView<Controller: SessionShellControlling>: View {
     }
 
     private var sessionHeader: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Spacer(minLength: 20)
-                sessionAction
-            }
+        Group {
+            if providerSettings.isConfigured {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        Spacer(minLength: 20)
+                        sessionAction
+                    }
 
-            meetingProfileControl
+                    meetingProfileControl
+                }
+            }
         }
     }
 
@@ -673,7 +681,7 @@ struct RioView<Controller: SessionShellControlling>: View {
 
     @ViewBuilder
     private var sessionAction: some View {
-        if isStartAction && !isReadyForListening {
+        if isStartAction && !isReadyForListening && providerSettings.isConfigured {
             Button("Set Up") {
                 openSetup()
             }
@@ -1005,28 +1013,18 @@ private struct ListeningSetupView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Before listening")
-                .font(.title3.weight(.semibold))
-                .padding(.bottom, 12)
-
             if showsProviderSetup {
                 setupRow(
-                    symbolName: "key.fill",
-                    tint: .accentColor,
-                    title: "OpenAI",
-                    detail: "Add an API key to transcribe meeting audio and generate insights."
+                    symbolName: "exclamationmark.circle.fill",
+                    tint: .red,
+                    title: "OpenAI API key",
+                    detail: nil
                 ) {
-                    Button("Add API Key", action: openProviderSetup)
+                    Button("Add API key", action: openProviderSetup)
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
                 }
-            }
-
-            if showsProviderSetup, !unmetChecks.isEmpty {
-                Divider().padding(.vertical, 12)
-            }
-
-            if !unmetChecks.isEmpty {
+            } else if !unmetChecks.isEmpty {
                 ForEach(Array(unmetChecks.enumerated()), id: \.element.id) { index, check in
                     if index > 0 {
                         Divider().padding(.vertical, 12)
@@ -1036,19 +1034,20 @@ private struct ListeningSetupView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor))
-        )
+        .padding(showsProviderSetup ? 0 : 16)
+        .background {
+            if !showsProviderSetup {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color(nsColor: .controlBackgroundColor))
+            }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Listening prerequisites")
     }
 
     private var unmetChecks: [PrerequisiteCheck] {
-        readiness?.checks.filter {
-            $0.reason != nil && !(showsProviderSetup && $0.kind == .openAI)
-        } ?? []
+        guard !showsProviderSetup else { return [] }
+        return readiness?.checks.filter { $0.reason != nil } ?? []
     }
 
     private func prerequisiteRow(_ check: PrerequisiteCheck) -> some View {
@@ -1074,7 +1073,7 @@ private struct ListeningSetupView: View {
         symbolName: String,
         tint: Color,
         title: String,
-        detail: String,
+        detail: String?,
         @ViewBuilder action: () -> Action
     ) -> some View {
         HStack(alignment: .top, spacing: 12) {
@@ -1086,11 +1085,13 @@ private struct ListeningSetupView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.body.weight(.medium))
-                Text(detail)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineSpacing(1)
-                    .fixedSize(horizontal: false, vertical: true)
+                if let detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineSpacing(1)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
             Spacer(minLength: 12)
@@ -1459,7 +1460,14 @@ private struct OpenAIProviderSetupView: View {
             if isShowingKeyDetails {
                 OpenAIAPIKeyDetailsView(
                     didChangeConfiguration: didChangeConfiguration,
-                    closeDetails: { isShowingKeyDetails = false }
+                    closeDetails: { isShowingKeyDetails = false },
+                    isInitialSetup: false
+                )
+            } else if !providerSettings.isConfigured {
+                OpenAIAPIKeyDetailsView(
+                    didChangeConfiguration: didChangeConfiguration,
+                    closeDetails: { dismiss() },
+                    isInitialSetup: true
                 )
             } else {
                 keyOverview
@@ -1484,13 +1492,8 @@ private struct OpenAIProviderSetupView: View {
 
     private var keyOverview: some View {
         VStack(alignment: .leading, spacing: 24) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("API Keys")
-                    .font(.title2.weight(.bold))
-                Text(providerSettings.storageDescription)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
+            Text("OpenAI API key")
+                .font(.title2.weight(.bold))
 
             Divider()
 
@@ -1542,23 +1545,15 @@ private struct OpenAIAPIKeyDetailsView: View {
 
     let didChangeConfiguration: () -> Void
     let closeDetails: () -> Void
+    let isInitialSetup: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 24) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text("OpenAI API key")
-                    .font(.title2.weight(.bold))
-                Text(providerSettings.storageDescription)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
+            Text("OpenAI API key")
+                .font(.title2.weight(.bold))
 
-            VStack(alignment: .leading, spacing: 8) {
-                Text("API key")
-                    .font(.headline)
-                SecureField("Paste a new API key", text: $providerSettings.apiKey)
-                    .textFieldStyle(.roundedBorder)
-            }
+            SecureField("Paste API key", text: $providerSettings.apiKey)
+                .textFieldStyle(.roundedBorder)
 
             if let errorMessage = providerSettings.errorMessage {
                 Text(errorMessage)
@@ -1567,7 +1562,7 @@ private struct OpenAIAPIKeyDetailsView: View {
             }
 
             HStack {
-                if providerSettings.isConfigured {
+                if providerSettings.isConfigured && !isInitialSetup {
                     Button(role: .destructive) {
                         isConfirmingDeletion = true
                     } label: {
@@ -1577,15 +1572,26 @@ private struct OpenAIAPIKeyDetailsView: View {
                     .tint(.secondary)
                 }
                 Spacer()
-                Button("Back", action: closeDetails)
-                Button("Save key") {
-                    if providerSettings.save() {
-                        didChangeConfiguration()
-                        closeDetails()
+                if isInitialSetup {
+                    Button("Done") {
+                        if providerSettings.save() {
+                            didChangeConfiguration()
+                            closeDetails()
+                        }
                     }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(providerSettings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                } else {
+                    Button("Back", action: closeDetails)
+                    Button("Save key") {
+                        if providerSettings.save() {
+                            didChangeConfiguration()
+                            closeDetails()
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(providerSettings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-                .buttonStyle(.borderedProminent)
-                .disabled(providerSettings.apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
         .confirmationDialog(

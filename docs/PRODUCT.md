@@ -31,8 +31,10 @@ reopen the app or access those controls.
 The start listening action remains disabled while a blocking prerequisite is
 unavailable. Permission states that macOS can request or re-check only when
 capture starts remain actionable so the user can complete the permission flow.
-If setup is incomplete, the main window shows the prerequisite guidance and the
-menu-bar action stays unavailable until the blocking checks pass.
+If the OpenAI API key is missing, the main window shows only a red API-key
+state and one action to add it. Other prerequisite guidance appears after the
+key is configured, and the menu-bar action stays unavailable until the
+blocking checks pass.
 
 Before starting a session, the user may choose one configured custom meeting
 profile. Rio does not ship built-in profiles. If no custom profile exists, Rio

@@ -149,8 +149,9 @@ The start action remains disabled only when the readiness report contains a
 blocking prerequisite. Permission states that macOS can request or re-check
 only when capture starts remain actionable so the user can complete the
 permission flow. A missing or rejected API key is an explicit unavailable
-state; transient network or service errors are explicit transient failures,
-not a permissions issue.
+state shown as a red API-key state with one add-key action; other prerequisite
+guidance appears after the key is configured. Transient network or service
+errors are explicit transient failures, not a permissions issue.
 
 Each request has stable developer-authored instructions and one untrusted input containing three bounded data sections: retained recent meeting context, new finalized text, and the current insight-card state. New text drives additions while the current cards supply stable keys for updates and resolutions. The request asks the API for strict JSON Schema output; meeting text and generated card text never enter instructions. A conceptual result is:
 
