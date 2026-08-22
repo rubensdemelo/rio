@@ -56,12 +56,13 @@ for a meeting.
 
 While listening, Rio shows a compact live meeting-audio input level and the elapsed meeting offset reached by finalized transcription. This lets the user verify long-session progress without exposing live transcript text. If bounded capture or transcription backpressure would skip audio, Rio stops explicitly and explains that the continuous transcript prefix was saved as incomplete. The live insight list remains bounded and scrollable. The main window has one primary action: start listening or stop listening and clear the active session. Recent Meetings opens read-only transcripts and insights saved locally from the last two days. Saved transcript segments retain meeting-relative timestamps and can be filtered locally by text so a long completed meeting remains navigable; this is not AI search, editing, or export. A concise cue explains that audio is never retained and finalized transcript text is kept only for that two-day window.
 
-Each profile includes an Insight pace choice of 15, 30, or 45 seconds; 30
-seconds is the default for new profiles. This controls how much live meeting
-audio Rio groups before sending it for temporary transcription. Shorter
-choices produce quicker updates with more requests; longer choices use fewer
-requests and more context but make insights arrive later. A changed choice
-applies to the next listening session.
+Each profile includes a segmented Insight pace choice of 30, 60, or 90 seconds;
+30 seconds is the default for new profiles. This controls how much live meeting
+audio Rio groups before sending it for temporary transcription. Shorter choices
+produce quicker updates with more requests and smaller in-memory audio batches;
+longer choices use fewer requests and more context but increase temporary memory
+use and make insights arrive later. A changed choice applies to the next
+listening session.
 
 Each profile also includes an optional Technical vocabulary field. The user can
 enter concise product names, acronyms, versions, and error-code prefixes to

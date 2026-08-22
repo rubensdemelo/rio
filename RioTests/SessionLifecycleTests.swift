@@ -30,7 +30,7 @@ final class SessionLifecycleTests: XCTestCase {
             MeetingProfile.custom(
                 name: "Incident review",
                 guidance: "Prioritize evidence.",
-                insightPace: .fortyFiveSeconds,
+                insightPace: .ninetySeconds,
                 technicalVocabulary: "z/OS, IRLM"
             )
         )
@@ -40,7 +40,7 @@ final class SessionLifecycleTests: XCTestCase {
 
         let batchDuration = await speech.batchDuration()
         let transcriptionPrompt = await speech.transcriptionPrompt()
-        XCTAssertEqual(batchDuration, .seconds(45))
+        XCTAssertEqual(batchDuration, .seconds(90))
         XCTAssertEqual(transcriptionPrompt, "z/OS, IRLM")
     }
 

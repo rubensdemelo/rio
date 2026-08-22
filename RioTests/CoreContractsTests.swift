@@ -130,15 +130,15 @@ final class CoreContractsTests: XCTestCase {
         XCTAssertTrue(
             settings.updateProfileConfiguration(
                 id: profile.id,
-                insightPace: .fifteenSeconds,
+                insightPace: .sixtySeconds,
                 technicalVocabulary: "Db2, IRLM"
             )
         )
-        XCTAssertEqual(settings.selection.insightPace, .fifteenSeconds)
+        XCTAssertEqual(settings.selection.insightPace, .sixtySeconds)
         XCTAssertEqual(settings.selection.technicalVocabulary, "Db2, IRLM")
 
         let reloaded = MeetingProfileSettings(defaults: defaults)
-        XCTAssertEqual(reloaded.selection.insightPace, .fifteenSeconds)
+        XCTAssertEqual(reloaded.selection.insightPace, .sixtySeconds)
         XCTAssertEqual(reloaded.selection.technicalVocabulary, "Db2, IRLM")
     }
 

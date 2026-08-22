@@ -14,6 +14,14 @@ final class OpenAITranscriptionAdapterTests: XCTestCase {
         XCTAssertEqual(data.count, 50)
     }
 
+    func testWAVEncoderKeepsTranscriptionFilesBelowTheUploadLimit() {
+        let largestAllowedSampleCount =
+            (WAVEncoder.maximumFileByteCount - 44) / MemoryLayout<Int16>.size
+
+        XCTAssertTrue(WAVEncoder.canEncode(sampleCount: largestAllowedSampleCount))
+        XCTAssertFalse(WAVEncoder.canEncode(sampleCount: largestAllowedSampleCount + 1))
+    }
+
     func testTranscriptionSendsInMemoryWAVAndEmitsFinalizedText() async throws {
         let client = RecordingTranscriptionHTTPClient(text: " meeting decision ")
         let adapter = OpenAITranscriptionAdapter(

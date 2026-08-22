@@ -327,7 +327,7 @@ final class MeetingProfileSettings: ObservableObject {
         }
 
         let legacyCadence = defaults.object(forKey: ListeningCadenceSettings.storageKey)
-            .flatMap { ($0 as? Int).flatMap(ListeningCadence.init(rawValue:)) }
+            .flatMap { ($0 as? Int).flatMap(ListeningCadence.fromStoredSeconds) }
             ?? .thirtySeconds
         let legacyVocabulary = defaults.string(forKey: TranscriptionVocabularyConfiguration.storageKey) ?? ""
         defaults.set(true, forKey: legacyConfigurationMigrationKey)
@@ -396,14 +396,18 @@ final class TranscriptionVocabularySettings: ObservableObject {
 }
 
 enum ListeningCadence: Int, CaseIterable, Codable, Hashable, Identifiable, Sendable {
-    case fifteenSeconds = 15
     case thirtySeconds = 30
-    case fortyFiveSeconds = 45
+    case sixtySeconds = 60
+    case ninetySeconds = 90
 
     var id: Int { rawValue }
 
     var title: String {
         "\(rawValue) seconds"
+    }
+
+    var shortTitle: String {
+        "\(rawValue)s"
     }
 
     var audioBatchDuration: Duration {
@@ -412,13 +416,43 @@ enum ListeningCadence: Int, CaseIterable, Codable, Hashable, Identifiable, Senda
 
     var detail: String {
         switch self {
-        case .fifteenSeconds:
-            "Quicker updates with smaller audio batches. Rio uses more requests and less context per update."
         case .thirtySeconds:
-            "A balanced pace with more context per update and fewer requests."
-        case .fortyFiveSeconds:
-            "Fewer requests and fuller context, but insights arrive later and cover larger time windows."
+            "Fastest updates, with about two transcription requests per minute."
+        case .sixtySeconds:
+            "Fewer requests and more context, with about one transcription request per minute."
+        case .ninetySeconds:
+            "Fewest requests and most context, but insights can arrive noticeably later."
         }
+    }
+
+    static func fromStoredSeconds(_ seconds: Int) -> ListeningCadence? {
+        switch seconds {
+        case 15, 30:
+            .thirtySeconds
+        case 45, 60:
+            .sixtySeconds
+        case 90:
+            .ninetySeconds
+        default:
+            nil
+        }
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let seconds = try container.decode(Int.self)
+        guard let cadence = Self.fromStoredSeconds(seconds) else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "Unsupported listening cadence: \(seconds) seconds."
+            )
+        }
+        self = cadence
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
     }
 }
 
@@ -437,7 +471,7 @@ final class ListeningCadenceSettings: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         let storedSeconds = defaults.integer(forKey: Self.storageKey)
-        selection = ListeningCadence(rawValue: storedSeconds) ?? .thirtySeconds
+        selection = ListeningCadence.fromStoredSeconds(storedSeconds) ?? .thirtySeconds
     }
 }
 

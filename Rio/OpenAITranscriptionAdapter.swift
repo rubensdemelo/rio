@@ -36,9 +36,21 @@ private final class WAVAudioBatch: @unchecked Sendable {
         self.samples.append(contentsOf: samples)
         self.endOffset = endOffset
     }
+
+    func canAppend(sampleCount: Int) -> Bool {
+        WAVEncoder.canEncode(sampleCount: samples.count + sampleCount)
+    }
 }
 
 enum WAVEncoder {
+    // Leave headroom below the transcription endpoint's 25 MB file limit.
+    static let maximumFileByteCount = 24_000_000
+
+    static func canEncode(sampleCount: Int) -> Bool {
+        sampleCount >= 0
+            && sampleCount <= (maximumFileByteCount - 44) / MemoryLayout<Int16>.size
+    }
+
     static func encode(
         interleavedSamples: [Float],
         sampleRate: Int,
@@ -46,6 +58,7 @@ enum WAVEncoder {
     ) -> Data {
         precondition(sampleRate > 0)
         precondition(channelCount > 0)
+        precondition(canEncode(sampleCount: interleavedSamples.count))
 
         let byteCount = interleavedSamples.count * MemoryLayout<Int16>.size
         var data = Data()
@@ -368,9 +381,16 @@ actor OpenAITranscriptionAdapter: SessionSpeechRecognizer {
                 }
 
                 if let current = batch,
-                   (current.sampleRate != sampleRate || current.channelCount != chunk.channelCount || current.endOffset - current.startOffset >= batchDuration) {
+                   (current.sampleRate != sampleRate
+                    || current.channelCount != chunk.channelCount
+                    || current.endOffset - current.startOffset >= batchDuration
+                    || !current.canAppend(sampleCount: chunk.samples.count)) {
                     await queue.enqueue(current)
                     batch = nil
+                }
+
+                guard WAVEncoder.canEncode(sampleCount: chunk.samples.count) else {
+                    throw PipelineFailure.stage(.speechRecognition, .overloaded)
                 }
 
                 let startOffset = nextAudioOffset

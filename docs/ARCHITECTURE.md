@@ -100,11 +100,16 @@ never resumes after a hidden transcript gap and never accumulates unbounded
 audio in memory.
 
 The transcription batch duration is selected from the active profile's
-persisted `ListeningCadence` value: 15, 30, or 45 seconds. The setting is
+persisted `ListeningCadence` value: 30, 60, or 90 seconds. Legacy persisted
+15-second values migrate to 30 seconds and 45-second values migrate to 60
+seconds. The setting is
 applied before a new session starts and is not changed during an active
 session. Larger batches reduce request frequency and increase the amount of
 temporary in-memory audio held before a request, while delaying finalized text
-and insight generation.
+and insight generation. Rio also closes a batch before its encoded PCM WAV
+would exceed 24 MB, leaving headroom below the transcription API's 25 MB file
+limit; high-sample-rate devices may therefore produce a shorter batch than the
+selected cadence.
 
 The API key is the preflight requirement. A rejected key is unavailable; transient network and service failures are explicit transcription failures. TTS is not part of the pipeline.
 

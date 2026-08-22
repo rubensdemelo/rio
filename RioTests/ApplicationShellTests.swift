@@ -93,11 +93,23 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(settings.selection, .thirtySeconds)
         XCTAssertEqual(settings.selection.title, "30 seconds")
 
-        settings.selection = .fortyFiveSeconds
+        settings.selection = .ninetySeconds
 
         let reloadedSettings = ListeningCadenceSettings(defaults: defaults)
-        XCTAssertEqual(reloadedSettings.selection, .fortyFiveSeconds)
-        XCTAssertTrue(reloadedSettings.selection.detail.contains("Fewer requests"))
+        XCTAssertEqual(reloadedSettings.selection, .ninetySeconds)
+        XCTAssertTrue(reloadedSettings.selection.detail.contains("Fewest requests"))
+        XCTAssertEqual(ListeningCadence.allCases, [.thirtySeconds, .sixtySeconds, .ninetySeconds])
+    }
+
+    func testListeningCadenceMigratesLegacyStoredValues() throws {
+        XCTAssertEqual(
+            try JSONDecoder().decode(ListeningCadence.self, from: Data("15".utf8)),
+            .thirtySeconds
+        )
+        XCTAssertEqual(
+            try JSONDecoder().decode(ListeningCadence.self, from: Data("45".utf8)),
+            .sixtySeconds
+        )
     }
 
     func testStartListeningAllowsPermissionRequestButRequiresBlockingChecks() {

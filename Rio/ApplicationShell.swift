@@ -1065,43 +1065,11 @@ struct MeetingProfileSettingsView: View {
     @State private var addError: String?
 
     var body: some View {
-        NavigationSplitView {
-            VStack(spacing: 0) {
-                HStack {
-                    Text("Custom profiles")
-                        .font(.headline)
-                    Spacer()
-                    Button {
-                        selectedProfileID = nil
-                        showingNewProfile = true
-                    } label: {
-                        Label("New", systemImage: "plus")
-                    }
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.borderless)
-                    .help("Create a custom meeting profile")
-                    .accessibilityLabel("New profile")
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+        HStack(spacing: 0) {
+            profileList
 
-                Divider()
+            Divider()
 
-                List(selection: $selectedProfileID) {
-                    if meetingProfileSettings.profiles.isEmpty {
-                        Text("No profiles yet")
-                            .foregroundStyle(.secondary)
-                            .listRowSeparator(.hidden)
-                    } else {
-                        ForEach(meetingProfileSettings.profiles) { profile in
-                            Label(profile.name, systemImage: "person.crop.circle")
-                                .tag(profile.id)
-                        }
-                    }
-                }
-                .listStyle(.sidebar)
-            }
-        } detail: {
             VStack(spacing: 0) {
                 if showingNewProfile || selectedProfile == nil {
                     newProfileForm
@@ -1111,7 +1079,6 @@ struct MeetingProfileSettingsView: View {
                 }
             }
         }
-        .toolbar(removing: .sidebarToggle)
         .onAppear {
             selectInitialProfile()
         }
@@ -1139,6 +1106,45 @@ struct MeetingProfileSettingsView: View {
         return meetingProfileSettings.profiles.first(where: { $0.id == selectedProfileID })
     }
 
+    private var profileList: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text("Custom profiles")
+                    .font(.headline)
+                Spacer()
+                Button {
+                    selectedProfileID = nil
+                    showingNewProfile = true
+                } label: {
+                    Label("New", systemImage: "plus")
+                }
+                .labelStyle(.iconOnly)
+                .buttonStyle(.borderless)
+                .help("Create a custom meeting profile")
+                .accessibilityLabel("New profile")
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+
+            Divider()
+
+            List(selection: $selectedProfileID) {
+                if meetingProfileSettings.profiles.isEmpty {
+                    Text("No profiles yet")
+                        .foregroundStyle(.secondary)
+                        .listRowSeparator(.hidden)
+                } else {
+                    ForEach(meetingProfileSettings.profiles) { profile in
+                        Label(profile.name, systemImage: "person.crop.circle")
+                            .tag(profile.id)
+                    }
+                }
+            }
+            .listStyle(.sidebar)
+        }
+        .frame(width: 250)
+    }
+
     private var newProfileForm: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("A profile is saved on this Mac and applied to the next listening session.")
@@ -1159,7 +1165,7 @@ struct MeetingProfileSettingsView: View {
             }
 
             ProfileField(title: "Insight pace") {
-                ListeningCadenceSlider(selection: $newInsightPace)
+                ListeningCadencePicker(selection: $newInsightPace)
             }
 
             ProfileField(title: "Technical vocabulary (optional)") {
@@ -1268,7 +1274,7 @@ private struct MeetingProfileEditorRow: View {
             }
 
             ProfileField(title: "Insight pace") {
-                ListeningCadenceSlider(selection: $insightPace)
+                ListeningCadencePicker(selection: $insightPace)
             }
 
             ProfileField(title: "Technical vocabulary (optional)") {
@@ -1344,41 +1350,21 @@ private struct ProfileField<Content: View>: View {
     }
 }
 
-private struct ListeningCadenceSlider: View {
+private struct ListeningCadencePicker: View {
     @Binding var selection: ListeningCadence
-
-    private let minimumCadence = ListeningCadence.allCases.first!
-    private let maximumCadence = ListeningCadence.allCases.last!
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("Update insights every")
-                Spacer()
-                Text(selection.title)
-                    .foregroundStyle(.secondary)
+            Picker("Update insights every", selection: $selection) {
+                ForEach(ListeningCadence.allCases) { cadence in
+                    Text(cadence.shortTitle)
+                        .tag(cadence)
+                }
             }
-
-            Slider(
-                value: Binding(
-                    get: { Double(selection.rawValue) },
-                    set: { newValue in
-                        selection = ListeningCadence(rawValue: Int(newValue.rounded())) ?? selection
-                    }
-                ),
-                in: Double(minimumCadence.rawValue)...Double(maximumCadence.rawValue),
-                step: 15
-            )
+            .pickerStyle(.segmented)
+            .labelsHidden()
             .accessibilityLabel("Update insights every")
             .accessibilityValue(selection.title)
-
-            HStack {
-                Text(minimumCadence.title)
-                Spacer()
-                Text(maximumCadence.title)
-            }
-            .font(.caption)
-            .foregroundStyle(.secondary)
 
             Text(selection.detail)
                 .font(.callout)
