@@ -583,13 +583,9 @@ struct RioView<Controller: SessionShellControlling>: View {
     private var meetingProfileControl: some View {
         HStack(spacing: 8) {
             if meetingProfileSettings.profiles.isEmpty {
-                Label("General meeting guidance", systemImage: "person.crop.circle")
+                Text("General meeting guidance")
                     .lineLimit(1)
             } else {
-                Image(systemName: "person.crop.circle")
-                    .foregroundStyle(.secondary)
-                    .accessibilityHidden(true)
-
                 Picker("Meeting profile", selection: $meetingProfileSettings.selection) {
                     ForEach(meetingProfileSettings.profiles) { profile in
                         Text(profile.title).tag(profile)
