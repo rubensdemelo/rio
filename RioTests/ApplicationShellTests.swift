@@ -1,3 +1,4 @@
+import Security
 import XCTest
 
 @MainActor
@@ -373,6 +374,12 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertTrue(
             OpenAIAPIKeyStoreFactory.makeRuntimeStore() is KeychainOpenAIAPIKeyStore
         )
+    }
+
+    func testKeychainStoreUsesTheDataProtectionKeychain() {
+        let query = KeychainOpenAIAPIKeyStore().baseQuery
+
+        XCTAssertEqual(query[kSecUseDataProtectionKeychain as String] as? Bool, true)
     }
 
     func testMeetingAudioActionTargetsTheScreenRecordingPrivacyPane() {

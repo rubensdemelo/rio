@@ -106,7 +106,7 @@ Rio must not guess an action-item owner. Owner attribution is validated only whe
 
 Rio uses OpenAI's `gpt-transcribe` API for speech-to-text and the Responses API for meeting understanding. Insight requests use a strict JSON Schema and Rio validates the returned updates before rendering cards. OpenAI is the default and only MVP provider. The current defaults are `gpt-5.6-terra` for insights and `gpt-transcribe` for transcription.
 
-Before listening, Rio checks system audio availability and whether the user has added an OpenAI API key in Provider settings. Rio stores the key only in the user's macOS Keychain in every build configuration, never in the app bundle, preferences, logs, or an environment variable. A missing or rejected key blocks listening with direct guidance. The UI retains the direct button to the System Audio Recording privacy pane. There are no macOS speech assets to install.
+Before listening, Rio checks system audio availability and whether the user has added an OpenAI API key in Provider settings. Rio stores the key only in its app-isolated macOS data-protection Keychain group in every build configuration, never in the app bundle, preferences, logs, or an environment variable. A missing or rejected key blocks listening with direct guidance. The UI retains the direct button to the System Audio Recording privacy pane. There are no macOS speech assets to install.
 
 Transcription is a cloud stage: Rio sends bounded in-memory WAV chunks to OpenAI, receives temporary finalized text, and immediately feeds it into the bounded insight context. TTS is not used because Rio never plays or generates meeting audio.
 

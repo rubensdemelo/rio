@@ -215,6 +215,11 @@
 				TargetAttributes = {
 					A50000010000000000000001 = {
 						CreatedOnToolsVersion = 26.0;
+						SystemCapabilities = {
+							com.apple.Keychain = {
+								enabled = 1;
+							};
+						};
 					};
 					A50000010000000000000002 = {
 						CreatedOnToolsVersion = 26.0;

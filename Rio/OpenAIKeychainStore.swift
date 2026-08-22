@@ -85,11 +85,12 @@ struct KeychainOpenAIAPIKeyStore: OpenAIAPIKeyStore, Sendable {
         }
     }
 
-    private var baseQuery: [String: Any] {
+    var baseQuery: [String: Any] {
         [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
+            kSecUseDataProtectionKeychain as String: true,
         ]
     }
 }
@@ -104,7 +105,7 @@ final class OpenAIProviderSettings: ObservableObject {
     private let keyStore: any OpenAIAPIKeyStore
 
     var storageDescription: String {
-        "Stored only in your login Keychain. It is never shown again."
+        "Stored securely in your macOS Keychain. It is never shown again."
     }
 
     init(keyStore: any OpenAIAPIKeyStore = KeychainOpenAIAPIKeyStore()) {

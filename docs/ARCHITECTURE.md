@@ -69,7 +69,7 @@ The app requests the macOS System Audio Recording permission using
 must handle output changes, sleep and wake, permission revocation, and the
 selected meeting source disappearing.
 
-Development builds use a persistent Apple Development code-signing identity configured through the ignored `Config/Development.xcconfig`, so macOS privacy grants survive ordinary source rebuilds. The identity is managed by Xcode and is not stored in the repository. A changed bundle identifier, signing authority, or user privacy decision remains a legitimate reason for macOS to request access again.
+Development builds use a persistent Apple Development code-signing identity configured through the ignored `Config/Development.xcconfig`, so macOS privacy grants survive ordinary source rebuilds. The local build fails rather than launching an ad-hoc-signed app when that configuration exists but its development identity is unavailable. The identity is managed by Xcode and is not stored in the repository. A changed bundle identifier, signing authority, or user privacy decision remains a legitimate reason for macOS to request access again.
 
 The MVP does not save audio or create a recording output. Capture callbacks only
 make a bounded copy of the ephemeral Core Audio buffers and attempt a
@@ -184,7 +184,7 @@ All queues and buffers are bounded:
 
 Diagnostics may record durations, queue depth, model availability, and error codes. Failed OpenAI requests record only a fixed endpoint label, HTTP status, transport category and code, sanitized OpenAI request ID, and sanitized API error type and code. The HTTP transport observes response headers, response data, and task metrics separately so an early server rejection remains available even when URLSession later reports an upload timeout. Diagnostics never record request or response bodies, free-form API error messages, the API key, audio, transcript text, generated insight text, prompts, or other meeting content.
 
-The user-provided API key is held by the macOS Keychain in every build configuration rather than the meeting-data lifecycle and is never copied into `UserDefaults`, files, logs, or environment-dependent runtime configuration. The two-day local meeting history is the only persisted meeting-derived content and lives in an atomically written application-support JSON file.
+The user-provided API key is held by Rio's app-isolated macOS data-protection Keychain group in every build configuration rather than the meeting-data lifecycle and is never copied into `UserDefaults`, files, logs, or environment-dependent runtime configuration. Rio does not query or migrate the earlier file-based Keychain item because doing so can invoke a legacy per-binary access dialog; the user enters the key once into the isolated store. The two-day local meeting history is the only persisted meeting-derived content and lives in an atomically written application-support JSON file.
 
 ## Concurrency
 
