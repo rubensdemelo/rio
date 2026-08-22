@@ -25,6 +25,7 @@ final class ApplicationShellTests: XCTestCase {
         )
 
         XCTAssertTrue(statusItemController.statusItem.menu === statusItemController.menu)
+        XCTAssertEqual(statusItemController.statusItem.button?.image?.isTemplate, true)
         XCTAssertEqual(statusItemController.menu.items.map(\.title), [
             "Open Rio",
             "Start Listening",

@@ -56,11 +56,12 @@ final class RioStatusItemController: NSObject, ObservableObject, NSMenuDelegate 
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         super.init()
 
-        if let rioImage = NSApp.applicationIconImage.copy() as? NSImage {
-            rioImage.size = NSSize(width: 18, height: 18)
-            rioImage.accessibilityDescription = "Rio"
-            statusItem.button?.image = rioImage
-        }
+        let rioImage = (NSImage(named: "RioMenuBarIcon")?.copy() as? NSImage)
+            ?? NSImage(systemSymbolName: "waveform", accessibilityDescription: "Rio")
+        rioImage?.isTemplate = true
+        rioImage?.size = NSSize(width: 18, height: 18)
+        rioImage?.accessibilityDescription = "Rio"
+        statusItem.button?.image = rioImage
         statusItem.button?.imagePosition = .imageOnly
         statusItem.button?.toolTip = "Rio"
         menu.delegate = self
