@@ -416,6 +416,16 @@ final class FakeSessionController: SessionShellControlling {
     }
 }
 
+enum RioMainWindowSizing {
+    static func minimumContentHeight(apiKeyOnly: Bool, needsSetup: Bool) -> CGFloat {
+        apiKeyOnly ? 80 : needsSetup ? 420 : 180
+    }
+
+    static func windowHeight(apiKeyOnly: Bool, needsSetup: Bool) -> CGFloat {
+        apiKeyOnly ? 120 : needsSetup ? 480 : 240
+    }
+}
+
 struct RioView<Controller: SessionShellControlling>: View {
     @ObservedObject private var controller: Controller
     @Environment(\.openWindow) private var openWindow
@@ -451,7 +461,10 @@ struct RioView<Controller: SessionShellControlling>: View {
             minWidth: 480,
             idealWidth: 560,
             maxWidth: 720,
-            minHeight: shouldShowSetup ? 420 : 180,
+            minHeight: RioMainWindowSizing.minimumContentHeight(
+                apiKeyOnly: !providerSettings.isConfigured,
+                needsSetup: shouldShowSetup
+            ),
             alignment: .topLeading
         )
         .background(.clear)
@@ -492,7 +505,10 @@ struct RioView<Controller: SessionShellControlling>: View {
                 return
             }
 
-            let targetHeight: CGFloat = shouldShowSetup ? 480 : 240
+            let targetHeight = RioMainWindowSizing.windowHeight(
+                apiKeyOnly: !providerSettings.isConfigured,
+                needsSetup: shouldShowSetup
+            )
             guard abs(window.frame.height - targetHeight) > 1 else {
                 return
             }

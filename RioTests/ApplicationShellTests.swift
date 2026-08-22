@@ -43,6 +43,17 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(RioCompositionRoot.defaultLocaleIdentifier, "en-US")
     }
 
+    func testAPIKeyOnlyWindowUsesCompactHeight() {
+        XCTAssertEqual(
+            RioMainWindowSizing.minimumContentHeight(apiKeyOnly: true, needsSetup: true),
+            80
+        )
+        XCTAssertLessThanOrEqual(
+            RioMainWindowSizing.windowHeight(apiKeyOnly: true, needsSetup: true),
+            140
+        )
+    }
+
     func testListeningCadencePersistsAndExplainsItsTradeoff() {
         let suiteName = "RioTests.ListeningCadence.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
