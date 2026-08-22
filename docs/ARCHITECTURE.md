@@ -31,7 +31,7 @@ live SwiftUI insight cards
  bounded local meeting history (transcript + insights, two days only)
 
                          MenuBarExtra
-          start/stop, recent, provider, open, quit
+      start/stop, manage profiles, recent, provider, open, quit
 
                        non-content voice feedback
                        (input level + recognition activity)
@@ -208,7 +208,8 @@ scene by ID, and Quit Rio terminates the application. The main window uses a
 suppressed default launch behavior, so a ready app starts as a menu-bar-only
 experience and the window is opened only through an explicit menu action. The
 application-agent configuration keeps Rio out of the Dock and app switcher.
-The menu-bar scene has no meeting-data state of its own.
+The menu offers profile management without duplicating the selected profile as
+a passive row. The menu-bar scene has no meeting-data state of its own.
 
 The main window uses its content size rather than a fixed idle canvas. Its
 single listening action is always first; status feedback, setup guidance, and

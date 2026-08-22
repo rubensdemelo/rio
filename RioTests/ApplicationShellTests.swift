@@ -29,7 +29,6 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(statusItemController.menu.items.map(\.title), [
             "Open Rio",
             "Start Listening",
-            "Meeting Profile: General meeting guidance",
             "Manage Profiles…",
             "Recent Meetings",
             "Provider & API Key…",

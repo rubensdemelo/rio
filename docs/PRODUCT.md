@@ -20,7 +20,9 @@ and insight cards appear below that action only when they are useful.
 
 Rio also remains available from the macOS menu bar while the app is running. The
 menu-bar menu provides the same start/stop listening action as the main window,
-along with Recent Meetings, Provider & API Key, Open Rio, and Quit Rio actions.
+along with Manage Profiles, Recent Meetings, Provider & API Key, Open Rio, and
+Quit Rio actions. The menu does not repeat the selected meeting profile as a
+passive status row.
 When Rio launches, it keeps the main window suppressed so a ready setup starts
 with only the menu-bar item visible. Open Rio remains available whenever the
 full interface or setup guidance is needed. Rio is a menu-bar utility rather

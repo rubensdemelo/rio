@@ -98,16 +98,6 @@ final class RioStatusItemController: NSObject, ObservableObject, NSMenuDelegate 
             && (!isStartAction || (providerSettings.isConfigured && controller.isReadyToStartListening))
         menu.addItem(startItem)
 
-        let profileItem = NSMenuItem(
-            title: meetingProfileSettings.profiles.isEmpty
-                ? "Meeting Profile: General meeting guidance"
-                : "Meeting Profile: \(meetingProfileSettings.selection.title)",
-            action: nil,
-            keyEquivalent: ""
-        )
-        profileItem.isEnabled = false
-        menu.addItem(profileItem)
-
         let manageProfilesItem = NSMenuItem(
             title: "Manage Profiles…",
             action: #selector(manageProfiles),
