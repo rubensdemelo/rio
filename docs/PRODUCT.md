@@ -54,7 +54,7 @@ are not meeting text or live transcript content. Insight pace and vocabulary
 are configured per profile so the selected profile carries the complete setup
 for a meeting.
 
-While listening, Rio shows a compact live microphone input level and the elapsed meeting offset reached by finalized transcription. This lets the user verify long-session progress without exposing live transcript text. If bounded transcription backpressure would skip audio, Rio stops explicitly and explains that the continuous transcript prefix was saved as incomplete. The live insight list remains bounded and scrollable. The main window has one primary action: start listening or stop listening and clear the active session. Recent Meetings opens read-only transcripts and insights saved locally from the last two days. Saved transcript segments retain meeting-relative timestamps and can be filtered locally by text so a long completed meeting remains navigable; this is not AI search, editing, or export. A concise cue explains that audio is never retained and finalized transcript text is kept only for that two-day window.
+While listening, Rio shows a compact live meeting-audio input level and the elapsed meeting offset reached by finalized transcription. This lets the user verify long-session progress without exposing live transcript text. If bounded capture or transcription backpressure would skip audio, Rio stops explicitly and explains that the continuous transcript prefix was saved as incomplete. The live insight list remains bounded and scrollable. The main window has one primary action: start listening or stop listening and clear the active session. Recent Meetings opens read-only transcripts and insights saved locally from the last two days. Saved transcript segments retain meeting-relative timestamps and can be filtered locally by text so a long completed meeting remains navigable; this is not AI search, editing, or export. A concise cue explains that audio is never retained and finalized transcript text is kept only for that two-day window.
 
 Each profile includes an Insight pace choice of 15, 30, or 45 seconds; 30
 seconds is the default for new profiles. This controls how much live meeting
@@ -86,7 +86,7 @@ For the incident-copilot evaluation target, the useful signal set is symptoms, e
 
 The app does not display a live transcript. Finalized transcript segments are collected in memory during the session and saved as a read-only meeting record when the session stops. The saved record contains no audio and expires after two days.
 
-If no input is detected for a sustained period, the interface warns that the microphone may be muted. Capture or microphone failures are shown as explicit connection errors rather than as an apparently active listening state.
+If no input is detected for a sustained period, the interface warns that meeting audio may be silent. Capture failures are shown as explicit connection errors rather than as an apparently active listening state.
 
 ## Insight categories
 
@@ -148,7 +148,7 @@ Transcription is a cloud stage: Rio sends bounded in-memory WAV chunks to OpenAI
 The MVP is successful when:
 
 1. A user can start and stop listening with one obvious action.
-2. The app captures microphone and system audio from a real meeting after a clear permission flow.
+2. The app captures system/meeting audio from a real meeting after a clear permission flow.
 3. Useful insight cards begin appearing during the meeting without exposing a transcript.
 4. Duplicate insights are merged and changed conclusions update or replace stale cards.
 5. An action-item owner is never inferred without explicit support in the temporary text.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the synthetic Papagaio incident-copilot evaluation pack."""
+"""Validate the synthetic Rio incident-copilot evaluation pack."""
 
 from __future__ import annotations
 

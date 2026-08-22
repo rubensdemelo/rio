@@ -1,5 +1,71 @@
+import AppKit
 import CoreAudio
 import Foundation
+
+private final class CoreAudioSystemEventMonitor: @unchecked Sendable {
+    private let lock = NSLock()
+    private let notificationCenter = NSWorkspace.shared.notificationCenter
+    private let audioQueue = DispatchQueue(label: "app.rio.system-audio.events")
+    private var notificationObservers: [NSObjectProtocol] = []
+    private var outputDeviceAddress = AudioObjectPropertyAddress(
+        mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+        mScope: kAudioObjectPropertyScopeGlobal,
+        mElement: kAudioObjectPropertyElementMain
+    )
+    private var outputDeviceListener: AudioObjectPropertyListenerBlock?
+    private var isStopped = false
+
+    init(onInterruption: @escaping @Sendable () -> Void) {
+        notificationObservers.append(
+            notificationCenter.addObserver(
+                forName: NSWorkspace.willSleepNotification,
+                object: nil,
+                queue: nil
+            ) { _ in
+                onInterruption()
+            }
+        )
+
+        let listener: AudioObjectPropertyListenerBlock = { _, _ in
+            onInterruption()
+        }
+        outputDeviceListener = listener
+        _ = AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &outputDeviceAddress,
+            audioQueue,
+            listener
+        )
+    }
+
+    func stop() {
+        lock.lock()
+        guard !isStopped else {
+            lock.unlock()
+            return
+        }
+        isStopped = true
+        let observers = notificationObservers
+        notificationObservers.removeAll()
+        let listener = outputDeviceListener
+        outputDeviceListener = nil
+        lock.unlock()
+
+        observers.forEach(notificationCenter.removeObserver)
+        if let listener {
+            _ = AudioObjectRemovePropertyListenerBlock(
+                AudioObjectID(kAudioObjectSystemObject),
+                &outputDeviceAddress,
+                audioQueue,
+                listener
+            )
+        }
+    }
+
+    deinit {
+        stop()
+    }
+}
 
 /// Decodes the linear PCM layouts Core Audio taps can deliver without assuming
 /// that 32-bit samples are floating point.
@@ -214,9 +280,12 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
     private var queue: BoundedAudioQueue?
     private var rawQueue: BoundedQueue<CoreAudioRawBuffer>?
     private var decodingTask: Task<Void, Never>?
+    private var continuityTask: Task<Void, Never>?
     private var activeStream: AudioStream?
     private var resources: CoreAudioCaptureResources?
     private var callbackState: CoreAudioCaptureCallbackState?
+    private var continuityFailures: BoundedQueue<PipelineFailure>?
+    private var systemEventMonitor: CoreAudioSystemEventMonitor?
     private var isStarting = false
     private var isRunning = false
     private var cancellationRequested = false
@@ -259,10 +328,20 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
 
         guard !Task.isCancelled else { throw .cancelled }
 
-        let queue = BoundedAudioQueue(capacity: queueCapacity)
-        let rawQueue = BoundedQueue<CoreAudioRawBuffer>(capacity: queueCapacity)
+        let continuityFailures = BoundedQueue<PipelineFailure>(capacity: 1)
+        let reportOverload: @Sendable () -> Void = {
+            _ = continuityFailures.enqueue(.stage(.audioCapture, .overloaded))
+        }
+        let queue = BoundedAudioQueue(
+            capacity: queueCapacity,
+            onDrop: reportOverload
+        )
+        let rawQueue = BoundedQueue<CoreAudioRawBuffer>(
+            capacity: queueCapacity,
+            onDrop: reportOverload
+        )
         let audioStream = queue.makeStream(
-            onOutputDrop: {},
+            onOutputDrop: reportOverload,
             onTermination: { [weak self] in
                 Task { await self?.cancel() }
             }
@@ -272,14 +351,20 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
             let resources = try makeResources(rawQueue: rawQueue)
             self.queue = queue
             self.rawQueue = rawQueue
+            self.continuityFailures = continuityFailures
             activeStream = audioStream
             self.resources = resources
+            systemEventMonitor = CoreAudioSystemEventMonitor {
+                _ = continuityFailures.enqueue(.stage(.audioCapture, .interrupted))
+            }
             decodingTask = makeDecodingTask(
                 rawQueue: rawQueue,
                 destination: queue,
-                format: try resources.tap.format
+                format: try resources.tap.format,
+                onContinuityLoss: reportOverload
             )
             isRunning = true
+            continuityTask = makeContinuityTask(failures: continuityFailures)
 
             guard !Task.isCancelled, !cancellationRequested else {
                 await finish(throwing: .cancelled)
@@ -403,6 +488,12 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
         inputLevelMonitor.reset()
         decodingTask?.cancel()
         decodingTask = nil
+        continuityTask?.cancel()
+        continuityTask = nil
+        systemEventMonitor?.stop()
+        systemEventMonitor = nil
+        continuityFailures?.finish(throwing: failure)
+        continuityFailures = nil
         rawQueue?.finish(throwing: failure)
         rawQueue = nil
         queue?.finish(throwing: failure)
@@ -413,10 +504,11 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
     private func makeDecodingTask(
         rawQueue: BoundedQueue<CoreAudioRawBuffer>,
         destination: BoundedAudioQueue,
-        format: AudioStreamBasicDescription
+        format: AudioStreamBasicDescription,
+        onContinuityLoss: @escaping @Sendable () -> Void
     ) -> Task<Void, Never> {
         let rawStream = rawQueue.makeStream(
-            onOutputDrop: {},
+            onOutputDrop: onContinuityLoss,
             onTermination: {}
         )
         return Task.detached(priority: .userInitiated) { [inputLevelMonitor] in
@@ -437,6 +529,28 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
                 destination.finish(throwing: .stage(.audioCapture, .failed))
             }
         }
+    }
+
+    private func makeContinuityTask(
+        failures: BoundedQueue<PipelineFailure>
+    ) -> Task<Void, Never> {
+        let stream = failures.makeStream(onOutputDrop: {}, onTermination: {})
+        return Task { [weak self] in
+            do {
+                for try await failure in stream {
+                    await self?.handleContinuityFailure(failure)
+                    return
+                }
+            } catch {
+                // Cleanup terminates this private signal stream.
+            }
+        }
+    }
+
+    private func handleContinuityFailure(_ failure: PipelineFailure) async {
+        guard isRunning else { return }
+        continuityTask = nil
+        await finish(throwing: failure)
     }
 }
 

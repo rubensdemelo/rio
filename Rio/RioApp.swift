@@ -3,12 +3,7 @@ import SwiftUI
 
 final class RioAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.setActivationPolicy(.regular)
-
-        DispatchQueue.main.async {
-            NSApp.activate(ignoringOtherApps: true)
-            NSApp.windows.first(where: { $0.title == "Rio" })?.makeKeyAndOrderFront(nil)
-        }
+        NSApp.setActivationPolicy(RioLaunchPresentation.activationPolicy)
     }
 }
 
@@ -60,6 +55,8 @@ struct RioApp: App {
                 .environmentObject(meetingProfileSettings)
         }
         .defaultSize(width: 640, height: 240)
+        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
         .windowResizability(.contentMinSize)
 
         Window("Recent Meetings", id: "recent-meetings") {
@@ -67,6 +64,8 @@ struct RioApp: App {
                 .environmentObject(meetingHistory)
         }
         .defaultSize(width: 760, height: 620)
+        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
         .windowResizability(.contentMinSize)
 
         Window("Meeting Profiles", id: "profiles") {
@@ -74,6 +73,8 @@ struct RioApp: App {
                 .environmentObject(meetingProfileSettings)
         }
         .defaultSize(width: 760, height: 560)
+        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
         .windowResizability(.contentMinSize)
 
     }

@@ -8,7 +8,7 @@ Goal: prove the complete meeting-understanding loop with the smallest possible a
 
 - Create a macOS 26+ SwiftUI application target.
 - Add one start/stop listening control and a clear session status.
-- Capture microphone audio for the initial development loop.
+- Capture system/meeting audio for the development and release loop.
 - Send bounded in-memory audio batches to OpenAI transcription.
 - Hold finalized text in a bounded, in-memory rolling context.
 - Let the user add their own OpenAI API key in Provider settings and check the stored Keychain credential before listening.
@@ -24,14 +24,15 @@ Exit criterion: meeting audio produces useful, structured insight cards through 
 
 Verified on macOS 26.5.2:
 
-- 150 unit and integration tests pass in Debug, including deterministic long-session coverage for rolling-context novelty, current-card insight requests, explicit transcription-overload shutdown before audio eviction, pause/resume continuity, elapsed transcription feedback, saved-transcript navigation, direct system-audio permission recovery, custom meeting-profile persistence and guidance, app-isolated data-protection Keychain selection, and privacy-safe OpenAI request diagnostics. The earlier 68-test suite passed in Release; the expanded Release suite has not been rerun.
+- 152 unit and integration tests pass in both Debug and Release, including deterministic long-session coverage for rolling-context novelty, current-card insight requests, explicit capture/transcription-overload shutdown before audio eviction, pause/resume continuity, elapsed transcription feedback, saved-transcript navigation, capture interruption persistence, direct system-audio permission recovery, custom meeting-profile persistence and guidance, app-isolated data-protection Keychain selection, and privacy-safe OpenAI request diagnostics.
 - Debug and Release builds pass with warnings treated as errors and Swift 6 complete strict-concurrency checking enabled.
 - Static privacy scans find no production logging or persistence APIs other than the bounded two-day insight history.
+- The development-signed application passes entitlement verification. A clean launch leaves Rio running as a menu-bar-only accessory without opening or restoring a window, activating over Finder, or appearing in the Dock/app switcher.
 - The built application launches and exits cleanly without creating audio or transcript files; its inspected container contains only app preferences and the bounded local insight-history file after cards are generated.
 
 Not yet verified:
 
-- Microphone permission grant or denial behavior in the live app.
+- System Audio Recording permission grant or denial behavior in the live app.
 - Live meeting audio through OpenAI transcription, OpenAI API configuration, and visible cards.
 - Restart, interruption, model-unavailable, and stop-during-stage hardware paths.
 - The 15-to-30-minute bounded-memory smoke session and Instruments resource-growth inspection.
@@ -43,16 +44,16 @@ The Milestone 1 exit criterion is not marked complete until the not-yet-verified
 Goal: make the vertical slice work with actual remote meetings.
 
 - Add system/meeting audio capture with Core Audio taps.
-- Capture or combine microphone audio without recording either source.
+- Keep local microphone capture outside the first personal release; Rio listens to system/meeting audio only.
 - Exclude Rio's own process audio.
-- Add microphone and system-audio permission onboarding.
+- Add system-audio permission onboarding.
 - Add source and input-level status without exposing transcript text.
 - Handle device changes, selected-source loss, sleep and wake, and permission revocation.
 - Test speaker-output duplication and document headphone expectations or add mitigation if needed.
 
-Exit criterion: Rio can listen to both sides of a meeting in common conferencing apps and maintain an accurate listening state.
+Exit criterion: Rio can listen to meeting audio in common conferencing apps and maintain an accurate listening state.
 
-Implementation status: system audio capture is wired through a private Core Audio tap with Rio's own process audio excluded. It still requires live permission, browser-meeting, interruption, and long-running validation before this milestone can be marked complete.
+Implementation status: system audio capture is wired through a private Core Audio tap with Rio's own process audio excluded. Bounded raw/decoded queue loss now fails explicitly instead of silently skipping meeting audio, and sleep/default-output-device changes stop the session as interruptions. Live permission, browser-meeting, interruption, and long-running validation are still required before this milestone can be marked complete.
 
 ## Milestone 3: Useful live insights
 
@@ -86,14 +87,14 @@ configuration.
 Goal: ship a technical preview that behaves predictably for a full meeting.
 
 - Add polished unavailable, permission, listening, processing, interrupted, and stopped states.
-- Add live non-content voice feedback with an input meter, transcription activity cue, mute warning, microphone connection error, pause/resume, and stop controls.
+- Add live non-content voice feedback with an input meter, transcription activity cue, silence warning, capture connection error, pause/resume, and stop controls.
 - Ensure cancellation and cleanup work from every state.
 - Run one-hour capture and insight-generation soak tests.
 - Verify bounded audio queues, text context, model context, and card count.
 - Confirm that no audio is written to logs, caches, crash annotations, or persistent storage, and that local transcript-plus-insight meeting history expires after two days.
 - Test missing and rejected OpenAI API keys, unavailable network/service responses, and bounded transcription backpressure.
 - Add accessibility, keyboard control, and basic VoiceOver coverage.
-- Sign, notarize, and package the macOS app.
+- Produce a verified local app bundle; notarization and App Store packaging are not required for this personal-only release.
 
 Exit criterion: a one-hour meeting completes without unbounded memory growth, silent capture loss, persistent audio or transcript data, or manual recovery from ordinary interruptions.
 
@@ -106,7 +107,9 @@ local timestamped filtering. OpenAI request failures now emit privacy-safe
 endpoint, HTTP, transport, request-ID, and API error-code diagnostics; an early
 HTTP rejection is preserved when an upload later times out. Deterministic
 queue-pressure, long-session, rejection-plus-timeout, and diagnostic-privacy
-coverage passes; the one-hour hardware soak and live interruption checks remain
+coverage passes. Rio now launches menu-bar-only with SwiftUI restoration disabled,
+and the local personal-release gate verifies stable signing and capture
+entitlements; the one-hour hardware soak and live interruption checks remain
 outstanding.
 
 ## Deferred until after the MVP

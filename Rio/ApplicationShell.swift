@@ -7,6 +7,11 @@ extension Notification.Name {
     static let rioOpenRecentMeetings = Notification.Name("Rio.openRecentMeetings")
 }
 
+enum RioLaunchPresentation {
+    static let activationPolicy: NSApplication.ActivationPolicy = .accessory
+    static let opensMainWindowOnLaunch = false
+}
+
 @MainActor
 final class RioPanelRouter: ObservableObject {
     enum Panel: String, Identifiable {
@@ -2296,7 +2301,7 @@ private extension PipelineFailure {
         case .stage(_, .interrupted):
             "Listening was interrupted."
         case .stage(_, .overloaded):
-            "Rio could not keep up with the audio stream."
+            "Rio stopped before skipping meeting audio. The transcript saved so far is marked incomplete. Start listening again to resume."
         case .stage, .cancelled:
             "Rio could not start listening."
         }

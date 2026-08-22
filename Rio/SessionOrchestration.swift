@@ -504,6 +504,9 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         guard activeSessionID == sessionID else {
             return
         }
+        if case .stage(.audioCapture, _) = failure {
+            incompleteTranscript = true
+        }
         await cleanup(sessionID: sessionID, kind: .failure(failure))
     }
 

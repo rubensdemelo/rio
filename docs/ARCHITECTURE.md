@@ -5,9 +5,8 @@
 Rio is a native Swift macOS application. The first release uses OpenAI's cloud APIs for transcription and insight generation but does not introduce a Rust core, C ABI, database, or cross-platform abstraction.
 
 ```text
-Microphone audio ─────┐
-                      ├─> bounded audio pipeline
-System/meeting audio ─┘             │
+System/meeting audio ─> bounded audio pipeline
+                                    │
                                     v
                    bounded in-memory WAV batches
                                     │
@@ -205,9 +204,10 @@ stay above normal app windows and be moved independently while the live insight
 stream remains visible.
 Open Rio targets the main window scene by ID, Recent Meetings targets its own
 scene by ID, and Quit Rio terminates the application. The main window uses a
-suppressed default launch behavior, so a ready app starts as a menu-bar-only
-experience and the window is opened only through an explicit menu action. The
-application-agent configuration keeps Rio out of the Dock and app switcher.
+suppressed default launch behavior and restoration is disabled for every window
+scene, so stale SwiftUI window state cannot override a menu-bar-only launch.
+Windows open only through explicit menu actions. The application-agent
+configuration keeps Rio out of the Dock and app switcher.
 The menu offers profile management without duplicating the selected profile as
 a passive row. The menu-bar scene has no meeting-data state of its own.
 

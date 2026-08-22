@@ -10,7 +10,10 @@ Rio uses bounded in-memory OpenAI transcription and context, OpenAI insight gene
 
 ## MVP experience
 
-The app has one primary action: start or stop listening. During a meeting, it surfaces concise cards for:
+Rio launches as a menu-bar-only utility: it does not open a window, appear in
+the Dock, or enter the app switcher. The menu-bar item provides the primary
+start/stop action and explicit access to Rio's windows. During a meeting, it
+surfaces concise cards for:
 
 - Important points and takeaways.
 - Decisions.
@@ -25,9 +28,9 @@ Rio does not display a live transcript. Audio and temporary speech-to-text conte
 ## Meeting pipeline
 
 ```text
-Microphone + meeting/system audio
-                 │
-                 v
+Meeting/system audio
+          │
+          v
        Core Audio tap
                  │
                  v
@@ -94,7 +97,7 @@ Meeting data is ephemeral except for the bounded two-day local meeting history:
 
 The project uses Xcode 26.6, Swift 6, and a macOS 26 deployment target. Build and test from the repository root:
 
-Development builds should use a stable Apple Development signing identity so macOS can associate microphone permission and Keychain access with the same Rio bundle and signing authority across frequent rebuilds. Copy `Config/Development.xcconfig.example` to `Config/Development.xcconfig`, set `DEVELOPMENT_TEAM` to the team shown in Xcode’s Signing & Capabilities editor, and sign in to Xcode with that Apple Developer account. `make final` uses the full installed Apple Development or Mac Development identity when available. If no development identity is visible to the command-line tools, it falls back to Xcode-compatible local signing: tests run without signing and the app is ad-hoc signed for local launch. That fallback is suitable for development only and may cause TCC or Keychain to ask again after rebuilds. Do not delete or recreate a stable development identity while testing, because changing the bundle identifier or signing authority legitimately causes macOS to ask again.
+Development builds use a stable Apple Development signing identity so macOS can associate System Audio Recording permission and Keychain access with the same Rio bundle and signing authority across frequent rebuilds. Copy `Config/Development.xcconfig.example` to `Config/Development.xcconfig`, set `DEVELOPMENT_TEAM` to the team shown in Xcode’s Signing & Capabilities editor, and sign in to Xcode with that Apple Developer account. `make final` uses the full installed Apple Development or Mac Development identity and fails if the local signing configuration exists but that identity is unavailable. Do not delete or recreate a stable development identity while testing, because changing the bundle identifier or signing authority legitimately causes macOS to ask again.
 
 On first launch, use **Provider** to add your own OpenAI API key. Rio stores it only in your login Keychain, never in the app bundle, source tree, preferences, logs, or an environment variable. The current defaults are `gpt-5.6-terra` for insights and `gpt-transcribe` for transcription.
 
@@ -136,4 +139,11 @@ xcodebuild \
   test
 ```
 
-The automated M1-10 run on macOS 26.5.2 passed all 68 unit tests in Debug and Release and passed both warnings-as-errors builds. The app also launched and exited cleanly in an idle smoke check. Permission prompts, live meeting transcription, OpenAI API configuration, and the 15-to-30-minute bounded-memory session have not been directly exercised in this environment; they remain required before the M1 exit criterion can be marked complete. Verified progress is tracked in [the roadmap](docs/ROADMAP.md).
+The personal-release gate on macOS 26.5.2 passes all 152 unit and integration
+tests in Debug and Release, both warnings-as-errors builds, stable development
+signing, and entitlement verification. A clean launch was also inspected: Rio
+remains running without opening a window while Finder stays active. Permission
+prompts, live meeting transcription through OpenAI, and the one-hour hardware
+soak still require direct acceptance on the target Mac before the broader M1
+exit criterion is marked complete. Verified progress is tracked in [the
+roadmap](docs/ROADMAP.md).

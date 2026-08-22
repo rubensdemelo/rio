@@ -57,6 +57,19 @@ final class MicrophoneCaptureTests: XCTestCase {
         XCTAssertEqual(queue.enqueue(makeChunk(sequenceNumber: 4)).result, .terminated)
     }
 
+    func testBoundedQueueReportsCapacityLossWithoutBlockingTheProducer() {
+        let dropCounter = LockedDropCounter()
+        let queue = BoundedAudioQueue(
+            capacity: 1,
+            onDrop: { dropCounter.increment() }
+        )
+        defer { queue.finish() }
+
+        XCTAssertEqual(queue.enqueue(makeChunk(sequenceNumber: 1)).result, .accepted)
+        XCTAssertEqual(queue.enqueue(makeChunk(sequenceNumber: 2)).result, .dropped)
+        XCTAssertEqual(dropCounter.value, 1)
+    }
+
     func testCaptureDeliversAudioInOrderAndReportsFormat() async throws {
         let engine = TestMicrophoneEngine(
             format: MicrophoneAudioFormat(sampleRate: 48_000, channelCount: 1)
@@ -227,6 +240,23 @@ final class MicrophoneCaptureTests: XCTestCase {
             channelCount: 1,
             samples: [0.0, 0.1]
         )
+    }
+}
+
+private final class LockedDropCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    func increment() {
+        lock.lock()
+        count += 1
+        lock.unlock()
+    }
+
+    var value: Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
     }
 }
 

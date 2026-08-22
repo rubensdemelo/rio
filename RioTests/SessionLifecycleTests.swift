@@ -654,7 +654,11 @@ final class SessionLifecycleTests: XCTestCase {
 
     func testCaptureInterruptionPropagatesAsInterrupted() async throws {
         let capture = TestSessionAudioCapture()
-        let coordinator = makeCoordinator(capture: capture)
+        let historyRecorder = TestMeetingHistoryRecorder()
+        let coordinator = makeCoordinator(
+            capture: capture,
+            historyRecorder: historyRecorder
+        )
 
         try await coordinator.start()
         let audioStream = await capture.lastStream()
@@ -665,6 +669,7 @@ final class SessionLifecycleTests: XCTestCase {
 
         let captureCancellations = await capture.cancelCount()
         XCTAssertEqual(captureCancellations, 1)
+        XCTAssertTrue(historyRecorder.records().first?.incompleteTranscript == true)
     }
 
     func testUnexpectedCaptureCancellationPropagatesAsInterrupted() async throws {

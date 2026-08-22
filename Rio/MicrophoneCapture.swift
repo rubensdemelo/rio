@@ -261,6 +261,7 @@ final class MicrophoneCaptureDiagnostics: @unchecked Sendable {
 
 final class BoundedQueue<Element: Sendable>: @unchecked Sendable {
     private let capacity: Int
+    private let onDrop: @Sendable () -> Void
     private let lock = NSLock()
     private var storage: [Element?]
     private var readIndex = 0
@@ -272,9 +273,13 @@ final class BoundedQueue<Element: Sendable>: @unchecked Sendable {
     private let wakeStream: AsyncStream<Void>
     private let wakeContinuation: AsyncStream<Void>.Continuation
 
-    init(capacity: Int) {
+    init(
+        capacity: Int,
+        onDrop: @escaping @Sendable () -> Void = {}
+    ) {
         precondition(capacity > 0)
         self.capacity = capacity
+        self.onDrop = onDrop
         storage = Array(repeating: nil, count: capacity)
 
         var continuation: AsyncStream<Void>.Continuation?
@@ -293,6 +298,7 @@ final class BoundedQueue<Element: Sendable>: @unchecked Sendable {
     func enqueue(_ element: Element) -> BoundedAudioEnqueueOutcome {
         // The realtime producer never waits for the consumer. Contention drops the newest chunk.
         guard lock.try() else {
+            onDrop()
             return BoundedAudioEnqueueOutcome(result: .dropped, queueDepth: 0)
         }
 
@@ -303,6 +309,7 @@ final class BoundedQueue<Element: Sendable>: @unchecked Sendable {
         guard count < capacity else {
             let queueDepth = count
             lock.unlock()
+            onDrop()
             return BoundedAudioEnqueueOutcome(result: .dropped, queueDepth: queueDepth)
         }
 

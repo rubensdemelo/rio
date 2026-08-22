@@ -16,7 +16,7 @@ The first release targets macOS 26+.
 
 Rio uses native Apple technologies for capture and interface, with OpenAI APIs for understanding:
 
-- Core Audio taps for meeting/system audio capture and AVAudioEngine for microphone capture where supported.
+- Core Audio taps for meeting/system audio capture, excluding Rio's own process audio.
 - OpenAI's `gpt-transcribe` API for temporary meeting-audio transcription.
 - OpenAI's Responses API for cloud insight generation from bounded temporary meeting text.
 - SwiftUI for a small native interface.

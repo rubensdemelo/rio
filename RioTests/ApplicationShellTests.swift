@@ -3,6 +3,11 @@ import XCTest
 
 @MainActor
 final class ApplicationShellTests: XCTestCase {
+    func testRioLaunchesAsAMenuBarOnlyAccessory() {
+        XCTAssertEqual(RioLaunchPresentation.activationPolicy, .accessory)
+        XCTAssertFalse(RioLaunchPresentation.opensMainWindowOnLaunch)
+    }
+
     func testPanelRouterSelectsProvider() {
         let router = RioPanelRouter()
 

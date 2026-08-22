@@ -1,6 +1,6 @@
-# Papagaio incident-copilot MVP evaluation pack
+# Rio incident-copilot MVP evaluation pack
 
-This is a version-controlled, synthetic evaluation pack for Papagaio's clarified MVP purpose: a live incident copilot for technical-support meetings. It evaluates whether a future implementation can extract meaningful incident signals, formulate retrieval intent for trusted local manuals/runbooks, preserve evidence provenance, and ask useful next questions while respecting consent and privacy.
+This is a version-controlled, synthetic evaluation pack for Rio's clarified MVP purpose: a live incident copilot for technical-support meetings. It evaluates whether the implementation can extract meaningful incident signals, formulate retrieval intent for trusted local manuals/runbooks, preserve evidence provenance, and ask useful next questions while respecting consent and privacy.
 
 The pack is deliberately independent of the listening-controls work, local-manuals-folder work, and deferred notch design. It does not implement AI generation, retrieval, a corpus, a folder picker, UI, external search, or persistence of raw meeting data.
 
