@@ -1091,10 +1091,11 @@ struct MeetingProfileSettingsView: View {
                     newProfileForm
                 } else if let selectedProfile {
                     MeetingProfileEditorRow(profile: selectedProfile)
-                        .id(selectedProfile.id)
+                    .id(selectedProfile.id)
                 }
             }
         }
+        .toolbar(removing: .sidebarToggle)
         .onAppear {
             selectInitialProfile()
         }
