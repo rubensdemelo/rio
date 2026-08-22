@@ -187,9 +187,23 @@ final class RioStatusItemController: NSObject, ObservableObject, NSMenuDelegate 
 }
 
 enum SystemSettingsOpener {
+    static let microphoneURL = URL(
+        string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
+    )!
+
     static let systemAudioRecordingURL = URL(
         string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
     )!
+
+    static func openMicrophone() {
+        guard !NSWorkspace.shared.open(microphoneURL) else {
+            return
+        }
+
+        NSWorkspace.shared.open(
+            URL(fileURLWithPath: "/System/Applications/System Settings.app")
+        )
+    }
 
     static func openSystemAudioRecording() {
         guard !NSWorkspace.shared.open(systemAudioRecordingURL) else {
@@ -491,41 +505,12 @@ struct RioView<Controller: SessionShellControlling>: View {
 
     private var sessionHeader: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .center, spacing: 16) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Rio")
-                        .font(.title2.weight(.semibold))
-
-                    Text(sessionSummary)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-
+            HStack {
                 Spacer(minLength: 20)
-
-                primaryAction
+                sessionAction
             }
 
             meetingProfileControl
-        }
-    }
-
-    private var sessionSummary: String {
-        switch controller.status {
-        case .stopped:
-            "Ready to listen"
-        case .checkingAvailability:
-            "Checking listening availability"
-        case .listening:
-            "Listening"
-        case .processing:
-            "Processing meeting audio"
-        case .paused:
-            "Listening paused"
-        case .interrupted:
-            "Listening was interrupted"
-        case .unavailable:
-            "Listening unavailable"
         }
     }
 
@@ -667,6 +652,66 @@ struct RioView<Controller: SessionShellControlling>: View {
         .accessibilityLabel(controller.primaryActionTitle)
         .accessibilityHint(primaryActionHint)
         .help("\(controller.primaryActionTitle) (⌘L)")
+    }
+
+    @ViewBuilder
+    private var sessionAction: some View {
+        if isStartAction && !isReadyForListening {
+            Button("Set Up") {
+                openSetup()
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .accessibilityHint("Opens the settings needed before Rio can listen.")
+            .help("Set up listening")
+        } else {
+            primaryAction
+        }
+    }
+
+    private var isReadyForListening: Bool {
+        providerSettings.isConfigured && controller.readiness?.isReady == true
+    }
+
+    private func openSetup() {
+        if !providerSettings.isConfigured {
+            panelRouter.showProvider()
+            return
+        }
+
+        if let reason = controller.readiness?.checks.compactMap(\.reason).first {
+            switch reason {
+            case .openAIAPIKeyMissing, .openAIAPIKeyInvalid:
+                panelRouter.showProvider()
+            case .microphonePermissionDenied:
+                SystemSettingsOpener.openMicrophone()
+            case .microphonePermissionUndetermined:
+                Task { await controller.performPrimaryAction() }
+            case .systemAudioPermissionDenied, .systemAudioCaptureFailed, .systemAudioUnavailable:
+                SystemSettingsOpener.openSystemAudioRecording()
+            case .audioInputUnavailable:
+                Task { await controller.checkReadiness() }
+            }
+            return
+        }
+
+        if let reason = controller.unavailableReason {
+            switch reason {
+            case .openAIAPIKeyMissing, .openAIAPIKeyInvalid:
+                panelRouter.showProvider()
+            case .microphonePermissionDenied:
+                SystemSettingsOpener.openMicrophone()
+            case .systemAudioPermissionDenied, .systemAudioCaptureFailed, .systemAudioUnavailable:
+                SystemSettingsOpener.openSystemAudioRecording()
+            case .microphonePermissionUndetermined:
+                Task { await controller.performPrimaryAction() }
+            case .audioInputUnavailable:
+                Task { await controller.checkReadiness() }
+            }
+            return
+        }
+
+        Task { await controller.checkReadiness() }
     }
 
     private var isPrimaryActionDisabled: Bool {

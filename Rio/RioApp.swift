@@ -57,7 +57,7 @@ struct RioApp: App {
                 .environmentObject(panelRouter)
                 .environmentObject(meetingProfileSettings)
         }
-        .defaultSize(width: 640, height: 480)
+        .defaultSize(width: 640, height: 240)
         .windowResizability(.contentMinSize)
 
         Window("Recent Meetings", id: "recent-meetings") {
