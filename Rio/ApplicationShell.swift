@@ -417,12 +417,20 @@ final class FakeSessionController: SessionShellControlling {
 }
 
 enum RioMainWindowSizing {
-    static func minimumContentHeight(apiKeyOnly: Bool, needsSetup: Bool) -> CGFloat {
-        apiKeyOnly ? 80 : needsSetup ? 420 : 180
+    static func minimumContentHeight(
+        apiKeyOnly: Bool,
+        needsSetup: Bool,
+        compactReady: Bool
+    ) -> CGFloat {
+        apiKeyOnly ? 80 : needsSetup ? 420 : compactReady ? 120 : 180
     }
 
-    static func windowHeight(apiKeyOnly: Bool, needsSetup: Bool) -> CGFloat {
-        apiKeyOnly ? 120 : needsSetup ? 480 : 240
+    static func windowHeight(
+        apiKeyOnly: Bool,
+        needsSetup: Bool,
+        compactReady: Bool
+    ) -> CGFloat {
+        apiKeyOnly ? 120 : needsSetup ? 480 : compactReady ? 160 : 240
     }
 }
 
@@ -463,7 +471,8 @@ struct RioView<Controller: SessionShellControlling>: View {
             maxWidth: 720,
             minHeight: RioMainWindowSizing.minimumContentHeight(
                 apiKeyOnly: setupNeedsOnlyAPIKey,
-                needsSetup: shouldShowSetup
+                needsSetup: shouldShowSetup,
+                compactReady: usesCompactReadyLayout
             ),
             alignment: .topLeading
         )
@@ -481,6 +490,9 @@ struct RioView<Controller: SessionShellControlling>: View {
             openWindow(id: "recent-meetings")
         }
         .onChange(of: shouldShowSetup) { _, _ in
+            resizeMainWindowIfNeeded()
+        }
+        .onChange(of: controller.status) { _, _ in
             resizeMainWindowIfNeeded()
         }
         .sheet(item: $panelRouter.presentedPanel) { panel in
@@ -503,6 +515,10 @@ struct RioView<Controller: SessionShellControlling>: View {
         !providerSettings.isConfigured
     }
 
+    private var usesCompactReadyLayout: Bool {
+        controller.status == .stopped && !shouldShowSetup
+    }
+
     private func resizeMainWindowIfNeeded() {
         DispatchQueue.main.async {
             guard let window = NSApp.windows.first(where: { $0.title == "Rio" }) else {
@@ -511,7 +527,8 @@ struct RioView<Controller: SessionShellControlling>: View {
 
             let targetHeight = RioMainWindowSizing.windowHeight(
                 apiKeyOnly: setupNeedsOnlyAPIKey,
-                needsSetup: shouldShowSetup
+                needsSetup: shouldShowSetup,
+                compactReady: usesCompactReadyLayout
             )
             guard abs(window.frame.height - targetHeight) > 1 else {
                 return

@@ -45,12 +45,47 @@ final class ApplicationShellTests: XCTestCase {
 
     func testAPIKeyOnlyWindowUsesCompactHeight() {
         XCTAssertEqual(
-            RioMainWindowSizing.minimumContentHeight(apiKeyOnly: true, needsSetup: true),
+            RioMainWindowSizing.minimumContentHeight(
+                apiKeyOnly: true,
+                needsSetup: true,
+                compactReady: false
+            ),
             80
         )
         XCTAssertLessThanOrEqual(
-            RioMainWindowSizing.windowHeight(apiKeyOnly: true, needsSetup: true),
+            RioMainWindowSizing.windowHeight(
+                apiKeyOnly: true,
+                needsSetup: true,
+                compactReady: false
+            ),
             140
+        )
+    }
+
+    func testReadyWindowUsesCompactHeight() {
+        XCTAssertEqual(
+            RioMainWindowSizing.minimumContentHeight(
+                apiKeyOnly: false,
+                needsSetup: false,
+                compactReady: true
+            ),
+            120
+        )
+        XCTAssertLessThanOrEqual(
+            RioMainWindowSizing.windowHeight(
+                apiKeyOnly: false,
+                needsSetup: false,
+                compactReady: true
+            ),
+            180
+        )
+        XCTAssertEqual(
+            RioMainWindowSizing.windowHeight(
+                apiKeyOnly: false,
+                needsSetup: false,
+                compactReady: false
+            ),
+            240
         )
     }
 
