@@ -1142,17 +1142,7 @@ struct MeetingProfileSettingsView: View {
             }
 
             ProfileField(title: "Insight pace") {
-                VStack(alignment: .leading, spacing: 6) {
-                    Picker("Update insights every", selection: $newInsightPace) {
-                        ForEach(ListeningCadence.allCases) { cadence in
-                            Text(cadence.title).tag(cadence)
-                        }
-                    }
-                    .pickerStyle(.radioGroup)
-                    Text(newInsightPace.detail)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
+                ListeningCadenceSlider(selection: $newInsightPace)
             }
 
             ProfileField(title: "Technical vocabulary (optional)") {
@@ -1261,17 +1251,7 @@ private struct MeetingProfileEditorRow: View {
             }
 
             ProfileField(title: "Insight pace") {
-                VStack(alignment: .leading, spacing: 6) {
-                    Picker("Update insights every", selection: $insightPace) {
-                        ForEach(ListeningCadence.allCases) { cadence in
-                            Text(cadence.title).tag(cadence)
-                        }
-                    }
-                    .pickerStyle(.radioGroup)
-                    Text(insightPace.detail)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
+                ListeningCadenceSlider(selection: $insightPace)
             }
 
             ProfileField(title: "Technical vocabulary (optional)") {
@@ -1343,6 +1323,49 @@ private struct ProfileField<Content: View>: View {
             Text(title)
                 .font(.body.weight(.semibold))
             content()
+        }
+    }
+}
+
+private struct ListeningCadenceSlider: View {
+    @Binding var selection: ListeningCadence
+
+    private let minimumCadence = ListeningCadence.allCases.first!
+    private let maximumCadence = ListeningCadence.allCases.last!
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text("Update insights every")
+                Spacer()
+                Text(selection.title)
+                    .foregroundStyle(.secondary)
+            }
+
+            Slider(
+                value: Binding(
+                    get: { Double(selection.rawValue) },
+                    set: { newValue in
+                        selection = ListeningCadence(rawValue: Int(newValue.rounded())) ?? selection
+                    }
+                ),
+                in: Double(minimumCadence.rawValue)...Double(maximumCadence.rawValue),
+                step: 15
+            )
+            .accessibilityLabel("Update insights every")
+            .accessibilityValue(selection.title)
+
+            HStack {
+                Text(minimumCadence.title)
+                Spacer()
+                Text(maximumCadence.title)
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            Text(selection.detail)
+                .font(.callout)
+                .foregroundStyle(.secondary)
         }
     }
 }
