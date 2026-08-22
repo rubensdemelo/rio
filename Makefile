@@ -41,4 +41,4 @@ final:
 	@$(MAKE) test
 	@$(MAKE) build
 	@echo "Launching Rio..."
-	@.build/Iteration/Build/Products/Debug/Rio.app/Contents/MacOS/Rio >/dev/null 2>&1 &
+	@open -n .build/Iteration/Build/Products/Debug/Rio.app
