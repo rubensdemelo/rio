@@ -38,10 +38,10 @@ state and one action to add it. Other prerequisite guidance appears after the
 key is configured, and the menu-bar action stays unavailable until the
 blocking checks pass.
 
-Before starting a session, the user may choose one configured custom meeting
-profile. Rio does not ship built-in profiles. If no custom profile exists, Rio
-uses general meeting guidance. Custom profiles have a name and bounded guidance
-and can be created, edited, or deleted.
+Before starting a session, the user may choose the read-only Default profile or
+one configured custom meeting profile. The Default profile uses general meeting
+guidance and a 30-second insight pace. Custom profiles have a name and bounded
+guidance and can be created, edited, or deleted.
 
 The selected profile (or general meeting guidance) is fixed for the session and
 saved with the completed two-day meeting record. A custom profile changes model
@@ -70,10 +70,9 @@ guide OpenAI transcription. This bounded configuration is sent with each
 transcription request and must not contain meeting notes or other meeting
 content.
 
-Meeting profile settings let the user create, edit, and delete custom profiles.
-Each custom profile has a nonempty name and bounded guidance, plus its own
-insight pace and technical vocabulary. When no custom profile exists, the
-settings view shows the general-guidance empty state.
+Meeting profile settings show the read-only Default profile and let the user
+create, edit, and delete custom profiles. Each custom profile has a nonempty
+name and bounded guidance, plus its own insight pace and technical vocabulary.
 
 When the user starts listening:
 

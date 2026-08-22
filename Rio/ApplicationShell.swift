@@ -587,6 +587,7 @@ struct RioView<Controller: SessionShellControlling>: View {
                     .lineLimit(1)
             } else {
                 Picker("Meeting profile", selection: $meetingProfileSettings.selection) {
+                    Text(MeetingProfile.fallback.title).tag(MeetingProfile.fallback)
                     ForEach(meetingProfileSettings.profiles) { profile in
                         Text(profile.title).tag(profile)
                     }
@@ -1068,8 +1069,12 @@ struct MeetingProfileSettingsView: View {
                 if showingNewProfile || selectedProfile == nil {
                     newProfileForm
                 } else if let selectedProfile {
-                    MeetingProfileEditorRow(profile: selectedProfile)
-                    .id(selectedProfile.id)
+                    if selectedProfile.isFallback {
+                        defaultProfileDetails
+                    } else {
+                        MeetingProfileEditorRow(profile: selectedProfile)
+                            .id(selectedProfile.id)
+                    }
                 }
             }
         }
@@ -1086,6 +1091,9 @@ struct MeetingProfileSettingsView: View {
                 showingNewProfile = profiles.isEmpty
                 return
             }
+            if selectedProfileID == MeetingProfile.fallback.id {
+                return
+            }
             guard profiles.contains(where: { $0.id == selectedProfileID }) else {
                 self.selectedProfileID = profiles.first?.id
                 showingNewProfile = profiles.isEmpty
@@ -1097,13 +1105,16 @@ struct MeetingProfileSettingsView: View {
 
     private var selectedProfile: MeetingProfile? {
         guard let selectedProfileID else { return nil }
+        if selectedProfileID == MeetingProfile.fallback.id {
+            return .fallback
+        }
         return meetingProfileSettings.profiles.first(where: { $0.id == selectedProfileID })
     }
 
     private var profileList: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Custom profiles")
+                Text("Meeting profiles")
                     .font(.headline)
                 Spacer()
                 Button {
@@ -1123,14 +1134,21 @@ struct MeetingProfileSettingsView: View {
             Divider()
 
             List(selection: $selectedProfileID) {
-                if meetingProfileSettings.profiles.isEmpty {
-                    Text("No profiles yet")
-                        .foregroundStyle(.secondary)
-                        .listRowSeparator(.hidden)
-                } else {
-                    ForEach(meetingProfileSettings.profiles) { profile in
-                        Label(profile.name, systemImage: "person.crop.circle")
-                            .tag(profile.id)
+                Section("Default") {
+                    Label(MeetingProfile.fallback.name, systemImage: "checkmark.circle")
+                        .tag(MeetingProfile.fallback.id)
+                }
+
+                Section("Custom") {
+                    if meetingProfileSettings.profiles.isEmpty {
+                        Text("No custom profiles yet")
+                            .foregroundStyle(.secondary)
+                            .listRowSeparator(.hidden)
+                    } else {
+                        ForEach(meetingProfileSettings.profiles) { profile in
+                            Label(profile.name, systemImage: "person.crop.circle")
+                                .tag(profile.id)
+                        }
                     }
                 }
             }
@@ -1206,11 +1224,33 @@ struct MeetingProfileSettingsView: View {
 
     private func selectInitialProfile() {
         guard selectedProfileID == nil else { return }
-        if let firstProfile = meetingProfileSettings.profiles.first {
-            selectedProfileID = firstProfile.id
-        } else {
-            showingNewProfile = true
+        selectedProfileID = MeetingProfile.fallback.id
+    }
+
+    private var defaultProfileDetails: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Text("Default profile")
+                .font(.title2.weight(.semibold))
+
+            Text("Used when no custom profile is selected. Create a custom profile when a meeting needs different guidance or vocabulary.")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            ProfileField(title: "Meeting guidance") {
+                Text(MeetingProfile.fallback.guidance)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            ProfileField(title: "Insight pace") {
+                Text(MeetingProfile.fallback.insightPace.title)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
         }
+        .padding(20)
     }
 
     private func addProfile() {
