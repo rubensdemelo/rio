@@ -1237,6 +1237,7 @@ struct MeetingProfileSettingsView: View {
 private struct MeetingProfileEditorRow: View {
     let profile: MeetingProfile
 
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var meetingProfileSettings: MeetingProfileSettings
     @State private var name: String
     @State private var guidance: String
@@ -1327,6 +1328,7 @@ private struct MeetingProfileEditorRow: View {
             return
         }
         saveError = nil
+        dismiss()
     }
 
 }
