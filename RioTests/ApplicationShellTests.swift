@@ -64,15 +64,15 @@ final class ApplicationShellTests: XCTestCase {
                 needsSetup: false,
                 compactReady: true
             ),
-            120
+            64
         )
-        XCTAssertLessThanOrEqual(
+        XCTAssertEqual(
             RioMainWindowSizing.windowHeight(
                 apiKeyOnly: false,
                 needsSetup: false,
                 compactReady: true
             ),
-            180
+            104
         )
         XCTAssertEqual(
             RioMainWindowSizing.windowHeight(

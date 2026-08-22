@@ -364,7 +364,7 @@ enum RioMainWindowSizing {
         needsSetup: Bool,
         compactReady: Bool
     ) -> CGFloat {
-        apiKeyOnly ? 80 : needsSetup ? 420 : compactReady ? 120 : 180
+        apiKeyOnly ? 80 : needsSetup ? 420 : compactReady ? 64 : 180
     }
 
     static func windowHeight(
@@ -372,7 +372,7 @@ enum RioMainWindowSizing {
         needsSetup: Bool,
         compactReady: Bool
     ) -> CGFloat {
-        apiKeyOnly ? 120 : needsSetup ? 480 : compactReady ? 160 : 240
+        apiKeyOnly ? 120 : needsSetup ? 480 : compactReady ? 104 : 240
     }
 }
 
@@ -480,13 +480,10 @@ struct RioView<Controller: SessionShellControlling>: View {
     private var sessionHeader: some View {
         Group {
             if providerSettings.isConfigured {
-                VStack(alignment: .leading, spacing: 14) {
-                    HStack {
-                        Spacer(minLength: 20)
-                        sessionAction
-                    }
-
+                HStack(spacing: 20) {
                     meetingProfileControl
+                    Spacer(minLength: 0)
+                    sessionAction
                 }
             }
         }
@@ -584,15 +581,15 @@ struct RioView<Controller: SessionShellControlling>: View {
     }
 
     private var meetingProfileControl: some View {
-        HStack(spacing: 10) {
-            Text("Meeting profile")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-
+        HStack(spacing: 8) {
             if meetingProfileSettings.profiles.isEmpty {
-                Text("General meeting guidance")
-                    .font(.subheadline)
+                Label("General meeting guidance", systemImage: "person.crop.circle")
+                    .lineLimit(1)
             } else {
+                Image(systemName: "person.crop.circle")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+
                 Picker("Meeting profile", selection: $meetingProfileSettings.selection) {
                     ForEach(meetingProfileSettings.profiles) { profile in
                         Text(profile.title).tag(profile)
@@ -611,6 +608,7 @@ struct RioView<Controller: SessionShellControlling>: View {
             .help("Configure meeting profiles")
             .accessibilityLabel("Configure meeting profiles")
         }
+        .font(.subheadline)
         .help(meetingProfileSettings.profiles.isEmpty ? "Rio uses general meeting guidance until you add a profile." : meetingProfileSettings.selection.detail)
     }
 
