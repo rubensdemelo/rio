@@ -135,7 +135,7 @@ non-transient request failures remain explicit unavailable states.
 
 ### Meeting understanding
 
-Use OpenAI's Responses API with `gpt-5.6-terra` by default. OpenAI is the default and only MVP provider. The user supplies their own API key in Provider settings; release Rio stores it only in the macOS Keychain and never in the bundle, source tree, diagnostics, app preferences, or an environment variable. Development builds deliberately use a process-only in-memory store until the final release-hardening step, so development launches do not access the Keychain. Transcription uses `gpt-transcribe` by default.
+Use OpenAI's Responses API with `gpt-5.6-terra` by default. OpenAI is the default and only MVP provider. The user supplies their own API key in Provider settings; Rio stores it only in the macOS Keychain in every build configuration and never in the bundle, source tree, diagnostics, app preferences, or an environment variable. Transcription uses `gpt-transcribe` by default.
 
 The general fallback and custom profiles supply model guidance through model
 instructions; meeting text remains untrusted prompt input. Legacy
@@ -184,7 +184,7 @@ All queues and buffers are bounded:
 
 Diagnostics may record durations, queue depth, model availability, and error codes. They must never record audio, transcript text, generated insight text, or other meeting content.
 
-The user-provided API key is held by the macOS Keychain in release builds rather than the meeting-data lifecycle and is never copied into `UserDefaults`, files, logs, or environment-dependent runtime configuration. Development builds keep the key only in process memory and clear it on relaunch. The two-day local meeting history is the only persisted meeting-derived content and lives in an atomically written application-support JSON file.
+The user-provided API key is held by the macOS Keychain in every build configuration rather than the meeting-data lifecycle and is never copied into `UserDefaults`, files, logs, or environment-dependent runtime configuration. The two-day local meeting history is the only persisted meeting-derived content and lives in an atomically written application-support JSON file.
 
 ## Concurrency
 

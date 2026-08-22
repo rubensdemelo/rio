@@ -13,6 +13,12 @@ protocol OpenAIAPIKeyStore: Sendable {
     func remove() throws
 }
 
+enum OpenAIAPIKeyStoreFactory {
+    static func makeRuntimeStore() -> any OpenAIAPIKeyStore {
+        KeychainOpenAIAPIKeyStore()
+    }
+}
+
 struct KeychainOpenAIAPIKeyStore: OpenAIAPIKeyStore, Sendable {
     private let service: String
     private let account: String
@@ -88,32 +94,6 @@ struct KeychainOpenAIAPIKeyStore: OpenAIAPIKeyStore, Sendable {
     }
 }
 
-/// Development-only storage that avoids Keychain prompts while the app is being built.
-/// The value exists only for the current process and is never persisted.
-final class InMemoryOpenAIAPIKeyStore: OpenAIAPIKeyStore, @unchecked Sendable {
-    private let lock = NSLock()
-    private var storedValue: String?
-
-    func load() throws -> String? {
-        lock.lock()
-        defer { lock.unlock() }
-        return storedValue
-    }
-
-    func save(_ key: String) throws {
-        let trimmed = key.trimmingCharacters(in: .whitespacesAndNewlines)
-        lock.lock()
-        storedValue = trimmed.isEmpty ? nil : trimmed
-        lock.unlock()
-    }
-
-    func remove() throws {
-        lock.lock()
-        storedValue = nil
-        lock.unlock()
-    }
-}
-
 @MainActor
 final class OpenAIProviderSettings: ObservableObject {
     @Published var apiKey = ""
@@ -124,11 +104,7 @@ final class OpenAIProviderSettings: ObservableObject {
     private let keyStore: any OpenAIAPIKeyStore
 
     var storageDescription: String {
-#if DEBUG
-        "Held only in memory during development. Enter it again after relaunch."
-#else
         "Stored only in your login Keychain. It is never shown again."
-#endif
     }
 
     init(keyStore: any OpenAIAPIKeyStore = KeychainOpenAIAPIKeyStore()) {
