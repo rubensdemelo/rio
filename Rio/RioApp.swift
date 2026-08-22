@@ -1,4 +1,5 @@
 import AppKit
+import Darwin
 import SwiftUI
 
 final class RioAppDelegate: NSObject, NSApplicationDelegate {
@@ -17,6 +18,15 @@ struct RioApp: App {
     @StateObject private var meetingProfileSettings: MeetingProfileSettings
 
     init() {
+        if CommandLine.arguments.contains(RioKeychainAccessVerifier.launchArgument) {
+            let succeeded = RioKeychainAccessVerifier.verify()
+            let message = succeeded
+                ? RioKeychainAccessVerifier.successMessage
+                : RioKeychainAccessVerifier.failureMessage
+            FileHandle.standardOutput.write(Data("\(message)\n".utf8))
+            Darwin.exit(succeeded ? EXIT_SUCCESS : EXIT_FAILURE)
+        }
+
         let meetingHistory = MeetingHistoryStore()
         let meetingProfileSettings = MeetingProfileSettings()
         let apiKeyStore = OpenAIAPIKeyStoreFactory.makeRuntimeStore()

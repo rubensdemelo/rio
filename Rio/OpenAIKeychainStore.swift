@@ -95,6 +95,33 @@ struct KeychainOpenAIAPIKeyStore: OpenAIAPIKeyStore, Sendable {
     }
 }
 
+enum RioKeychainAccessVerifier {
+    static let launchArgument = "--verify-keychain-access"
+    static let successMessage = "Rio Keychain verification passed."
+    static let failureMessage = "Rio Keychain verification failed."
+
+    static func verify() -> Bool {
+        let store = KeychainOpenAIAPIKeyStore(
+            service: "com.rio.app.keychain-verification",
+            account: UUID().uuidString
+        )
+        let syntheticValue = UUID().uuidString
+
+        do {
+            try store.save(syntheticValue)
+            guard try store.load() == syntheticValue else {
+                try? store.remove()
+                return false
+            }
+            try store.remove()
+            return try store.load() == nil
+        } catch {
+            try? store.remove()
+            return false
+        }
+    }
+}
+
 @MainActor
 final class OpenAIProviderSettings: ObservableObject {
     @Published var apiKey = ""

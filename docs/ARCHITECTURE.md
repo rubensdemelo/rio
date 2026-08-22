@@ -190,6 +190,12 @@ Diagnostics may record durations, queue depth, model availability, and error cod
 
 The user-provided API key is held by Rio's app-isolated macOS data-protection Keychain group in every build configuration rather than the meeting-data lifecycle and is never copied into `UserDefaults`, files, logs, or environment-dependent runtime configuration. Rio does not query or migrate the earlier file-based Keychain item because doing so can invoke a legacy per-binary access dialog; the user enters the key once into the isolated store. The two-day local meeting history is the only persisted meeting-derived content and lives in an atomically written application-support JSON file.
 
+The local final verification gate executes the built Rio binary in a dedicated
+diagnostic mode and performs a synthetic save-load-delete round-trip through
+that same data-protection Keychain. It runs after signature and entitlement
+inspection and before launch, never reads the user's API key, and prevents an
+unsigned or incorrectly entitled build from reaching the normal interface.
+
 ## Concurrency
 
 - Capture callbacks do minimal real-time work.

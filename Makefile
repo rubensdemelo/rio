@@ -1,4 +1,4 @@
-.PHONY: clean test build verify-signing final
+.PHONY: clean test build verify-signing verify-keychain-access final
 
 PROJECT = Rio.xcodeproj
 SCHEME = Rio
@@ -8,24 +8,15 @@ DERIVED_DATA_PATH = .build/Iteration
 XCODEBUILD_BASE_FLAGS = -project $(PROJECT) -scheme $(SCHEME) -configuration $(CONFIGURATION) -destination '$(DESTINATION)' -derivedDataPath $(DERIVED_DATA_PATH) SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
 XCODEBUILD_FLAGS = $(XCODEBUILD_BASE_FLAGS)
 
-# Prefer the full development identity Xcode has installed. On current Xcode
-# versions this may be named Apple Development rather than Mac Development.
-DEVELOPMENT_IDENTITY_HASH := $(shell security find-identity -v -p codesigning 2>/dev/null | awk '/"Apple Development:|"Mac Development:/ { print $$2; exit }')
-
-ifneq ($(strip $(DEVELOPMENT_IDENTITY_HASH)),)
-STABLE_SIGNING_FLAGS = $(XCODEBUILD_FLAGS) -allowProvisioningUpdates
-TEST_XCODEBUILD_FLAGS = $(STABLE_SIGNING_FLAGS)
-BUILD_XCODEBUILD_FLAGS = $(STABLE_SIGNING_FLAGS)
-else
-TEST_XCODEBUILD_FLAGS = $(XCODEBUILD_BASE_FLAGS) CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
-BUILD_XCODEBUILD_FLAGS = $(XCODEBUILD_BASE_FLAGS) CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=-
-endif
-
 ifneq ($(wildcard Config/Development.xcconfig),)
 XCODEBUILD_FLAGS += -xcconfig Config/Development.xcconfig
-ifeq ($(strip $(DEVELOPMENT_IDENTITY_HASH)),)
-$(error Config/Development.xcconfig exists, but no Apple or Mac Development signing identity is available)
-endif
+TEST_XCODEBUILD_FLAGS = $(XCODEBUILD_FLAGS) -allowProvisioningUpdates
+BUILD_XCODEBUILD_FLAGS = $(XCODEBUILD_FLAGS) -allowProvisioningUpdates
+else
+# A checkout without local development signing configuration may still run its
+# tests and build an ad-hoc app. `make final` rejects that artifact before launch.
+TEST_XCODEBUILD_FLAGS = $(XCODEBUILD_FLAGS) CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+BUILD_XCODEBUILD_FLAGS = $(XCODEBUILD_FLAGS) CODE_SIGNING_ALLOWED=YES CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=-
 endif
 
 clean:
@@ -46,10 +37,15 @@ ifneq ($(wildcard Config/Development.xcconfig),)
 	@codesign -d --entitlements - .build/Iteration/Build/Products/Debug/Rio.app 2>&1 | grep -Fq '.com.rio.app'
 endif
 
+verify-keychain-access:
+	@echo "Verifying built-app Keychain access..."
+	@scripts/verify-keychain-access.sh .build/Iteration/Build/Products/Debug/Rio.app
+
 final:
 	@pkill -x Rio 2>/dev/null || true
 	@$(MAKE) test
 	@$(MAKE) build
 	@$(MAKE) verify-signing
+	@$(MAKE) verify-keychain-access
 	@echo "Launching Rio..."
 	@open -n .build/Iteration/Build/Products/Debug/Rio.app

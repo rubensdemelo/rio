@@ -105,7 +105,13 @@ On first launch, use **Provider** to add your own OpenAI API key. Rio stores it 
 make final
 ```
 
-`make final` stops any running Rio instance, runs the complete test suite, reuses the generated `.build/` directory, builds the Debug application with warnings treated as errors, and launches the app executable directly. Use `make clean` when a fully clean rebuild is needed.
+`make final` stops any running Rio instance, runs the complete test suite,
+reuses the generated `.build/` directory, builds the Debug application with
+warnings treated as errors, verifies its development signature and Keychain
+entitlement, performs a synthetic save-load-delete round-trip through the
+built app's data-protection Keychain, and only then launches Rio. The
+verification never reads or changes the user's OpenAI API key. Use `make clean`
+when a fully clean rebuild is needed.
 
 ```sh
 xcodebuild \
