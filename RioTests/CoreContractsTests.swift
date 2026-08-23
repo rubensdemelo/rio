@@ -115,6 +115,30 @@ final class CoreContractsTests: XCTestCase {
     }
 
     @MainActor
+    func testDefaultMeetingProfileCanBeEditedAndPersists() {
+        let suiteName = "RioTests.DefaultMeetingProfileMutation.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let settings = MeetingProfileSettings(defaults: defaults)
+
+        XCTAssertTrue(
+            settings.updateDefaultProfile(
+                name: "My default",
+                guidance: "Prioritize decisions and risks.",
+                insightPace: .sixtySeconds,
+                technicalVocabulary: "SwiftUI, AVAudioEngine"
+            )
+        )
+        XCTAssertEqual(settings.defaultProfile.name, "My default")
+        XCTAssertEqual(settings.selection, settings.defaultProfile)
+
+        let reloaded = MeetingProfileSettings(defaults: defaults)
+        XCTAssertEqual(reloaded.defaultProfile, settings.defaultProfile)
+        XCTAssertEqual(reloaded.selection, settings.defaultProfile)
+    }
+
+    @MainActor
     func testProfileConfigurationPersistsPaceAndVocabularyForCustomProfiles() throws {
         let suiteName = "RioTests.MeetingProfileConfiguration.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

@@ -583,11 +583,12 @@ struct RioView<Controller: SessionShellControlling>: View {
     private var meetingProfileControl: some View {
         HStack(spacing: 8) {
             if meetingProfileSettings.profiles.isEmpty {
-                Text("General meeting guidance")
+                Text(meetingProfileSettings.defaultProfile.title)
                     .lineLimit(1)
             } else {
                 Picker("Meeting profile", selection: $meetingProfileSettings.selection) {
-                    Text(MeetingProfile.fallback.title).tag(MeetingProfile.fallback)
+                    Text(meetingProfileSettings.defaultProfile.title)
+                        .tag(meetingProfileSettings.defaultProfile)
                     ForEach(meetingProfileSettings.profiles) { profile in
                         Text(profile.title).tag(profile)
                     }
@@ -606,7 +607,7 @@ struct RioView<Controller: SessionShellControlling>: View {
             .accessibilityLabel("Configure meeting profiles")
         }
         .font(.subheadline)
-        .help(meetingProfileSettings.profiles.isEmpty ? "Rio uses general meeting guidance until you add a profile." : meetingProfileSettings.selection.detail)
+        .help(meetingProfileSettings.selection.detail)
     }
 
     private var primaryAction: some View {
@@ -1069,12 +1070,8 @@ struct MeetingProfileSettingsView: View {
                 if showingNewProfile || selectedProfile == nil {
                     newProfileForm
                 } else if let selectedProfile {
-                    if selectedProfile.isFallback {
-                        defaultProfileDetails
-                    } else {
-                        MeetingProfileEditorRow(profile: selectedProfile)
-                            .id(selectedProfile.id)
-                    }
+                    MeetingProfileEditorRow(profile: selectedProfile)
+                        .id(selectedProfile.id)
                 }
             }
         }
@@ -1106,7 +1103,7 @@ struct MeetingProfileSettingsView: View {
     private var selectedProfile: MeetingProfile? {
         guard let selectedProfileID else { return nil }
         if selectedProfileID == MeetingProfile.fallback.id {
-            return .fallback
+            return meetingProfileSettings.defaultProfile
         }
         return meetingProfileSettings.profiles.first(where: { $0.id == selectedProfileID })
     }
@@ -1135,7 +1132,7 @@ struct MeetingProfileSettingsView: View {
 
             List(selection: $selectedProfileID) {
                 Section("Default") {
-                    Label(MeetingProfile.fallback.name, systemImage: "checkmark.circle")
+                    Label(meetingProfileSettings.defaultProfile.name, systemImage: "checkmark.circle")
                         .tag(MeetingProfile.fallback.id)
                 }
 
@@ -1227,32 +1224,6 @@ struct MeetingProfileSettingsView: View {
         selectedProfileID = MeetingProfile.fallback.id
     }
 
-    private var defaultProfileDetails: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            Text("Default profile")
-                .font(.title2.weight(.semibold))
-
-            Text("Used when no custom profile is selected. Create a custom profile when a meeting needs different guidance or vocabulary.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            ProfileField(title: "Meeting guidance") {
-                Text(MeetingProfile.fallback.guidance)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            ProfileField(title: "Insight pace") {
-                Text(MeetingProfile.fallback.insightPace.title)
-                    .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-        }
-        .padding(20)
-    }
-
     private func addProfile() {
         guard let profile = meetingProfileSettings.addCustomProfile(
             name: newName,
@@ -1338,8 +1309,10 @@ private struct MeetingProfileEditorRow: View {
                         .foregroundStyle(.red)
                 }
                 Spacer()
-                Button("Delete", role: .destructive) {
-                    meetingProfileSettings.deleteCustomProfile(id: profile.id)
+                if !profile.isFallback {
+                    Button("Delete", role: .destructive) {
+                        meetingProfileSettings.deleteCustomProfile(id: profile.id)
+                    }
                 }
                 Button("Save Changes") { saveProfile() }
                     .buttonStyle(.borderedProminent)
@@ -1357,13 +1330,24 @@ private struct MeetingProfileEditorRow: View {
     }
 
     private func saveProfile() {
-        guard meetingProfileSettings.updateCustomProfile(
-            id: profile.id,
-            name: name,
-            guidance: guidance,
-            insightPace: insightPace,
-            technicalVocabulary: technicalVocabulary
-        ) else {
+        let didSave = if profile.isFallback {
+            meetingProfileSettings.updateDefaultProfile(
+                name: name,
+                guidance: guidance,
+                insightPace: insightPace,
+                technicalVocabulary: technicalVocabulary
+            )
+        } else {
+            meetingProfileSettings.updateCustomProfile(
+                id: profile.id,
+                name: name,
+                guidance: guidance,
+                insightPace: insightPace,
+                technicalVocabulary: technicalVocabulary
+            )
+        }
+
+        guard didSave else {
             saveError = "Use a nonempty name and guidance within the field limits."
             return
         }

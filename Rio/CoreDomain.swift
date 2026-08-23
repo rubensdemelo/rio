@@ -190,6 +190,7 @@ struct MeetingProfile: Codable, Hashable, Identifiable, Sendable {
 final class MeetingProfileSettings: ObservableObject {
     private static let storageKey = "meetingProfile"
     private static let profilesStorageKey = "meetingProfiles"
+    private static let defaultProfileStorageKey = "defaultMeetingProfile"
     private static let legacyConfigurationMigrationKey = "meetingProfileConfigurationMigrationCompleted"
 
     @Published var selection: MeetingProfile {
@@ -197,15 +198,44 @@ final class MeetingProfileSettings: ObservableObject {
     }
 
     @Published private(set) var profiles: [MeetingProfile]
+    @Published private(set) var defaultProfile: MeetingProfile
 
     private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        let loadedDefaultProfile = Self.loadDefaultProfile(defaults: defaults)
         let loadedProfiles = Self.loadProfiles(defaults: defaults)
+        defaultProfile = loadedDefaultProfile
         profiles = loadedProfiles
         let selectedID = defaults.string(forKey: Self.storageKey)
-        selection = loadedProfiles.first(where: { $0.id == selectedID }) ?? .fallback
+        selection = loadedProfiles.first(where: { $0.id == selectedID })
+            ?? loadedDefaultProfile
+    }
+
+    @discardableResult
+    func updateDefaultProfile(
+        name: String,
+        guidance: String,
+        insightPace: ListeningCadence,
+        technicalVocabulary: String
+    ) -> Bool {
+        guard let updated = MeetingProfile.custom(
+            name: name,
+            guidance: guidance,
+            insightPace: insightPace,
+            technicalVocabulary: technicalVocabulary,
+            id: MeetingProfile.fallback.id
+        ) else {
+            return false
+        }
+
+        defaultProfile = updated
+        if selection.isFallback {
+            selection = updated
+        }
+        persistDefaultProfile()
+        return true
     }
 
     @discardableResult
@@ -318,6 +348,17 @@ final class MeetingProfileSettings: ObservableObject {
         )
     }
 
+    private static func loadDefaultProfile(defaults: UserDefaults) -> MeetingProfile {
+        guard let data = defaults.data(forKey: defaultProfileStorageKey),
+              let profile = try? JSONDecoder().decode(MeetingProfile.self, from: data),
+              profile.isFallback,
+              !profile.isBuiltIn
+        else {
+            return .fallback
+        }
+        return profile
+    }
+
     private static func migrateLegacyConfiguration(
         _ profiles: [MeetingProfile],
         defaults: UserDefaults
@@ -348,6 +389,11 @@ final class MeetingProfileSettings: ObservableObject {
     private func persistProfiles() {
         guard let data = try? JSONEncoder().encode(profiles) else { return }
         defaults.set(data, forKey: Self.profilesStorageKey)
+    }
+
+    private func persistDefaultProfile() {
+        guard let data = try? JSONEncoder().encode(defaultProfile) else { return }
+        defaults.set(data, forKey: Self.defaultProfileStorageKey)
     }
 }
 

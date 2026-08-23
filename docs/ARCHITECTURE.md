@@ -85,9 +85,10 @@ display-capture API.
 
 Use OpenAI's `gpt-transcribe` through `POST /v1/audio/transcriptions`. The adapter converts bounded interleaved float audio to PCM16 WAV bytes in memory, identifies the expected English input language to improve accuracy and latency, sends a multipart request, and yields only nonempty finalized text. No WAV data is written to disk.
 
-The read-only fallback profile is surfaced as the Default profile in the
-settings window. Each meeting profile carries an optional bounded
-technical-vocabulary prompt
+The fallback profile is surfaced as the editable, non-deletable Default profile
+in the settings window. Its configuration is persisted separately from custom
+profiles while retaining the stable fallback identity. Each meeting profile
+carries an optional bounded technical-vocabulary prompt
 with static product names, acronyms, versions, and error-code prefixes for
 transcription. It is local configuration applied to the next session, never
 derived from meeting text, and must not contain meeting notes or other meeting
