@@ -49,7 +49,7 @@ The current M1 vertical slice uses:
 
 - Swift and SwiftUI for the application and interface.
 - Core Audio taps for meeting/system audio capture without screen capture.
-- OpenAI's `gpt-transcribe` for temporary cloud speech-to-text from bounded in-memory WAV chunks.
+- OpenAI's `gpt-transcribe` for temporary cloud speech-to-text from bounded in-memory WAV chunks, with automatic audio chunking, technical keyword hints, bounded cross-batch context, and bounded transient retries.
 - OpenAI's Responses API with strict JSON Schema output for insight updates.
 
 ## Requirements
@@ -145,7 +145,7 @@ xcodebuild \
   test
 ```
 
-The personal-release gate on macOS 26.5.2 passes all 152 unit and integration
+The personal-release gate on macOS 26.5.2 passes all 157 unit and integration
 tests in Debug and Release, both warnings-as-errors builds, stable development
 signing, and entitlement verification. A clean launch was also inspected: Rio
 remains running without opening a window while Finder stays active. Permission

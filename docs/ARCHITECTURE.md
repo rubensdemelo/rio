@@ -83,16 +83,35 @@ display-capture API.
 
 ### Temporary speech-to-text
 
-Use OpenAI's `gpt-transcribe` through `POST /v1/audio/transcriptions`. The adapter converts bounded interleaved float audio to PCM16 WAV bytes in memory, identifies the expected English input language to improve accuracy and latency, sends a multipart request, and yields only nonempty finalized text. No WAV data is written to disk.
+Use OpenAI's `gpt-transcribe` through `POST /v1/audio/transcriptions`. The
+adapter converts bounded interleaved float audio to PCM16 WAV bytes in memory,
+identifies the expected English input language to improve accuracy and latency,
+requests automatic server-side chunking and loudness normalization, sends a
+multipart request, and yields only nonempty finalized text. Requests have a
+two-minute transport timeout so a valid 90-second batch is not rejected merely
+because upload or processing exceeds 30 seconds. No WAV data is written to
+disk.
 
 The fallback profile is surfaced as the editable, non-deletable Default profile
 in the settings window. Its configuration is persisted separately from custom
 profiles while retaining the stable fallback identity. Each meeting profile
-carries an optional bounded technical-vocabulary prompt
+carries optional bounded technical vocabulary
 with static product names, acronyms, versions, and error-code prefixes for
-transcription. It is local configuration applied to the next session, never
+transcription. Rio sends it as both unstructured prompt context and individual
+keyword hints. It is local configuration applied to the next session, never
 derived from meeting text, and must not contain meeting notes or other meeting
-content.
+content. After the first completed batch, the request prompt may also carry at
+most 1,000 characters from the immediately preceding finalized transcription
+result. That temporary tail exists only in the active recognizer queue and is
+cleared with the session; it is not a separate persisted transcript or log.
+
+The active audio batch is retried at most twice after a transient transport
+failure, HTTP 408/409/429 response, 5xx response, invalid transport response, or
+malformed response. Retries reuse the same bounded in-memory audio and do not
+reorder batches. Authentication and other request rejections fail immediately.
+The existing pending-batch bound remains authoritative during retries, so a
+long outage stops explicitly before a hidden audio gap or unbounded backlog can
+form.
 
 The collector keeps accepting capture chunks while a single request is in
 flight. Its pending request queue is bounded to two batches. If another batch

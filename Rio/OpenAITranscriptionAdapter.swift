@@ -93,15 +93,24 @@ enum WAVEncoder {
 }
 
 private enum OpenAITranscriptionRequest {
+    static let timeoutInterval: TimeInterval = 120
+
     static func make(
         configuration: OpenAIAPIConfiguration,
         audio: Data,
-        prompt: String?
+        prompt: String?,
+        keywordHints: [String]
     ) -> URLRequest {
         let boundary = "RioBoundary-\(UUID().uuidString)"
         var body = Data()
         appendField("model", value: configuration.transcriptionModel, boundary: boundary, to: &body)
         appendField("language", value: "en", boundary: boundary, to: &body)
+        if configuration.transcriptionModel == OpenAIAPIConfiguration.defaultTranscriptionModel {
+            appendField("chunking_strategy", value: "auto", boundary: boundary, to: &body)
+            for keyword in keywordHints {
+                appendField("keywords[]", value: keyword, boundary: boundary, to: &body)
+            }
+        }
         if let prompt {
             appendField("prompt", value: prompt, boundary: boundary, to: &body)
         }
@@ -114,7 +123,7 @@ private enum OpenAITranscriptionRequest {
 
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/audio/transcriptions")!)
         request.httpMethod = "POST"
-        request.timeoutInterval = 30
+        request.timeoutInterval = timeoutInterval
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(configuration.apiKey)", forHTTPHeaderField: "Authorization")
         request.httpBody = body
@@ -134,6 +143,69 @@ private enum OpenAITranscriptionRequest {
     }
 }
 
+private enum TranscriptionRequestContext {
+    static let maximumPreviousTextLength = 1_000
+
+    static func keywordHints(from technicalVocabulary: String?) -> [String] {
+        guard let technicalVocabulary else { return [] }
+
+        var seen: Set<String> = []
+        return technicalVocabulary
+            .components(separatedBy: CharacterSet(charactersIn: ",;\n"))
+            .compactMap { rawTerm in
+                let term = rawTerm.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !term.isEmpty else { return nil }
+                let key = term.folding(
+                    options: [.caseInsensitive, .diacriticInsensitive],
+                    locale: Locale(identifier: "en_US_POSIX")
+                )
+                guard seen.insert(key).inserted else { return nil }
+                return term
+            }
+    }
+
+    static func prompt(
+        technicalVocabulary: String?,
+        previousFinalizedText: String?
+    ) -> String? {
+        guard let previousFinalizedText else { return technicalVocabulary }
+        let previousContext = String(previousFinalizedText.suffix(maximumPreviousTextLength))
+        guard let technicalVocabulary else {
+            return "Previous finalized transcript context:\n\(previousContext)"
+        }
+        return """
+        Technical vocabulary:
+        \(technicalVocabulary)
+
+        Previous finalized transcript context:
+        \(previousContext)
+        """
+    }
+}
+
+private enum TranscriptionRetryPolicy {
+    static let maximumRetryCount = 2
+
+    static func delay(forRetry retry: Int) -> Duration {
+        retry == 1 ? .milliseconds(250) : .milliseconds(750)
+    }
+
+    static func shouldRetry(_ error: any Error) -> Bool {
+        if let error = error as? URLError {
+            return error.code != .cancelled
+        }
+        guard let error = error as? OpenAIHTTPError else { return false }
+        switch error {
+        case .invalidResponse, .malformedResponse:
+            return true
+        case .unexpectedStatus(let status):
+            return status == 408 || status == 409 || status == 429 || (500...599).contains(status)
+        case .incompleteResponse, .refusedResponse, .missingOutputText:
+            return false
+        }
+    }
+}
+
 private struct OpenAITranscriptionResponse: Decodable, Sendable {
     let text: String
 }
@@ -144,22 +216,25 @@ private actor OpenAITranscriptionQueue {
     private let configuration: OpenAIAPIConfiguration
     private let client: any OpenAIHTTPClient
     private let continuation: FinalizedSpeechStream.Continuation
-    private let prompt: String?
+    private let technicalVocabulary: String?
+    private let keywordHints: [String]
     private var pending: [WAVAudioBatch] = []
     private var worker: Task<Void, Never>?
     private var acceptsInput = true
     private var isTerminated = false
+    private var previousFinalizedText: String?
 
     init(
         configuration: OpenAIAPIConfiguration,
         client: any OpenAIHTTPClient,
         continuation: FinalizedSpeechStream.Continuation,
-        prompt: String?
+        technicalVocabulary: String?
     ) {
         self.configuration = configuration
         self.client = client
         self.continuation = continuation
-        self.prompt = prompt
+        self.technicalVocabulary = technicalVocabulary
+        keywordHints = TranscriptionRequestContext.keywordHints(from: technicalVocabulary)
     }
 
     func enqueue(_ batch: WAVAudioBatch) {
@@ -195,23 +270,50 @@ private actor OpenAITranscriptionQueue {
         let batch = pending.removeFirst()
         let configuration = configuration
         let client = client
-        let requestPrompt = prompt
+        let requestPrompt = TranscriptionRequestContext.prompt(
+            technicalVocabulary: technicalVocabulary,
+            previousFinalizedText: previousFinalizedText
+        )
+        let keywordHints = keywordHints
         let worker = Task { [weak self] in
-            do {
-                let request = OpenAITranscriptionRequest.make(
-                    configuration: configuration,
-                    audio: batch.wavData,
-                    prompt: requestPrompt
-                )
-                let (data, response) = try await client.data(for: request)
-                guard (200...299).contains(response.statusCode) else {
-                    throw OpenAIHTTPError.unexpectedStatus(response.statusCode)
+            var retryCount = 0
+            while true {
+                do {
+                    let request = OpenAITranscriptionRequest.make(
+                        configuration: configuration,
+                        audio: batch.wavData,
+                        prompt: requestPrompt,
+                        keywordHints: keywordHints
+                    )
+                    let (data, response) = try await client.data(for: request)
+                    guard (200...299).contains(response.statusCode) else {
+                        throw OpenAIHTTPError.unexpectedStatus(response.statusCode)
+                    }
+                    let output: OpenAITranscriptionResponse
+                    do {
+                        output = try JSONDecoder().decode(OpenAITranscriptionResponse.self, from: data)
+                    } catch {
+                        throw OpenAIHTTPError.malformedResponse
+                    }
+                    try Task.checkCancellation()
+                    await self?.completed(batch: batch, text: output.text)
+                    return
+                } catch {
+                    guard TranscriptionRetryPolicy.shouldRetry(error),
+                          retryCount < TranscriptionRetryPolicy.maximumRetryCount else {
+                        await self?.failed(error)
+                        return
+                    }
+                    retryCount += 1
+                    do {
+                        try await Task.sleep(
+                            for: TranscriptionRetryPolicy.delay(forRetry: retryCount)
+                        )
+                    } catch {
+                        await self?.failed(error)
+                        return
+                    }
                 }
-                let output = try JSONDecoder().decode(OpenAITranscriptionResponse.self, from: data)
-                try Task.checkCancellation()
-                await self?.completed(batch: batch, text: output.text)
-            } catch {
-                await self?.failed(error)
             }
         }
         self.worker = worker
@@ -222,7 +324,7 @@ private actor OpenAITranscriptionQueue {
         worker = nil
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty {
-            continuation.yield(
+            let result = continuation.yield(
                 FinalizedSpeechSegment(
                     sequenceNumber: batch.sequenceNumber,
                     text: trimmed,
@@ -230,6 +332,19 @@ private actor OpenAITranscriptionQueue {
                     endOffset: batch.endOffset
                 )
             )
+            switch result {
+            case .enqueued:
+                previousFinalizedText = trimmed
+            case .dropped:
+                terminate(throwing: .stage(.speechRecognition, .overloaded))
+                return
+            case .terminated:
+                terminate(throwing: .cancelled)
+                return
+            @unknown default:
+                terminate(throwing: .stage(.speechRecognition, .failed))
+                return
+            }
         }
         startNextIfNeeded()
     }
@@ -334,7 +449,7 @@ actor OpenAITranscriptionAdapter: SessionSpeechRecognizer {
             configuration: configuration,
             client: client,
             continuation: outputContinuation,
-            prompt: hasConfiguredTranscriptionPrompt
+            technicalVocabulary: hasConfiguredTranscriptionPrompt
                 ? configuredTranscriptionPrompt
                 : transcriptionPromptProvider()
         )

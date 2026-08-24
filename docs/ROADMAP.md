@@ -24,7 +24,7 @@ Exit criterion: meeting audio produces useful, structured insight cards through 
 
 Verified on macOS 26.5.2:
 
-- 152 unit and integration tests pass in both Debug and Release, including deterministic long-session coverage for rolling-context novelty, current-card insight requests, explicit capture/transcription-overload shutdown before audio eviction, pause/resume continuity, elapsed transcription feedback, saved-transcript navigation, capture interruption persistence, direct system-audio permission recovery, custom meeting-profile persistence and guidance, app-isolated data-protection Keychain selection, and privacy-safe OpenAI request diagnostics.
+- 157 unit and integration tests pass in both Debug and Release, including deterministic long-session coverage for rolling-context novelty, current-card insight requests, explicit capture/transcription-overload shutdown before audio eviction, pause/resume continuity, elapsed transcription feedback, saved-transcript navigation, capture interruption persistence, direct system-audio permission recovery, custom meeting-profile persistence and guidance, automatic transcription chunking and keyword hints, bounded cross-batch transcription context, transient transcription retry, app-isolated data-protection Keychain selection, and privacy-safe OpenAI request diagnostics.
 - Debug and Release builds pass with warnings treated as errors and Swift 6 complete strict-concurrency checking enabled.
 - Static privacy scans find no production logging or persistence APIs other than the bounded two-day insight history.
 - The development-signed application passes entitlement verification. A clean launch leaves Rio running as a menu-bar-only accessory without opening or restoring a window, activating over Finder, or appearing in the Dock/app switcher.
@@ -109,8 +109,11 @@ HTTP rejection is preserved when an upload later times out. Deterministic
 queue-pressure, long-session, rejection-plus-timeout, and diagnostic-privacy
 coverage passes. Rio now launches menu-bar-only with SwiftUI restoration disabled,
 and the local personal-release gate verifies stable signing and capture
-entitlements; the one-hour hardware soak and live interruption checks remain
-outstanding.
+entitlements. Transcription requests now use automatic server-side chunking and
+loudness normalization, discrete technical keyword hints, a bounded previous
+segment tail for cross-batch continuity, a two-minute upload timeout, and at
+most two same-batch transient retries without relaxing the bounded backlog. The
+one-hour hardware soak and live interruption checks remain outstanding.
 
 ## Deferred until after the MVP
 

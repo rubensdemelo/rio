@@ -44,11 +44,13 @@ final class OpenAITranscriptionAdapterTests: XCTestCase {
         XCTAssertTrue(request.value(forHTTPHeaderField: "Content-Type")?.contains("multipart/form-data") == true)
         XCTAssertTrue(request.httpBody?.range(of: Data("name=\"model\"\r\n\r\ngpt-transcribe\r\n".utf8)) != nil)
         XCTAssertTrue(request.httpBody?.range(of: Data("name=\"language\"\r\n\r\nen\r\n".utf8)) != nil)
+        XCTAssertTrue(request.httpBody?.range(of: Data("name=\"chunking_strategy\"\r\n\r\nauto\r\n".utf8)) != nil)
         XCTAssertTrue(request.httpBody?.range(of: Data("RIFF".utf8)) != nil)
         XCTAssertNil(request.httpBody?.range(of: Data("meeting decision".utf8)))
+        XCTAssertEqual(request.timeoutInterval, 120)
     }
 
-    func testTranscriptionSendsConfiguredTechnicalVocabularyOnlyAsPrompt() async throws {
+    func testTranscriptionSendsConfiguredVocabularyAsPromptAndKeywordHints() async throws {
         let client = RecordingTranscriptionHTTPClient(text: "technical term")
         let adapter = OpenAITranscriptionAdapter(
             configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
@@ -63,6 +65,52 @@ final class OpenAITranscriptionAdapterTests: XCTestCase {
         let request = await client.request()
         let body = try XCTUnwrap(request?.httpBody)
         XCTAssertNotNil(body.range(of: Data("name=\"prompt\"\r\n\r\nDb2, IRLM, DASD\r\n".utf8)))
+        XCTAssertNotNil(body.range(of: Data("name=\"keywords[]\"\r\n\r\nDb2\r\n".utf8)))
+        XCTAssertNotNil(body.range(of: Data("name=\"keywords[]\"\r\n\r\nIRLM\r\n".utf8)))
+        XCTAssertNotNil(body.range(of: Data("name=\"keywords[]\"\r\n\r\nDASD\r\n".utf8)))
+    }
+
+    func testTranscriptionCarriesBoundedPreviousFinalizedTextAcrossBatchBoundaries() async throws {
+        let client = SequencedTranscriptionHTTPClient(texts: [
+            "The customer runs Db2 13 in data sharing mode.",
+            "IRLM timeout 00C9008E followed.",
+        ])
+        let adapter = OpenAITranscriptionAdapter(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client,
+            batchDuration: .seconds(1)
+        )
+        let stream = try await adapter.recognize(audio: twoChunkAudioStream())
+
+        let segments = try await collect(stream)
+
+        XCTAssertEqual(segments.count, 2)
+        let requests = await client.requests()
+        XCTAssertEqual(requests.count, 2)
+        let secondBody = try XCTUnwrap(requests.last?.httpBody)
+        XCTAssertNotNil(
+            secondBody.range(
+                of: Data(
+                    "Previous finalized transcript context:\nThe customer runs Db2 13 in data sharing mode.".utf8
+                )
+            )
+        )
+    }
+
+    func testTransientTranscriptionFailureRetriesTheSameBatch() async throws {
+        let client = RecoveringTranscriptionHTTPClient()
+        let adapter = OpenAITranscriptionAdapter(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client,
+            batchDuration: .seconds(1)
+        )
+        let stream = try await adapter.recognize(audio: audioStream())
+
+        let segments = try await collect(stream)
+
+        XCTAssertEqual(segments.map(\.text), ["recovered transcript"])
+        let requestCount = await client.requestCount()
+        XCTAssertEqual(requestCount, 2)
     }
 
     func testMissingAPIKeyIsReportedBeforeAudioCapture() async {
@@ -220,6 +268,14 @@ final class OpenAITranscriptionAdapterTests: XCTestCase {
         }
     }
 
+    private func twoChunkAudioStream() -> AudioStream {
+        AudioStream { continuation in
+            continuation.yield(chunk(sequenceNumber: 0))
+            continuation.yield(chunk(sequenceNumber: 1))
+            continuation.finish()
+        }
+    }
+
     private func chunk(sequenceNumber: UInt64) -> AudioChunk {
         AudioChunk(
             sequenceNumber: sequenceNumber,
@@ -237,6 +293,53 @@ final class OpenAITranscriptionAdapterTests: XCTestCase {
         }
         return segments
     }
+}
+
+private actor SequencedTranscriptionHTTPClient: OpenAIHTTPClient {
+    private var recordedRequests: [URLRequest] = []
+    private var texts: [String]
+
+    init(texts: [String]) {
+        self.texts = texts
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        recordedRequests.append(request)
+        let text = texts.isEmpty ? "" : texts.removeFirst()
+        return (
+            try JSONSerialization.data(withJSONObject: ["text": text]),
+            HTTPURLResponse(
+                url: URL(string: "https://api.openai.com/v1/audio/transcriptions")!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+        )
+    }
+
+    func requests() -> [URLRequest] { recordedRequests }
+}
+
+private actor RecoveringTranscriptionHTTPClient: OpenAIHTTPClient {
+    private var count = 0
+
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        count += 1
+        if count == 1 {
+            throw URLError(.networkConnectionLost)
+        }
+        return (
+            try JSONSerialization.data(withJSONObject: ["text": "recovered transcript"]),
+            HTTPURLResponse(
+                url: URL(string: "https://api.openai.com/v1/audio/transcriptions")!,
+                statusCode: 200,
+                httpVersion: nil,
+                headerFields: nil
+            )!
+        )
+    }
+
+    func requestCount() -> Int { count }
 }
 
 private actor RecordingTranscriptionHTTPClient: OpenAIHTTPClient {

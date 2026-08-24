@@ -68,8 +68,12 @@ listening session.
 Each profile also includes an optional Technical vocabulary field. The user can
 enter concise product names, acronyms, versions, and error-code prefixes to
 guide OpenAI transcription. This bounded configuration is sent with each
-transcription request and must not contain meeting notes or other meeting
-content.
+transcription request as both prompt context and discrete keyword hints. Rio
+also sends a bounded tail of the immediately preceding finalized segment as
+temporary context for the next transcription batch so words split across a
+batch boundary retain context. Neither form of transcription context changes
+the two-day history or no-audio-storage boundaries. Technical vocabulary must
+not contain meeting notes or other meeting content.
 
 Meeting profile settings let the user edit the non-deletable Default profile
 and create, edit, and delete custom profiles. Every profile has a nonempty name
@@ -78,7 +82,7 @@ and bounded guidance, plus its own insight pace and technical vocabulary.
 When the user starts listening:
 
 1. Rio captures system/meeting audio, including browser-based calls.
-2. Rio groups live audio into bounded, in-memory WAV chunks and sends them to OpenAI's `gpt-transcribe` API for temporary finalized text.
+2. Rio groups live audio into bounded, in-memory WAV chunks and sends them to OpenAI's `gpt-transcribe` API with automatic server-side audio chunking, bounded profile vocabulary, and bounded prior-segment context for temporary finalized text.
 3. A bounded rolling text window is sent to OpenAI's Responses API.
 4. The API receives the bounded recent context, a distinct new-finalized-text slice, and the bounded current insight cards, then returns structured incident-signal and insight updates. This lets it update or resolve stable keys instead of re-summarizing repeated rolling context.
 5. The UI adds, updates, or removes concise cards as the support call develops.
@@ -117,7 +121,7 @@ Transcription is a cloud stage: Rio sends bounded in-memory WAV chunks to OpenAI
 - Audio is never intentionally written to disk.
 - Bounded in-memory WAV chunks are transmitted to OpenAI only for transcription.
 - Finalized transcript segments live in a bounded rolling context window.
-- Bounded temporary meeting text is transmitted to OpenAI only to create current insight updates.
+- A bounded tail of the immediately preceding finalized segment may be sent to OpenAI with the next transcription batch for continuity; bounded temporary meeting text is also transmitted to create current insight updates.
 - Old text is continuously discarded.
 - All temporary meeting text is discarded when listening stops.
 - Current insight cards disappear from the active session when it ends, but Rio stores them with the meeting's finalized transcript locally for up to two days so they remain available through Recent Meetings.
