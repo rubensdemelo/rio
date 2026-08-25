@@ -29,9 +29,13 @@ final class ApplicationShellTests: XCTestCase {
         router.open(.main)
         router.open(.profiles)
         router.open(.recentMeetings)
+        router.open(.diagnostics)
 
-        XCTAssertEqual(openedWindowIDs, ["main", "profiles", "recent-meetings"])
-        XCTAssertEqual(activationCount, 3)
+        XCTAssertEqual(
+            openedWindowIDs,
+            ["main", "profiles", "recent-meetings", "diagnostics"]
+        )
+        XCTAssertEqual(activationCount, 4)
     }
 
     func testLiveCompositionUsesFixedEnglishUSLocale() {

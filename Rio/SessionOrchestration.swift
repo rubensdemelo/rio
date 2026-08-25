@@ -88,6 +88,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     private let insightState: any InsightState
     private let transcriptCollector: any TranscriptCollecting
     private let historyRecorder: any MeetingHistoryRecording
+    private let failureRecorder: any SessionFailureRecording
 
     private(set) var status: SessionStatus = .stopped
     private(set) var failure: PipelineFailure?
@@ -115,7 +116,8 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         insightGenerator: any SessionInsightGenerator,
         insightState: any InsightState,
         transcriptCollector: any TranscriptCollecting = InMemoryTranscriptCollector(),
-        historyRecorder: any MeetingHistoryRecording = NoopMeetingHistoryRecorder()
+        historyRecorder: any MeetingHistoryRecording = NoopMeetingHistoryRecorder(),
+        failureRecorder: any SessionFailureRecording = UnifiedSessionFailureRecorder()
     ) {
         self.localeIdentifier = localeIdentifier
         self.capture = capture
@@ -125,6 +127,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         self.insightState = insightState
         self.transcriptCollector = transcriptCollector
         self.historyRecorder = historyRecorder
+        self.failureRecorder = failureRecorder
     }
 
     func checkAvailability() async -> Availability {
@@ -225,7 +228,9 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
 
     func start() async throws(PipelineFailure) {
         guard activeSessionID == nil, status != .checkingAvailability else {
-            throw .stage(.sessionLifecycle, .invalidState)
+            let failure = PipelineFailure.stage(.sessionLifecycle, .invalidState)
+            failureRecorder.record(failure)
+            throw failure
         }
 
         do {
@@ -342,7 +347,9 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
 
     func resume() async throws(PipelineFailure) {
         guard let sessionID = activeSessionID, status == .paused else {
-            throw .stage(.sessionLifecycle, .invalidState)
+            let failure = PipelineFailure.stage(.sessionLifecycle, .invalidState)
+            failureRecorder.record(failure)
+            throw failure
         }
 
         do {
@@ -513,6 +520,10 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     private func cleanup(sessionID: UInt64, kind: CleanupKind) async {
         guard activeSessionID == sessionID else {
             return
+        }
+
+        if case .failure(let failure) = kind {
+            failureRecorder.record(failure)
         }
 
         let meetingRecord: MeetingHistoryRecord? = {

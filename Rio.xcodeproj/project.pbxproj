@@ -48,6 +48,9 @@
 		A1000001000000000000002C /* MeetingHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000021 /* MeetingHistoryStore.swift */; };
 		A1000001000000000000002D /* MeetingHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000021 /* MeetingHistoryStore.swift */; };
 		A1000001000000000000002E /* MeetingHistoryStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000022 /* MeetingHistoryStoreTests.swift */; };
+		A1000001000000000000002F /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000023 /* Diagnostics.swift */; };
+		A10000010000000000000030 /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000023 /* Diagnostics.swift */; };
+		A10000010000000000000031 /* DiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000024 /* DiagnosticsTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -82,6 +85,8 @@
 		A20000010000000000000020 /* CoreAudio.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreAudio.framework; path = System/Library/Frameworks/CoreAudio.framework; sourceTree = SDKROOT; };
 		A20000010000000000000021 /* MeetingHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingHistoryStore.swift; sourceTree = "<group>"; };
 		A20000010000000000000022 /* MeetingHistoryStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingHistoryStoreTests.swift; sourceTree = "<group>"; };
+		A20000010000000000000023 /* Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics.swift; sourceTree = "<group>"; };
+		A20000010000000000000024 /* DiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -130,6 +135,7 @@
 				A2000001000000000000001D /* OpenAIKeychainStore.swift */,
 				A2000001000000000000001E /* InsightHistoryStore.swift */,
 				A20000010000000000000021 /* MeetingHistoryStore.swift */,
+				A20000010000000000000023 /* Diagnostics.swift */,
 				A2000001000000000000000E /* ApplicationShell.swift */,
 				A20000010000000000000010 /* MicrophoneCapture.swift */,
 				A20000010000000000000013 /* OpenAITranscriptionAdapter.swift */,
@@ -154,6 +160,7 @@
 				A20000010000000000000019 /* VerticalSliceIntegrationTests.swift */,
 				A2000001000000000000001F /* InsightHistoryStoreTests.swift */,
 				A20000010000000000000022 /* MeetingHistoryStoreTests.swift */,
+				A20000010000000000000024 /* DiagnosticsTests.swift */,
 			);
 			path = RioTests;
 			sourceTree = "<group>";
@@ -276,6 +283,7 @@
 				A10000010000000000000027 /* OpenAIKeychainStore.swift in Sources */,
 				A10000010000000000000029 /* InsightHistoryStore.swift in Sources */,
 				A1000001000000000000002C /* MeetingHistoryStore.swift in Sources */,
+				A1000001000000000000002F /* Diagnostics.swift in Sources */,
 				A1000001000000000000000F /* ApplicationShell.swift in Sources */,
 				A10000010000000000000012 /* MicrophoneCapture.swift in Sources */,
 				A10000010000000000000017 /* OpenAITranscriptionAdapter.swift in Sources */,
@@ -311,6 +319,8 @@
 				A1000001000000000000002B /* InsightHistoryStoreTests.swift in Sources */,
 				A1000001000000000000002D /* MeetingHistoryStore.swift in Sources */,
 				A1000001000000000000002E /* MeetingHistoryStoreTests.swift in Sources */,
+				A10000010000000000000030 /* Diagnostics.swift in Sources */,
+				A10000010000000000000031 /* DiagnosticsTests.swift in Sources */,
 				A10000010000000000000025 /* SystemAudioCapture.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -90,5 +90,13 @@ struct RioApp: App {
         .restorationBehavior(.disabled)
         .windowResizability(.contentMinSize)
 
+        Window("Diagnostics", id: "diagnostics") {
+            RioDiagnosticsView()
+        }
+        .defaultSize(width: 760, height: 520)
+        .defaultLaunchBehavior(.suppressed)
+        .restorationBehavior(.disabled)
+        .windowResizability(.contentMinSize)
+
     }
 }

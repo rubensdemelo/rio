@@ -21,8 +21,8 @@ and insight cards appear below that action only when they are useful.
 Rio also remains available from the macOS menu bar while the app is running. The
 menu-bar menu provides the same start/stop listening action as the main window,
 along with Manage Profiles, Recent Meetings, Provider & API Key, Open Rio, and
-Quit Rio actions. The menu does not repeat the selected meeting profile as a
-passive status row.
+Diagnostics actions, plus Quit Rio. The menu does not repeat the selected
+meeting profile as a passive status row.
 When Rio launches, it keeps the main window suppressed so a ready setup starts
 with only the menu-bar item visible. Open Rio remains available whenever the
 full interface or setup guidance is needed. Rio is a menu-bar utility rather
@@ -93,6 +93,14 @@ The app does not display a live transcript. Finalized transcript segments are co
 
 If no input is detected for a sustained period, the interface warns that meeting audio may be silent. Capture failures are shown as explicit connection errors rather than as an apparently active listening state.
 
+Diagnostics remains available from the menu-bar icon before, during, and after
+a recoverable failure. It shows a bounded, read-only view of Rio's privacy-safe
+logs from the current app launch and provides Copy All, Refresh, and Open
+Console actions. Console is the path to entries from an earlier launch. These
+logs expose structured stages, availability reasons, status codes, request IDs,
+timing, and queue state where available; they never expose meeting content or
+credentials.
+
 ## Insight categories
 
 The MVP surfaces:
@@ -161,6 +169,7 @@ The MVP is successful when:
 7. A one-hour meeting completes without deadlock, unrecovered capture failure, or unbounded memory growth.
 8. The app clearly reports a missing or rejected OpenAI API key, denied permission, transcription failure, and interrupted capture states.
 9. Completed meetings persist their finalized transcript and generated insight cards locally, automatically expire after two days, and never include audio.
+10. A user can open bounded privacy-safe diagnostics from the menu-bar icon after any recoverable listening failure without using a command-line tool.
 
 Transient insight service failures do not end an active listening session. Rio
 retries them while preserving capture and the finalized transcript pipeline.

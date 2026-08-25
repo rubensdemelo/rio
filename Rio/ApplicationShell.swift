@@ -9,6 +9,7 @@ enum RioLaunchPresentation {
 
 enum RioWindow: String {
     case main
+    case diagnostics
     case profiles
     case recentMeetings = "recent-meetings"
 }
@@ -146,6 +147,10 @@ struct RioMenuBarContent<Controller: SessionShellControlling>: View {
         Button("Provider & API Key…") {
             panelRouter.showProvider()
             windowRouter.open(.main)
+        }
+
+        Button("Diagnostics…") {
+            windowRouter.open(.diagnostics)
         }
 
         Divider()

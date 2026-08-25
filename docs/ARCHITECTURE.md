@@ -30,7 +30,7 @@ live SwiftUI insight cards
  bounded local meeting history (transcript + insights, two days only)
 
                          MenuBarExtra
-      start/stop, manage profiles, recent, provider, open, quit
+ start/stop, manage profiles, recent, provider, diagnostics, open, quit
 
                        non-content voice feedback
                        (input level + recognition activity)
@@ -208,7 +208,14 @@ All queues and buffers are bounded:
 - The local meeting history bounds meeting count, transcript segment count, transcript text bytes, and card count, and removes records older than two days.
 - In-flight API requests are cancelled and their in-memory request context is released when listening stops.
 
-Diagnostics may record durations, queue depth, model availability, and error codes. Failed OpenAI requests record only a fixed endpoint label, HTTP status, transport category and code, sanitized OpenAI request ID, and sanitized API error type and code. The HTTP transport observes response headers, response data, and task metrics separately so an early server rejection remains available even when URLSession later reports an upload timeout. Diagnostics never record request or response bodies, free-form API error messages, the API key, audio, transcript text, generated insight text, prompts, or other meeting content.
+Diagnostics may record durations, queue depth, model availability, and error codes. Failed OpenAI requests record only a fixed endpoint label, HTTP status, transport category and code, sanitized OpenAI request ID, and sanitized API error type and code. The HTTP transport observes response headers, response data, and task metrics separately so an early server rejection remains available even when URLSession later reports an upload timeout. Every terminal listening failure also crosses the session-lifecycle cleanup seam, which emits one structured stage, reason, and HTTP-status record before state is cleared. Diagnostics never record request or response bodies, free-form API error messages, the API key, audio, transcript text, generated insight text, prompts, or other meeting content.
+
+Rio's Diagnostics window queries the macOS unified log for Rio's subsystem and
+current process only, returns at most the 200 newest entries, and renders them
+read-only. It supports refresh and copying the bounded result. The menu also
+opens Console for system-retained entries from earlier Rio launches; Rio does
+not copy unified logs into its meeting-history store or create a separate log
+file.
 
 The user-provided API key is held by Rio's app-isolated macOS data-protection Keychain group in every build configuration rather than the meeting-data lifecycle and is never copied into `UserDefaults`, files, logs, or environment-dependent runtime configuration. Rio does not query or migrate the earlier file-based Keychain item because doing so can invoke a legacy per-binary access dialog; the user enters the key once into the isolated store. The two-day local meeting history is the only persisted meeting-derived content and lives in an atomically written application-support JSON file.
 
@@ -228,15 +235,15 @@ unsigned or incorrectly entitled build from reaching the normal interface.
 
 ### Application shell
 
-The app exposes a native `MenuBarExtra` alongside the main `Window` and a
-separate movable, floating Recent Meetings `Window`. The menu-bar scene shares the main
+The app exposes a native `MenuBarExtra` alongside the main `Window` and
+separate movable, floating Recent Meetings and Diagnostics windows. The menu-bar scene shares the main
 actor-isolated `LiveSessionController`, so its start/stop action cannot create a
 second listening session or a separate insight store. Provider & API Key uses a
 sheet from the main window; Recent Meetings is its own floating window so it can
 stay above normal app windows and be moved independently while the live insight
 stream remains visible.
-Open Rio targets the main window scene by ID, Recent Meetings targets its own
-scene by ID, and Quit Rio terminates the application. Menu commands use the
+Open Rio targets the main window scene by ID, Recent Meetings and Diagnostics
+target their own scene IDs, and Quit Rio terminates the application. Menu commands use the
 `MenuBarExtra` scene's SwiftUI `openWindow` action rather than searching
 `NSApp.windows`, because no window exists yet after a menu-bar-only launch. The
 scene observes provider and session readiness directly so Start Listening
@@ -257,6 +264,12 @@ and performs local, non-AI text filtering without changing the saved record.
 ## Failure behavior
 
 A failure must not silently leave the app appearing to listen.
+
+All terminal listening failures are recorded at the shared session-cleanup
+boundary before cleanup runs, so capture, transcription, context, generation,
+availability, and invalid-state failures cannot bypass the privacy-safe
+diagnostic record. The menu-bar Diagnostics action remains available regardless
+of session readiness or failure state.
 
 - Permission denial explains which permission is needed and how to retry.
 - Capture interruption changes the status and attempts a bounded recovery where safe.

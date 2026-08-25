@@ -12,8 +12,10 @@ Rio uses bounded in-memory OpenAI transcription and context, OpenAI insight gene
 
 Rio launches as a menu-bar-only utility: it does not open a window, appear in
 the Dock, or enter the app switcher. The menu-bar item provides the primary
-start/stop action and explicit access to Rio's windows. During a meeting, it
-surfaces concise cards for:
+start/stop action and explicit access to Rio's windows. Its Diagnostics action
+shows bounded privacy-safe logs from the current launch and can open Console for
+earlier entries, so a recoverable failure can be investigated without a
+command-line tool. During a meeting, it surfaces concise cards for:
 
 - Important points and takeaways.
 - Decisions.

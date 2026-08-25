@@ -129,6 +129,27 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertTrue(records[0].incompleteTranscript)
     }
 
+    func testTerminalFailureIsRecordedByTheGeneralDiagnosticsGuardrail() async throws {
+        let speech = TestSessionSpeechRecognizer()
+        let failureRecorder = TestSessionFailureRecorder()
+        let coordinator = makeCoordinator(
+            speech: speech,
+            failureRecorder: failureRecorder
+        )
+
+        try await coordinator.start()
+        let speechStream = await speech.lastStream()
+        speechStream?.finish(
+            throwing: PipelineFailure.stage(.speechRecognition, .failed)
+        )
+        await waitUntil { coordinator.status == .unavailable }
+
+        XCTAssertEqual(
+            failureRecorder.failures,
+            [.stage(.speechRecognition, .failed)]
+        )
+    }
+
     func testTranscriptionOverloadStopsAndMarksSavedTranscriptIncomplete() async throws {
         let speech = TestSessionSpeechRecognizer()
         let transcriptCollector = TestTranscriptCollector()
@@ -810,7 +831,8 @@ final class SessionLifecycleTests: XCTestCase {
         contextFactory: TestMeetingContextFactory = TestMeetingContextFactory(),
         state: TestSessionInsightState = TestSessionInsightState(),
         transcriptCollector: any TranscriptCollecting = TestTranscriptCollector(),
-        historyRecorder: any MeetingHistoryRecording = TestMeetingHistoryRecorder()
+        historyRecorder: any MeetingHistoryRecording = TestMeetingHistoryRecorder(),
+        failureRecorder: any SessionFailureRecording = TestSessionFailureRecorder()
     ) -> SessionLifecycleCoordinator {
         SessionLifecycleCoordinator(
             localeIdentifier: "en-US",
@@ -820,7 +842,8 @@ final class SessionLifecycleTests: XCTestCase {
             insightGenerator: generator,
             insightState: state,
             transcriptCollector: transcriptCollector,
-            historyRecorder: historyRecorder
+            historyRecorder: historyRecorder,
+            failureRecorder: failureRecorder
         )
     }
 
@@ -858,6 +881,15 @@ final class SessionLifecycleTests: XCTestCase {
         )
     }
 
+}
+
+@MainActor
+private final class TestSessionFailureRecorder: SessionFailureRecording {
+    private(set) var failures: [PipelineFailure] = []
+
+    func record(_ failure: PipelineFailure) {
+        failures.append(failure)
+    }
 }
 
 final class TestStream<Element: Sendable>: @unchecked Sendable {

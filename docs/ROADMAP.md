@@ -24,9 +24,9 @@ Exit criterion: meeting audio produces useful, structured insight cards through 
 
 Verified on macOS 26.5.2:
 
-- 157 unit and integration tests pass in both Debug and Release, including deterministic long-session coverage for rolling-context novelty, current-card insight requests, explicit capture/transcription-overload shutdown before audio eviction, pause/resume continuity, elapsed transcription feedback, saved-transcript navigation, capture interruption persistence, direct system-audio permission recovery, custom meeting-profile persistence and guidance, automatic transcription chunking and keyword hints, bounded cross-batch transcription context, transient transcription retry, app-isolated data-protection Keychain selection, and privacy-safe OpenAI request diagnostics.
+- 161 unit and integration tests pass in both Debug and Release, including deterministic long-session coverage for rolling-context novelty, current-card insight requests, explicit capture/transcription-overload shutdown before audio eviction, pause/resume continuity, elapsed transcription feedback, saved-transcript navigation, capture interruption persistence, direct system-audio permission recovery, custom meeting-profile persistence and guidance, automatic transcription chunking and keyword hints, bounded cross-batch transcription context, transient transcription retry, app-isolated data-protection Keychain selection, and privacy-safe OpenAI and session-failure diagnostics.
 - Debug and Release builds pass with warnings treated as errors and Swift 6 complete strict-concurrency checking enabled.
-- Static privacy scans find no production logging or persistence APIs other than the bounded two-day insight history.
+- Static privacy scans confirm that production diagnostics contain only structured non-content metadata and that meeting-derived persistence remains limited to the bounded two-day history.
 - The development-signed application passes entitlement verification. A clean launch leaves Rio running as a menu-bar-only accessory without opening or restoring a window, activating over Finder, or appearing in the Dock/app switcher.
 - The built application launches and exits cleanly without creating audio or transcript files; its inspected container contains only app preferences and the bounded local insight-history file after cards are generated.
 
@@ -107,7 +107,10 @@ local timestamped filtering. OpenAI request failures now emit privacy-safe
 endpoint, HTTP, transport, request-ID, and API error-code diagnostics; an early
 HTTP rejection is preserved when an upload later times out. Deterministic
 queue-pressure, long-session, rejection-plus-timeout, and diagnostic-privacy
-coverage passes. Rio now launches menu-bar-only with SwiftUI restoration disabled,
+coverage passes. Every terminal listening failure now emits a structured,
+privacy-safe record at the shared cleanup boundary, and the menu-bar icon opens
+a bounded current-launch Diagnostics window with copy, refresh, and Console
+access. Rio now launches menu-bar-only with SwiftUI restoration disabled,
 and the local personal-release gate verifies stable signing and capture
 entitlements. Transcription requests now use automatic server-side chunking and
 loudness normalization, discrete technical keyword hints, a bounded previous
