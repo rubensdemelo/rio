@@ -294,7 +294,7 @@ private final class MeetingHistoryStoreRecorder: MeetingHistoryRecording {
                 SavedInsight(
                     sessionID: meeting.meetingID,
                     card: card,
-                    savedAt: meeting.endedAt
+                    savedAt: card.changedAt
                 )
             },
             incompleteTranscript: meeting.incompleteTranscript,

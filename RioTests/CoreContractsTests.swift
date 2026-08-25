@@ -445,7 +445,8 @@ final class CoreContractsTests: XCTestCase {
 @MainActor
 final class InMemoryInsightStoreTests: XCTestCase {
     func testAddsCardAndPublishesObservableState() throws {
-        let store = InMemoryInsightStore()
+        let changedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let store = InMemoryInsightStore(now: { changedAt })
         let change = expectation(description: "cards changed")
         withObservationTracking {
             _ = store.cards
@@ -467,19 +468,24 @@ final class InMemoryInsightStoreTests: XCTestCase {
                     category: .important,
                     text: "Useful point",
                     explicitOwner: nil,
-                    state: .new
+                    state: .new,
+                    changedAt: changedAt
                 )
             ]
         )
     }
 
     func testDuplicateAddAndUpdateUseStableKeyWithoutAccumulatingCards() throws {
-        let store = InMemoryInsightStore()
+        var changedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        let store = InMemoryInsightStore(now: { changedAt })
 
         try store.apply(
             [update(key: "Decision-1", category: .decision, text: "Use option A")],
             supportedBy: context()
         )
+        XCTAssertEqual(store.cards[0].changedAt, changedAt)
+
+        changedAt = changedAt.addingTimeInterval(60)
         try store.apply(
             [update(key: " decision-1 ", category: .decision, text: "Use option B")],
             supportedBy: context()
@@ -489,7 +495,9 @@ final class InMemoryInsightStoreTests: XCTestCase {
         XCTAssertEqual(store.cards[0].stableKey, "decision-1")
         XCTAssertEqual(store.cards[0].text, "Use option B")
         XCTAssertEqual(store.cards[0].state, .updated)
+        XCTAssertEqual(store.cards[0].changedAt, changedAt)
 
+        changedAt = changedAt.addingTimeInterval(60)
         try store.apply(
             [
                 update(
@@ -505,6 +513,7 @@ final class InMemoryInsightStoreTests: XCTestCase {
         XCTAssertEqual(store.cards.count, 1)
         XCTAssertEqual(store.cards[0].text, "Use option C")
         XCTAssertEqual(store.cards[0].state, .updated)
+        XCTAssertEqual(store.cards[0].changedAt, changedAt)
     }
 
     func testResolveKnownCardAndIgnoreUnknownStableKeys() throws {

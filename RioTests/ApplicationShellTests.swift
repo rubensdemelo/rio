@@ -221,16 +221,23 @@ final class ApplicationShellTests: XCTestCase {
     }
 
     func testInsightAccessibilityDoesNotExposeAnOwner() {
+        let changedAt = Date(timeIntervalSince1970: 1_700_000_000)
         let card = InsightCard(
             stableKey: "synthetic-owner",
             category: .action,
             text: "Synthetic action",
             explicitOwner: "Alex",
-            state: .new
+            state: .new,
+            changedAt: changedAt
         )
 
         XCTAssertFalse(card.accessibilityDescription.contains("Owner:"))
         XCTAssertFalse(card.accessibilityDescription.contains("Alex"))
+        XCTAssertTrue(
+            card.accessibilityDescription.contains(
+                changedAt.formatted(date: .abbreviated, time: .shortened)
+            )
+        )
     }
 
     func testUnavailableOutcomeNeverClaimsToBeListening() async {

@@ -111,7 +111,12 @@ The MVP surfaces:
 - Open questions.
 - Risks, blockers, and unresolved topics.
 
-Each card contains a concise statement, its category, and a simple state such as new, updated, or resolved. Evidence text and transcript navigation are not required for the MVP.
+Each card contains a concise statement, its category, and the local date and
+time when it was most recently added, updated, or resolved. Rio retains the
+new, updated, and resolved state internally for deduplication and visual
+treatment, but the card's right-side label shows the more useful timestamp
+instead of a state tag. Evidence text and transcript navigation are not
+required for the MVP.
 
 Rio must not guess an action-item owner. Owner attribution is validated only when the temporary meeting text explicitly names one, but it is not displayed on the compact MVP insight cards.
 
@@ -164,6 +169,7 @@ The MVP is successful when:
 2. The app captures system/meeting audio from a real meeting after a clear permission flow.
 3. Useful insight cards begin appearing during the meeting without exposing a transcript.
 4. Duplicate insights are merged and changed conclusions update or replace stale cards.
+   Their displayed date and time advance when the card changes.
 5. An action-item owner is never inferred without explicit support in the temporary text.
 6. Stopping listening promptly releases capture resources and clears temporary audio and text.
 7. A one-hour meeting completes without deadlock, unrecovered capture failure, or unbounded memory growth.

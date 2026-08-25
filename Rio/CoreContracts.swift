@@ -594,9 +594,14 @@ final class InMemoryInsightStore: InsightState {
     private(set) var cards: [InsightCard] = []
 
     private let configuration: InsightStoreConfiguration
+    private let now: () -> Date
 
-    init(configuration: InsightStoreConfiguration = InsightStoreConfiguration()) {
+    init(
+        configuration: InsightStoreConfiguration = InsightStoreConfiguration(),
+        now: @escaping () -> Date = { Date() }
+    ) {
         self.configuration = configuration
+        self.now = now
     }
 
     func apply(
@@ -605,9 +610,10 @@ final class InMemoryInsightStore: InsightState {
     ) throws(PipelineFailure) {
         let validatedUpdates = try validate(updates, supportedBy: sourceContext)
         var nextCards = cards
+        let changedAt = now()
 
         for update in validatedUpdates {
-            apply(update, to: &nextCards)
+            apply(update, changedAt: changedAt, to: &nextCards)
         }
 
         cards = nextCards
@@ -666,7 +672,11 @@ final class InMemoryInsightStore: InsightState {
         return validatedUpdates
     }
 
-    private func apply(_ update: InsightUpdate, to cards: inout [InsightCard]) {
+    private func apply(
+        _ update: InsightUpdate,
+        changedAt: Date,
+        to cards: inout [InsightCard]
+    ) {
         let existingIndex = cards.firstIndex { $0.stableKey == update.stableKey }
 
         switch update.operation {
@@ -675,35 +685,52 @@ final class InMemoryInsightStore: InsightState {
                 guard canActivateCard(at: existingIndex, in: cards) else {
                     return
                 }
-                cards[existingIndex] = card(from: update, state: .updated)
+                cards[existingIndex] = card(
+                    from: update,
+                    state: .updated,
+                    changedAt: changedAt
+                )
             } else {
                 guard activeCardCount(in: cards) < configuration.maximumActiveCardCount else {
                     return
                 }
                 removeOldestResolvedCardIfNeeded(from: &cards)
-                cards.append(card(from: update, state: .new))
+                cards.append(card(from: update, state: .new, changedAt: changedAt))
             }
         case .update:
             guard let existingIndex,
                   canActivateCard(at: existingIndex, in: cards) else {
                 return
             }
-            cards[existingIndex] = card(from: update, state: .updated)
+            cards[existingIndex] = card(
+                from: update,
+                state: .updated,
+                changedAt: changedAt
+            )
         case .resolve:
             guard let existingIndex else {
                 return
             }
-            cards[existingIndex] = card(from: update, state: .resolved)
+            cards[existingIndex] = card(
+                from: update,
+                state: .resolved,
+                changedAt: changedAt
+            )
         }
     }
 
-    private func card(from update: InsightUpdate, state: InsightCardState) -> InsightCard {
+    private func card(
+        from update: InsightUpdate,
+        state: InsightCardState,
+        changedAt: Date
+    ) -> InsightCard {
         InsightCard(
             stableKey: update.stableKey,
             category: update.category,
             text: update.text,
             explicitOwner: update.explicitOwner,
-            state: state
+            state: state,
+            changedAt: changedAt
         )
     }
 

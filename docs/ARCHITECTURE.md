@@ -194,9 +194,9 @@ The app validates semantic constraints after generation, including nonempty text
 
 ### Insight state
 
-An in-memory insight store applies generated updates on the main actor. Stable keys allow the model to update or resolve an existing card instead of creating duplicates.
+An in-memory insight store applies generated updates on the main actor. Stable keys allow the model to update or resolve an existing card instead of creating duplicates. Each accepted update batch receives one locally generated wall-clock timestamp; cards added, updated, or resolved by that batch store it as their last-changed time. The clock is injected at the store seam for deterministic tests. SwiftUI renders that localized date and time where the earlier New, Updated, or Resolved label appeared, while retaining state for deduplication, resolution, and visual treatment.
 
-The active insight store exists only for the current session. The local meeting-history store saves one completed meeting record containing start/end times, the selected profile, ordered finalized transcript segments, an incomplete-transcript flag, and the generated cards. It retains records for at most two days, bounds transcript/card counts and text size, prunes on load and every write, and provides per-meeting and clear-all actions. It never receives audio, and it never stores guessed action-owner metadata.
+The active insight store exists only for the current session. The local meeting-history store saves one completed meeting record containing start/end times, the selected profile, ordered finalized transcript segments, an incomplete-transcript flag, and the generated cards with their last-changed times. It retains records for at most two days, bounds transcript/card counts and text size, prunes on load and every write, and provides per-meeting and clear-all actions. It never receives audio, and it never stores guessed action-owner metadata.
 
 ## Data and memory boundaries
 

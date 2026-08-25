@@ -2040,9 +2040,17 @@ private struct InsightCardView: View {
 
                 Spacer()
 
-                Text(card.state.displayName)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(card.state == .resolved ? .tertiary : .secondary)
+                Text(
+                    card.changedAt,
+                    format: .dateTime
+                        .year()
+                        .month(.abbreviated)
+                        .day()
+                        .hour()
+                        .minute()
+                )
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
             }
 
             Text(card.text)
@@ -2293,7 +2301,7 @@ private extension InsightCategory {
 }
 
 private extension InsightCardState {
-    var displayName: String {
+    var accessibilityName: String {
         switch self {
         case .new: "New"
         case .updated: "Updated"
@@ -2304,7 +2312,13 @@ private extension InsightCardState {
 
 extension InsightCard {
     var accessibilityDescription: String {
-        [category.displayName, state.displayName, text].joined(separator: ", ")
+        [
+            category.displayName,
+            state.accessibilityName,
+            changedAt.formatted(date: .abbreviated, time: .shortened),
+            text,
+        ]
+        .joined(separator: ", ")
     }
 }
 

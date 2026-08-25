@@ -76,7 +76,8 @@ struct SavedInsight: Codable, Equatable, Identifiable, Sendable {
             category: category.domainValue,
             text: text,
             explicitOwner: nil,
-            state: state.domainValue
+            state: state.domainValue,
+            changedAt: savedAt
         )
     }
 }

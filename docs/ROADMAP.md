@@ -103,7 +103,9 @@ before dropping a queued audio interval, preserves the continuous finalized
 prefix as an incomplete meeting record, and offers restart. Pause/resume preserves
 meeting-relative offsets and segment ordering, live feedback exposes the latest
 finalized offset, the live card region scrolls, and completed transcripts have
-local timestamped filtering. OpenAI request failures now emit privacy-safe
+local timestamped filtering. Live and saved insight cards now show their
+localized last-changed date and time instead of New, Updated, or Resolved tags,
+while retaining state internally. OpenAI request failures now emit privacy-safe
 endpoint, HTTP, transport, request-ID, and API error-code diagnostics; an early
 HTTP rejection is preserved when an upload later times out. Deterministic
 queue-pressure, long-session, rejection-plus-timeout, and diagnostic-privacy

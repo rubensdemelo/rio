@@ -648,6 +648,23 @@ struct InsightCard: Sendable, Equatable {
     let text: String
     let explicitOwner: String?
     let state: InsightCardState
+    let changedAt: Date
+
+    init(
+        stableKey: String,
+        category: InsightCategory,
+        text: String,
+        explicitOwner: String?,
+        state: InsightCardState,
+        changedAt: Date = Date()
+    ) {
+        self.stableKey = stableKey
+        self.category = category
+        self.text = text
+        self.explicitOwner = explicitOwner
+        self.state = state
+        self.changedAt = changedAt
+    }
 }
 
 enum Availability: Sendable, Equatable {

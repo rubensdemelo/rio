@@ -132,6 +132,7 @@ final class MeetingHistoryStoreTests: XCTestCase {
         XCTAssertEqual(decoded, expected)
         XCTAssertTrue(decoded.incompleteTranscript)
         XCTAssertEqual(decoded.insights, [insight])
+        XCTAssertEqual(decoded.insights[0].card.changedAt, savedAt)
     }
 
     func testSavedMeetingRoundTripsTheMeetingProfile() throws {

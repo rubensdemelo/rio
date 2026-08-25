@@ -132,7 +132,8 @@ struct SavedMeeting: Codable, Equatable, Identifiable, Sendable {
                     category: insight.category.domainValue,
                     text: bounded,
                     explicitOwner: nil,
-                    state: insight.state.domainValue
+                    state: insight.state.domainValue,
+                    changedAt: insight.savedAt
                 ),
                 savedAt: insight.savedAt
             )

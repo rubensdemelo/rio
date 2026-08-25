@@ -23,7 +23,10 @@ command-line tool. During a meeting, it surfaces concise cards for:
 - Open questions.
 - Risks, blockers, and unresolved topics.
 
-Insights update or replace stale cards instead of accumulating duplicates. Rio never guesses an action-item owner; it includes one only when the meeting explicitly names that person.
+Insights update or replace stale cards instead of accumulating duplicates. Each
+card shows the local date and time when it was last added or changed rather than
+a New or Updated tag. Rio never guesses an action-item owner; it includes one
+only when the meeting explicitly names that person.
 
 Rio does not display a live transcript. Audio and temporary speech-to-text context are discarded continuously; finalized transcript segments are saved only in the bounded two-day local meeting history when listening stops.
 
