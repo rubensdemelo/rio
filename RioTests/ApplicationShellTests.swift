@@ -278,13 +278,18 @@ final class ApplicationShellTests: XCTestCase {
         MainActor.assertIsolated()
 
         let stopped = SessionStatusPresentation(status: .stopped)
-        let interrupted = SessionStatusPresentation(status: .interrupted)
+        let reconnecting = SessionStatusPresentation(status: .interrupted)
+        let interrupted = SessionStatusPresentation(
+            status: .interrupted,
+            failure: .stage(.audioCapture, .interrupted)
+        )
         let unavailable = SessionStatusPresentation(
             status: .unavailable,
             unavailableReason: .openAIAPIKeyMissing
         )
 
         XCTAssertEqual(stopped.title, "Stopped")
+        XCTAssertEqual(reconnecting.title, "Reconnecting meeting audio")
         XCTAssertEqual(interrupted.title, "Interrupted")
         XCTAssertEqual(unavailable.title, "Unavailable")
         XCTAssertEqual(

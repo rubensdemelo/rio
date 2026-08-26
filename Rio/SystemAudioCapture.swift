@@ -289,6 +289,8 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
     private var isStarting = false
     private var isRunning = false
     private var cancellationRequested = false
+    private var nextCaptureID: UInt64 = 0
+    private var activeCaptureID: UInt64?
 
     init(
         queueCapacity: Int = 32,
@@ -328,6 +330,10 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
 
         guard !Task.isCancelled else { throw .cancelled }
 
+        nextCaptureID &+= 1
+        let captureID = nextCaptureID
+        activeCaptureID = captureID
+
         let continuityFailures = BoundedQueue<PipelineFailure>(capacity: 1)
         let reportOverload: @Sendable () -> Void = {
             _ = continuityFailures.enqueue(.stage(.audioCapture, .overloaded))
@@ -343,7 +349,7 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
         let audioStream = queue.makeStream(
             onOutputDrop: reportOverload,
             onTermination: { [weak self] in
-                Task { await self?.cancel() }
+                Task { await self?.cancel(captureID: captureID) }
             }
         )
 
@@ -392,6 +398,11 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
     }
 
     func cancel() async {
+        await finish(throwing: .cancelled)
+    }
+
+    private func cancel(captureID: UInt64) async {
+        guard activeCaptureID == captureID else { return }
         await finish(throwing: .cancelled)
     }
 
@@ -482,6 +493,7 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
 
         let resources = self.resources
         self.resources = nil
+        activeCaptureID = nil
         callbackState = nil
         activeStream = nil
         isRunning = false

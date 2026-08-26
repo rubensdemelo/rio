@@ -91,7 +91,7 @@ For the incident-copilot evaluation target, the useful signal set is symptoms, e
 
 The app does not display a live transcript. Finalized transcript segments are collected in memory during the session and saved as a read-only meeting record when the session stops. The saved record contains no audio and expires after two days.
 
-If no input is detected for a sustained period, the interface warns that meeting audio may be silent. Capture failures are shown as explicit connection errors rather than as an apparently active listening state.
+If no input is detected for a sustained period, the interface warns that meeting audio may be silent. For an ordinary Core Audio interruption, Rio keeps the same meeting and transcription pipeline open while it makes bounded capture-reconnection attempts; finalized transcript segments from before and after recovery remain in one meeting with continuous meeting-relative timestamps. Because macOS may create an unknowable physical audio gap while changing routes, the saved transcript is marked incomplete after any such recovery. Rio ends the session and shows a terminal connection error only after those attempts are exhausted.
 
 Diagnostics remains available from the menu-bar icon before, during, and after
 a recoverable failure. It shows a bounded, read-only view of Rio's privacy-safe

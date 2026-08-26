@@ -673,36 +673,111 @@ final class SessionLifecycleTests: XCTestCase {
         await coordinator.stop()
     }
 
-    func testCaptureInterruptionPropagatesAsInterrupted() async throws {
+    func testCaptureInterruptionRecoversWithinTheSameMeetingWithoutLosingTranscript() async throws {
         let capture = TestSessionAudioCapture()
+        let speech = TestSessionSpeechRecognizer()
+        let transcriptCollector = TestTranscriptCollector()
         let historyRecorder = TestMeetingHistoryRecorder()
         let coordinator = makeCoordinator(
             capture: capture,
+            speech: speech,
+            transcriptCollector: transcriptCollector,
             historyRecorder: historyRecorder
         )
 
         try await coordinator.start()
+        let speechStream = await speech.lastStream()
+        let segmentBeforeInterruption = makeSegment(
+            sequence: 1,
+            text: "finalized before route change"
+        )
+        speechStream?.yield(segmentBeforeInterruption)
+        await waitUntil {
+            transcriptCollector.segments == [segmentBeforeInterruption]
+        }
+
         let audioStream = await capture.lastStream()
         audioStream?.finish(
             throwing: PipelineFailure.stage(.audioCapture, .interrupted)
         )
-        await waitUntil { coordinator.status == .interrupted }
+        await waitUntil(capture: capture, startCount: 2)
+        XCTAssertEqual(coordinator.status, .listening)
+        XCTAssertTrue(historyRecorder.records().isEmpty)
 
-        let captureCancellations = await capture.cancelCount()
-        XCTAssertEqual(captureCancellations, 1)
+        let segmentAfterInterruption = FinalizedSpeechSegment(
+            sequenceNumber: 2,
+            text: "finalized after route recovery",
+            startOffset: .seconds(1),
+            endOffset: .seconds(2)
+        )
+        speechStream?.yield(segmentAfterInterruption)
+        await waitUntil {
+            transcriptCollector.segments == [
+                segmentBeforeInterruption,
+                segmentAfterInterruption,
+            ]
+        }
+        await coordinator.stop()
+
+        let captureStarts = await capture.startCount()
+        let recognitionStarts = await speech.recognizeCount()
+        XCTAssertEqual(captureStarts, 2)
+        XCTAssertEqual(recognitionStarts, 1)
+        XCTAssertEqual(historyRecorder.records().count, 1)
+        XCTAssertEqual(
+            historyRecorder.records().first?.transcript,
+            [segmentBeforeInterruption, segmentAfterInterruption]
+        )
         XCTAssertTrue(historyRecorder.records().first?.incompleteTranscript == true)
     }
 
-    func testUnexpectedCaptureCancellationPropagatesAsInterrupted() async throws {
+    func testUnexpectedCaptureCancellationUsesTheSameRecoveryPath() async throws {
         let capture = TestSessionAudioCapture()
         let coordinator = makeCoordinator(capture: capture)
 
         try await coordinator.start()
         let audioStream = await capture.lastStream()
         audioStream?.finish(throwing: PipelineFailure.cancelled)
-        await waitUntil { coordinator.status == .interrupted }
+        await waitUntil(capture: capture, startCount: 2)
 
-        XCTAssertEqual(coordinator.failure, .stage(.audioCapture, .interrupted))
+        let captureStarts = await capture.startCount()
+        XCTAssertEqual(captureStarts, 2)
+        XCTAssertEqual(coordinator.status, .listening)
+        XCTAssertNil(coordinator.failure)
+        await coordinator.stop()
+    }
+
+    func testCaptureInterruptionEndsMeetingOnlyAfterRecoveryAttemptsAreExhausted() async throws {
+        let capture = TestSessionAudioCapture()
+        let historyRecorder = TestMeetingHistoryRecorder()
+        let coordinator = makeCoordinator(
+            capture: capture,
+            historyRecorder: historyRecorder,
+            captureRecoveryDelays: [.zero, .zero, .zero]
+        )
+
+        try await coordinator.start()
+        await capture.failNextStarts(
+            with: .stage(.audioCapture, .failed),
+            count: 3
+        )
+        let audioStream = await capture.lastStream()
+        audioStream?.finish(
+            throwing: PipelineFailure.stage(.audioCapture, .interrupted)
+        )
+        await waitUntil {
+            coordinator.status == .interrupted
+                && historyRecorder.records().count == 1
+        }
+
+        let captureStarts = await capture.startCount()
+        XCTAssertEqual(captureStarts, 4)
+        XCTAssertEqual(
+            coordinator.failure,
+            .stage(.audioCapture, .interrupted)
+        )
+        XCTAssertEqual(historyRecorder.records().count, 1)
+        XCTAssertTrue(historyRecorder.records().first?.incompleteTranscript == true)
     }
 
     func testRapidStartStopRestartUsesIsolatedSessionAndRejectsStaleResults() async throws {
@@ -832,7 +907,13 @@ final class SessionLifecycleTests: XCTestCase {
         state: TestSessionInsightState = TestSessionInsightState(),
         transcriptCollector: any TranscriptCollecting = TestTranscriptCollector(),
         historyRecorder: any MeetingHistoryRecording = TestMeetingHistoryRecorder(),
-        failureRecorder: any SessionFailureRecording = TestSessionFailureRecorder()
+        failureRecorder: any SessionFailureRecording = TestSessionFailureRecorder(),
+        captureRecoveryDelays: [Duration] = [
+            .zero,
+            .milliseconds(500),
+            .seconds(2),
+            .seconds(5),
+        ]
     ) -> SessionLifecycleCoordinator {
         SessionLifecycleCoordinator(
             localeIdentifier: "en-US",
@@ -843,7 +924,8 @@ final class SessionLifecycleTests: XCTestCase {
             insightState: state,
             transcriptCollector: transcriptCollector,
             historyRecorder: historyRecorder,
-            failureRecorder: failureRecorder
+            failureRecorder: failureRecorder,
+            captureRecoveryDelays: captureRecoveryDelays
         )
     }
 
@@ -860,6 +942,22 @@ final class SessionLifecycleTests: XCTestCase {
             try? await Task.sleep(for: .milliseconds(1))
         }
         XCTFail("Timed out waiting for lifecycle transition")
+    }
+
+    private func waitUntil(
+        capture: TestSessionAudioCapture,
+        startCount expectedStartCount: Int,
+        timeout: Duration = .seconds(1)
+    ) async {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if await capture.startCount() >= expectedStartCount {
+                return
+            }
+            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        XCTFail("Timed out waiting for capture restart")
     }
 
     private func makeSegment(sequence: UInt64, text: String) -> FinalizedSpeechSegment {
@@ -916,7 +1014,7 @@ final class TestStream<Element: Sendable>: @unchecked Sendable {
 actor TestSessionAudioCapture: SessionAudioCapture {
     private let configuredPermission: MicrophonePermission
     private let configuredAvailability: Availability
-    private let startFailure: PipelineFailure?
+    private var startFailure: PipelineFailure?
     private var remainingStartFailures: Int
     private let configuredInputSnapshot: AudioInputSnapshot
     private var currentStream: TestStream<AudioChunk>?
@@ -961,6 +1059,11 @@ actor TestSessionAudioCapture: SessionAudioCapture {
         return source.stream
     }
 
+    func failNextStarts(with failure: PipelineFailure, count: Int) {
+        startFailure = failure
+        remainingStartFailures = count
+    }
+
     func stop() async {
         stops += 1
         currentStream?.finish(throwing: PipelineFailure.cancelled)
@@ -983,6 +1086,7 @@ actor TestSessionSpeechRecognizer: SessionSpeechRecognizer {
     private let configuredAvailability: Availability
     private let recognizeFailure: PipelineFailure?
     private var currentStream: TestStream<FinalizedSpeechSegment>?
+    private var recognitions = 0
     private var stops = 0
     private var cancellations = 0
     private var configuredBatchDuration: Duration?
@@ -1018,6 +1122,7 @@ actor TestSessionSpeechRecognizer: SessionSpeechRecognizer {
     }
 
     func recognize(audio: AudioStream) async throws(PipelineFailure) -> FinalizedSpeechStream {
+        recognitions += 1
         if let recognizeFailure {
             throw recognizeFailure
         }
@@ -1040,6 +1145,7 @@ actor TestSessionSpeechRecognizer: SessionSpeechRecognizer {
 
     func stopCount() -> Int { stops }
     func cancelCount() -> Int { cancellations }
+    func recognizeCount() -> Int { recognitions }
     func lastStream() -> TestStream<FinalizedSpeechSegment>? { currentStream }
     func batchDuration() -> Duration? { configuredBatchDuration }
     func transcriptionPrompt() -> String? { configuredTranscriptionPrompt }

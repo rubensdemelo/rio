@@ -89,6 +89,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     private let transcriptCollector: any TranscriptCollecting
     private let historyRecorder: any MeetingHistoryRecording
     private let failureRecorder: any SessionFailureRecording
+    private let captureRecoveryDelays: [Duration]
 
     private(set) var status: SessionStatus = .stopped
     private(set) var failure: PipelineFailure?
@@ -117,7 +118,13 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         insightState: any InsightState,
         transcriptCollector: any TranscriptCollecting = InMemoryTranscriptCollector(),
         historyRecorder: any MeetingHistoryRecording = NoopMeetingHistoryRecorder(),
-        failureRecorder: any SessionFailureRecording = UnifiedSessionFailureRecorder()
+        failureRecorder: any SessionFailureRecording = UnifiedSessionFailureRecorder(),
+        captureRecoveryDelays: [Duration] = [
+            .zero,
+            .milliseconds(500),
+            .seconds(2),
+            .seconds(5),
+        ]
     ) {
         self.localeIdentifier = localeIdentifier
         self.capture = capture
@@ -128,6 +135,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         self.transcriptCollector = transcriptCollector
         self.historyRecorder = historyRecorder
         self.failureRecorder = failureRecorder
+        self.captureRecoveryDelays = captureRecoveryDelays
     }
 
     func checkAvailability() async -> Availability {
@@ -610,28 +618,85 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         var continuation: AudioStream.Continuation?
         let stream = AudioStream { continuation = $0 }
         let task = Task { [weak self] in
-            do {
-                for try await chunk in source {
-                    continuation?.yield(chunk)
+            var currentSource = source
+
+            while let self {
+                do {
+                    for try await chunk in currentSource {
+                        continuation?.yield(chunk)
+                    }
+                    continuation?.finish()
+                    return
+                } catch {
+                    let reportedFailure = normalizedCaptureFailure(error)
+                    if let recoveredSource = await recoverCapture(
+                        from: reportedFailure,
+                        sessionID: sessionID
+                    ) {
+                        currentSource = recoveredSource
+                        continue
+                    }
+                    continuation?.finish(throwing: reportedFailure)
+                    await fail(reportedFailure, sessionID: sessionID)
+                    return
                 }
-                continuation?.finish()
-            } catch let failure as PipelineFailure {
-                let reportedFailure: PipelineFailure = failure == .cancelled
-                    ? .stage(.audioCapture, .interrupted)
-                    : failure
-                continuation?.finish(throwing: reportedFailure)
-                await self?.fail(reportedFailure, sessionID: sessionID)
-            } catch is CancellationError {
-                let reportedFailure = PipelineFailure.stage(.audioCapture, .interrupted)
-                continuation?.finish(throwing: reportedFailure)
-                await self?.fail(reportedFailure, sessionID: sessionID)
-            } catch {
-                let failure = PipelineFailure.stage(.audioCapture, .failed)
-                continuation?.finish(throwing: failure)
-                await self?.fail(failure, sessionID: sessionID)
             }
+            continuation?.finish(throwing: PipelineFailure.cancelled)
         }
         return (stream, task)
+    }
+
+    private func normalizedCaptureFailure(_ error: any Error) -> PipelineFailure {
+        if let failure = error as? PipelineFailure {
+            return failure == .cancelled
+                ? .stage(.audioCapture, .interrupted)
+                : failure
+        }
+        if error is CancellationError {
+            return .stage(.audioCapture, .interrupted)
+        }
+        return .stage(.audioCapture, .failed)
+    }
+
+    private func recoverCapture(
+        from failure: PipelineFailure,
+        sessionID: UInt64
+    ) async -> AudioStream? {
+        guard failure == .stage(.audioCapture, .interrupted),
+              activeSessionID == sessionID,
+              !Task.isCancelled else {
+            return nil
+        }
+
+        incompleteTranscript = true
+        self.failure = nil
+        status = .interrupted
+
+        for delay in captureRecoveryDelays {
+            if delay > .zero {
+                do {
+                    try await Task.sleep(for: delay)
+                } catch {
+                    return nil
+                }
+            }
+
+            guard activeSessionID == sessionID, !Task.isCancelled else {
+                return nil
+            }
+
+            do {
+                let recoveredSource = try await capture.start()
+                try ensureActive(sessionID)
+                status = .listening
+                return recoveredSource
+            } catch {
+                // Core Audio route changes can remain unavailable briefly while
+                // macOS rebuilds the device graph. Retry only within this bound.
+            }
+        }
+
+        return nil
     }
 
     func feedbackSnapshot() async -> SessionFeedbackSnapshot {

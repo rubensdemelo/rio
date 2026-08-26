@@ -2118,9 +2118,15 @@ struct SessionStatusPresentation: Equatable {
             symbolName = "pause.circle.fill"
             tintName = .warning
         case .interrupted:
-            title = "Interrupted"
-            detail = "Listening stopped unexpectedly. Start again when ready."
-            symbolName = "exclamationmark.circle"
+            if failure == nil {
+                title = "Reconnecting meeting audio"
+                detail = "Rio is keeping this meeting open while audio reconnects."
+                symbolName = "arrow.trianglehead.2.clockwise.rotate.90"
+            } else {
+                title = "Interrupted"
+                detail = "Listening stopped after audio recovery attempts were exhausted."
+                symbolName = "exclamationmark.circle"
+            }
             tintName = .warning
         case .unavailable:
             title = "Unavailable"

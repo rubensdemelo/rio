@@ -272,7 +272,7 @@ diagnostic record. The menu-bar Diagnostics action remains available regardless
 of session readiness or failure state.
 
 - Permission denial explains which permission is needed and how to retry.
-- Capture interruption changes the status and attempts a bounded recovery where safe.
+- Capture interruption changes the status and attempts bounded capture-only recovery. The forwarding bridge reconnects a fresh Core Audio stream without replacing the active meeting, speech recognizer, transcription batch, rolling context, or finalized transcript collector. A recovered meeting is marked transcript-incomplete because the hardware route change may contain an unknowable gap; terminal cleanup runs only after the bounded attempts are exhausted.
 - Transcription failure keeps capture state accurate and offers restart.
 - Transcription overload stops before skipping queued audio, saves the continuous finalized prefix as incomplete, and offers restart.
 - A missing or rejected OpenAI API key prevents insight generation and explains the reason.

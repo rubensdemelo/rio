@@ -48,8 +48,10 @@ final class LiveSessionController: SessionShellControlling {
             "Stop Listening"
         case .checkingAvailability:
             "Checking…"
-        case .stopped, .interrupted, .unavailable:
+        case .stopped, .unavailable:
             "Start Listening"
+        case .interrupted:
+            failure == nil ? "Stop Listening" : "Start Listening"
         }
     }
 
@@ -77,41 +79,49 @@ final class LiveSessionController: SessionShellControlling {
         defer { isPerformingPrimaryAction = false }
 
         switch lifecycle.status {
-        case .listening, .processing:
-            persistCurrentInsights()
-            await lifecycle.stop()
-            stopMonitoring()
-            insightHistorySessionID = nil
-        case .paused:
-            persistCurrentInsights()
-            await lifecycle.stop()
-            stopMonitoring()
-            insightHistorySessionID = nil
-        case .stopped, .interrupted, .unavailable:
-            if !isReadyToStartListening {
-                await checkReadiness()
-            }
-            guard isReadyToStartListening else {
-                return
-            }
-            failure = nil
-            unavailableReason = nil
-            do {
-                await lifecycle.configure(
-                    profile: meetingProfileSettings?.selection ?? .fallback
-                )
-                try await lifecycle.start()
-                insightHistorySessionID = UUID()
-                startMonitoring()
-            } catch let startFailure {
-                apply(startFailure)
-                stopMonitoring()
+        case .listening, .processing, .paused:
+            await stopListening()
+        case .stopped, .unavailable:
+            await startListening()
+        case .interrupted:
+            if lifecycle.failure == nil {
+                await stopListening()
+            } else {
+                await startListening()
             }
         case .checkingAvailability:
             break
         }
 
         await refreshSnapshot()
+    }
+
+    private func startListening() async {
+        if !isReadyToStartListening {
+            await checkReadiness()
+        }
+        guard isReadyToStartListening else { return }
+
+        failure = nil
+        unavailableReason = nil
+        do {
+            await lifecycle.configure(
+                profile: meetingProfileSettings?.selection ?? .fallback
+            )
+            try await lifecycle.start()
+            insightHistorySessionID = UUID()
+            startMonitoring()
+        } catch let startFailure {
+            apply(startFailure)
+            stopMonitoring()
+        }
+    }
+
+    private func stopListening() async {
+        persistCurrentInsights()
+        await lifecycle.stop()
+        stopMonitoring()
+        insightHistorySessionID = nil
     }
 
     func performPauseAction() async {
@@ -144,9 +154,11 @@ final class LiveSessionController: SessionShellControlling {
             while let self, !Task.isCancelled {
                 await self.refreshSnapshot()
                 switch self.lifecycle.status {
-                case .stopped, .interrupted, .unavailable:
+                case .stopped, .unavailable:
                     return
-                case .checkingAvailability, .listening, .processing, .paused:
+                case .interrupted where self.lifecycle.failure != nil:
+                    return
+                case .checkingAvailability, .listening, .processing, .paused, .interrupted:
                     // The input meter is visual feedback, not a real-time
                     // control. Ten updates per second keeps it responsive
                     // without continuously invalidating the card list.
