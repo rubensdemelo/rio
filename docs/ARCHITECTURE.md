@@ -264,8 +264,13 @@ a passive row. The menu-bar scene has no meeting-data state of its own.
 
 The main window uses its content size rather than a fixed idle canvas. Its
 single listening action is always first; status feedback, setup guidance, and
-insight cards are conditionally composed below it. The bounded live-card region
-scrolls instead of expanding beyond a useful long-meeting window size. Recent
+insight cards are conditionally composed below it. Setup and ready states remain
+compact; the first live insight expands the main window to the active-workspace
+size, and the live-card region fills the remaining resizable area. A presentation
+adapter stably sorts cards by last-changed time in descending order, preserving
+store order for equal timestamps. The bounded region scrolls, and a new or
+updated card scrolls its newest item to the top instead of leaving recent data
+outside the visible viewport. Recent
 Meetings renders finalized transcript segments with meeting-relative timestamps
 and performs local, non-AI text filtering without changing the saved record.
 

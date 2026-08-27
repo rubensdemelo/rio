@@ -367,17 +367,23 @@ enum RioMainWindowSizing {
     static func minimumContentHeight(
         apiKeyOnly: Bool,
         needsSetup: Bool,
-        compactReady: Bool
+        compactReady: Bool,
+        hasInsights: Bool = false
     ) -> CGFloat {
-        apiKeyOnly ? 80 : needsSetup ? 420 : compactReady ? 64 : 180
+        apiKeyOnly ? 80 : needsSetup ? 420 : compactReady ? 64 : hasInsights ? 420 : 180
     }
 
     static func windowHeight(
         apiKeyOnly: Bool,
         needsSetup: Bool,
-        compactReady: Bool
+        compactReady: Bool,
+        hasInsights: Bool = false
     ) -> CGFloat {
-        apiKeyOnly ? 120 : needsSetup ? 480 : compactReady ? 104 : 240
+        apiKeyOnly ? 120 : needsSetup ? 480 : compactReady ? 104 : hasInsights ? 680 : 240
+    }
+
+    static func windowWidth(hasInsights: Bool = false) -> CGFloat {
+        hasInsights ? 920 : 640
     }
 }
 
@@ -414,13 +420,15 @@ struct RioView<Controller: SessionShellControlling>: View {
         .padding(20)
         .frame(
             minWidth: 480,
-            idealWidth: 560,
-            maxWidth: 720,
+            idealWidth: hasInsights ? 920 : 560,
+            maxWidth: hasInsights ? .infinity : 720,
             minHeight: RioMainWindowSizing.minimumContentHeight(
                 apiKeyOnly: setupNeedsOnlyAPIKey,
                 needsSetup: shouldShowSetup,
-                compactReady: usesCompactReadyLayout
+                compactReady: usesCompactReadyLayout,
+                hasInsights: hasInsights
             ),
+            maxHeight: hasInsights ? .infinity : nil,
             alignment: .topLeading
         )
         .background(.clear)
@@ -434,6 +442,9 @@ struct RioView<Controller: SessionShellControlling>: View {
             resizeMainWindowIfNeeded()
         }
         .onChange(of: controller.status) { _, _ in
+            resizeMainWindowIfNeeded()
+        }
+        .onChange(of: controller.cards.count) { _, _ in
             resizeMainWindowIfNeeded()
         }
         .sheet(item: $panelRouter.presentedPanel) { panel in
@@ -460,6 +471,10 @@ struct RioView<Controller: SessionShellControlling>: View {
         controller.status == .stopped && !shouldShowSetup
     }
 
+    private var hasInsights: Bool {
+        !controller.cards.isEmpty
+    }
+
     private func resizeMainWindowIfNeeded() {
         DispatchQueue.main.async {
             guard let window = NSApp.windows.first(where: { $0.title == "Rio" }) else {
@@ -469,14 +484,19 @@ struct RioView<Controller: SessionShellControlling>: View {
             let targetHeight = RioMainWindowSizing.windowHeight(
                 apiKeyOnly: setupNeedsOnlyAPIKey,
                 needsSetup: shouldShowSetup,
-                compactReady: usesCompactReadyLayout
+                compactReady: usesCompactReadyLayout,
+                hasInsights: hasInsights
             )
-            guard abs(window.frame.height - targetHeight) > 1 else {
+            let targetWidth = RioMainWindowSizing.windowWidth(hasInsights: hasInsights)
+            guard abs(window.frame.height - targetHeight) > 1
+                || abs(window.frame.width - targetWidth) > 1 else {
                 return
             }
 
             var frame = window.frame
+            frame.origin.x += (frame.width - targetWidth) / 2
             frame.origin.y += frame.height - targetHeight
+            frame.size.width = targetWidth
             frame.size.height = targetHeight
             window.setFrame(frame, display: true, animate: true)
         }
@@ -1993,38 +2013,84 @@ struct PrerequisiteCheckPresentation: Equatable {
     }
 }
 
+struct LiveInsightPresentation: Equatable {
+    let cards: [InsightCard]
+
+    init(cards: [InsightCard]) {
+        self.cards = cards.enumerated()
+            .sorted { left, right in
+                if left.element.changedAt != right.element.changedAt {
+                    return left.element.changedAt > right.element.changedAt
+                }
+                return left.offset < right.offset
+            }
+            .map(\.element)
+    }
+}
+
 private struct InsightStreamView: View {
     let cards: [InsightCard]
 
+    private var presentation: LiveInsightPresentation {
+        LiveInsightPresentation(cards: cards)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Insights")
-                .font(.title3.weight(.semibold))
+            HStack {
+                Text("Insights")
+                    .font(.title3.weight(.semibold))
+
+                Spacer()
+
+                Text("Newest first")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 13)
 
             Divider()
 
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(Array(cards.enumerated()), id: \.element.stableKey) { index, card in
-                        InsightCardView(card: card)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(spacing: 0) {
+                        ForEach(
+                            Array(presentation.cards.enumerated()),
+                            id: \.element.stableKey
+                        ) { index, card in
+                            InsightCardView(card: card)
+                                .id(card.stableKey)
 
-                        if index != cards.count - 1 {
-                            Divider()
-                                .padding(.leading, 16)
+                            if index != presentation.cards.count - 1 {
+                                Divider()
+                                    .padding(.leading, 16)
+                            }
                         }
                     }
                 }
+                .onAppear {
+                    scrollToNewest(using: proxy)
+                }
+                .onChange(of: presentation.cards.map(\.changedAt)) { _, _ in
+                    scrollToNewest(using: proxy)
+                }
             }
-            .frame(maxHeight: 520)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Color(nsColor: .controlBackgroundColor))
         )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Meeting insights")
+    }
+
+    private func scrollToNewest(using proxy: ScrollViewProxy) {
+        guard let newestCard = presentation.cards.first else {
+            return
+        }
+        proxy.scrollTo(newestCard.stableKey, anchor: .top)
     }
 }
 

@@ -88,6 +88,31 @@ final class ApplicationShellTests: XCTestCase {
         )
     }
 
+    func testActiveInsightWindowUsesAUsefulWorkspaceSize() {
+        XCTAssertEqual(
+            RioMainWindowSizing.minimumContentHeight(
+                apiKeyOnly: false,
+                needsSetup: false,
+                compactReady: false,
+                hasInsights: true
+            ),
+            420
+        )
+        XCTAssertEqual(
+            RioMainWindowSizing.windowHeight(
+                apiKeyOnly: false,
+                needsSetup: false,
+                compactReady: false,
+                hasInsights: true
+            ),
+            680
+        )
+        XCTAssertEqual(
+            RioMainWindowSizing.windowWidth(hasInsights: true),
+            920
+        )
+    }
+
     func testListeningCadencePersistsAndExplainsItsTradeoff() {
         let suiteName = "RioTests.ListeningCadence.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -218,6 +243,42 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(controller.cards, cards)
         XCTAssertEqual(controller.cards.map(\.state), [.new, .updated, .resolved])
         XCTAssertEqual(controller.status, .listening)
+    }
+
+    func testLiveInsightsArePresentedNewestFirst() {
+        let cards = [
+            InsightCard(
+                stableKey: "older",
+                category: .risk,
+                text: "Older risk",
+                explicitOwner: nil,
+                state: .new,
+                changedAt: Date(timeIntervalSince1970: 100)
+            ),
+            InsightCard(
+                stableKey: "newest",
+                category: .decision,
+                text: "Newest decision",
+                explicitOwner: nil,
+                state: .new,
+                changedAt: Date(timeIntervalSince1970: 300)
+            ),
+            InsightCard(
+                stableKey: "middle",
+                category: .question,
+                text: "Middle question",
+                explicitOwner: nil,
+                state: .updated,
+                changedAt: Date(timeIntervalSince1970: 200)
+            ),
+        ]
+
+        let presentation = LiveInsightPresentation(cards: cards)
+
+        XCTAssertEqual(
+            presentation.cards.map(\.stableKey),
+            ["newest", "middle", "older"]
+        )
     }
 
     func testInsightAccessibilityDoesNotExposeAnOwner() {

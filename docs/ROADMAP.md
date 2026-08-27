@@ -24,7 +24,7 @@ Exit criterion: meeting audio produces useful, structured insight cards through 
 
 Verified on macOS 26.5.2:
 
-- 164 unit and integration tests pass in both Debug and Release, including deterministic long-session coverage for rolling-context novelty, current-card insight requests, explicit capture/transcription-overload shutdown before audio eviction, pause/resume continuity, elapsed transcription feedback, saved-transcript navigation, same-meeting capture-interruption recovery, frame-liveness recovery and bounded exhaustion, direct system-audio permission recovery, custom meeting-profile persistence and guidance, automatic transcription chunking and keyword hints, bounded cross-batch transcription context, transient transcription retry, app-isolated data-protection Keychain selection, and privacy-safe OpenAI and session-failure diagnostics.
+- 166 unit and integration tests pass in both Debug and Release, including deterministic live-workspace sizing and newest-first insight presentation, long-session coverage for rolling-context novelty, current-card insight requests, explicit capture/transcription-overload shutdown before audio eviction, pause/resume continuity, elapsed transcription feedback, saved-transcript navigation, same-meeting capture-interruption recovery, frame-liveness recovery and bounded exhaustion, direct system-audio permission recovery, custom meeting-profile persistence and guidance, automatic transcription chunking and keyword hints, bounded cross-batch transcription context, transient transcription retry, app-isolated data-protection Keychain selection, and privacy-safe OpenAI and session-failure diagnostics.
 - Debug and Release builds pass with warnings treated as errors and Swift 6 complete strict-concurrency checking enabled.
 - Static privacy scans confirm that production diagnostics contain only structured non-content metadata and that meeting-derived persistence remains limited to the bounded two-day history.
 - The development-signed application passes entitlement verification. A clean launch leaves Rio running as a menu-bar-only accessory without opening or restoring a window, activating over Finder, or appearing in the Dock/app switcher.
@@ -102,8 +102,10 @@ Implementation status: transcription backlog exhaustion now stops explicitly
 before dropping a queued audio interval, preserves the continuous finalized
 prefix as an incomplete meeting record, and offers restart. Pause/resume preserves
 meeting-relative offsets and segment ordering, live feedback exposes the latest
-finalized offset, the live card region scrolls, and completed transcripts have
-local timestamped filtering. Live and saved insight cards now show their
+finalized offset, and completed transcripts have local timestamped filtering.
+When live cards appear, the main window expands to a useful workspace, the card
+region fills the available area, and cards remain visibly newest-first by their
+last-changed timestamp. Live and saved insight cards now show their
 localized last-changed date and time instead of New, Updated, or Resolved tags,
 while retaining state internally. OpenAI request failures now emit privacy-safe
 endpoint, HTTP, transport, request-ID, and API error-code diagnostics; an early
