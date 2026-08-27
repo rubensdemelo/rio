@@ -90,6 +90,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     private let historyRecorder: any MeetingHistoryRecording
     private let failureRecorder: any SessionFailureRecording
     private let captureRecoveryDelays: [Duration]
+    private let captureInactivityTimeout: Duration
 
     private(set) var status: SessionStatus = .stopped
     private(set) var failure: PipelineFailure?
@@ -119,6 +120,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         transcriptCollector: any TranscriptCollecting = InMemoryTranscriptCollector(),
         historyRecorder: any MeetingHistoryRecording = NoopMeetingHistoryRecorder(),
         failureRecorder: any SessionFailureRecording = UnifiedSessionFailureRecorder(),
+        captureInactivityTimeout: Duration = .seconds(5),
         captureRecoveryDelays: [Duration] = [
             .zero,
             .milliseconds(500),
@@ -126,6 +128,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
             .seconds(5),
         ]
     ) {
+        precondition(captureInactivityTimeout > .zero)
         self.localeIdentifier = localeIdentifier
         self.capture = capture
         self.speechRecognizer = speechRecognizer
@@ -135,6 +138,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         self.transcriptCollector = transcriptCollector
         self.historyRecorder = historyRecorder
         self.failureRecorder = failureRecorder
+        self.captureInactivityTimeout = captureInactivityTimeout
         self.captureRecoveryDelays = captureRecoveryDelays
     }
 
@@ -619,19 +623,30 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         let stream = AudioStream { continuation = $0 }
         let task = Task { [weak self] in
             var currentSource = source
+            var nextRecoveryAttempt = 0
 
             while let self {
+                var inactivityTask = makeCaptureInactivityTask(sessionID: sessionID)
                 do {
                     for try await chunk in currentSource {
+                        inactivityTask.cancel()
+                        nextRecoveryAttempt = 0
+                        if status == .interrupted {
+                            status = .listening
+                        }
                         continuation?.yield(chunk)
+                        inactivityTask = makeCaptureInactivityTask(sessionID: sessionID)
                     }
+                    inactivityTask.cancel()
                     continuation?.finish()
                     return
                 } catch {
+                    inactivityTask.cancel()
                     let reportedFailure = normalizedCaptureFailure(error)
                     if let recoveredSource = await recoverCapture(
                         from: reportedFailure,
-                        sessionID: sessionID
+                        sessionID: sessionID,
+                        nextAttempt: &nextRecoveryAttempt
                     ) {
                         currentSource = recoveredSource
                         continue
@@ -644,6 +659,25 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
             continuation?.finish(throwing: PipelineFailure.cancelled)
         }
         return (stream, task)
+    }
+
+    private func makeCaptureInactivityTask(
+        sessionID: UInt64
+    ) -> Task<Void, Never> {
+        let timeout = captureInactivityTimeout
+        return Task { [weak self] in
+            do {
+                try await Task.sleep(for: timeout)
+            } catch {
+                return
+            }
+            guard !Task.isCancelled,
+                  let self,
+                  activeSessionID == sessionID else {
+                return
+            }
+            await capture.cancel()
+        }
     }
 
     private func normalizedCaptureFailure(_ error: any Error) -> PipelineFailure {
@@ -660,7 +694,8 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
 
     private func recoverCapture(
         from failure: PipelineFailure,
-        sessionID: UInt64
+        sessionID: UInt64,
+        nextAttempt: inout Int
     ) async -> AudioStream? {
         guard failure == .stage(.audioCapture, .interrupted),
               activeSessionID == sessionID,
@@ -672,7 +707,9 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         self.failure = nil
         status = .interrupted
 
-        for delay in captureRecoveryDelays {
+        while nextAttempt < captureRecoveryDelays.count {
+            let delay = captureRecoveryDelays[nextAttempt]
+            nextAttempt += 1
             if delay > .zero {
                 do {
                     try await Task.sleep(for: delay)
@@ -688,7 +725,6 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
             do {
                 let recoveredSource = try await capture.start()
                 try ensureActive(sessionID)
-                status = .listening
                 return recoveredSource
             } catch {
                 // Core Audio route changes can remain unavailable briefly while

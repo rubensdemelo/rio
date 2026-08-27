@@ -91,7 +91,18 @@ For the incident-copilot evaluation target, the useful signal set is symptoms, e
 
 The app does not display a live transcript. Finalized transcript segments are collected in memory during the session and saved as a read-only meeting record when the session stops. The saved record contains no audio and expires after two days.
 
-If no input is detected for a sustained period, the interface warns that meeting audio may be silent. For an ordinary Core Audio interruption, Rio keeps the same meeting and transcription pipeline open while it makes bounded capture-reconnection attempts; finalized transcript segments from before and after recovery remain in one meeting with continuous meeting-relative timestamps. Because macOS may create an unknowable physical audio gap while changing routes, the saved transcript is marked incomplete after any such recovery. Rio ends the session and shows a terminal connection error only after those attempts are exhausted.
+If decoded audio frames continue but contain no signal for a sustained period,
+the interface warns that meeting audio may be silent. If no audio frames arrive
+at all within the capture-liveness bound, Rio treats the open stream as a Core
+Audio interruption rather than continuing to claim that listening is healthy.
+For an ordinary Core Audio interruption, Rio keeps the same meeting and
+transcription pipeline open while it makes bounded capture-reconnection
+attempts; a replacement stream remains interrupted until its first frame
+arrives. Finalized transcript segments from before and after recovery remain in
+one meeting with continuous meeting-relative timestamps. Because macOS may
+create an unknowable physical audio gap while changing routes, the saved
+transcript is marked incomplete after any such recovery. Rio ends the session
+and shows a terminal connection error only after those attempts are exhausted.
 
 Diagnostics remains available from the menu-bar icon before, during, and after
 a recoverable failure. It shows a bounded, read-only view of Rio's privacy-safe

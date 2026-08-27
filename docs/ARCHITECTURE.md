@@ -76,6 +76,14 @@ non-blocking enqueue. A separate worker decodes PCM and calculates input-level
 telemetry before handing audio to transcription; callbacks perform no model
 requests, UI work, PCM conversion, or blocking synchronization.
 
+The session forwarding bridge applies a five-second frame-liveness bound to
+each capture stream. Zero-amplitude frames are healthy capture activity and
+remain the separate silent-audio UI condition. An open stream that delivers no
+frames is interrupted and re-enters bounded capture-only recovery. A restarted
+stream does not reset that retry budget or return the UI to listening until it
+delivers a frame; repeated frame-less starts therefore end explicitly instead
+of looping while the UI claims to listen.
+
 If the Core Audio tap cannot provide the required system-audio behavior on the
 minimum supported macOS release, keep the capture interface stable and report
 the system-audio capability as unavailable rather than falling back to a
@@ -272,7 +280,7 @@ diagnostic record. The menu-bar Diagnostics action remains available regardless
 of session readiness or failure state.
 
 - Permission denial explains which permission is needed and how to retry.
-- Capture interruption changes the status and attempts bounded capture-only recovery. The forwarding bridge reconnects a fresh Core Audio stream without replacing the active meeting, speech recognizer, transcription batch, rolling context, or finalized transcript collector. A recovered meeting is marked transcript-incomplete because the hardware route change may contain an unknowable gap; terminal cleanup runs only after the bounded attempts are exhausted.
+- Capture interruption—including an open stream that exceeds the frame-liveness bound—changes the status and attempts bounded capture-only recovery. The forwarding bridge reconnects a fresh Core Audio stream without replacing the active meeting, speech recognizer, transcription batch, rolling context, or finalized transcript collector. Listening resumes only after the replacement stream delivers a frame. A recovered meeting is marked transcript-incomplete because the hardware route change may contain an unknowable gap; terminal cleanup runs only after the bounded attempts are exhausted.
 - Transcription failure keeps capture state accurate and offers restart.
 - Transcription overload stops before skipping queued audio, saves the continuous finalized prefix as incomplete, and offers restart.
 - A missing or rejected OpenAI API key prevents insight generation and explains the reason.

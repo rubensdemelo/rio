@@ -24,7 +24,7 @@ Exit criterion: meeting audio produces useful, structured insight cards through 
 
 Verified on macOS 26.5.2:
 
-- 162 unit and integration tests pass in both Debug and Release, including deterministic long-session coverage for rolling-context novelty, current-card insight requests, explicit capture/transcription-overload shutdown before audio eviction, pause/resume continuity, elapsed transcription feedback, saved-transcript navigation, same-meeting capture-interruption recovery, bounded recovery exhaustion, direct system-audio permission recovery, custom meeting-profile persistence and guidance, automatic transcription chunking and keyword hints, bounded cross-batch transcription context, transient transcription retry, app-isolated data-protection Keychain selection, and privacy-safe OpenAI and session-failure diagnostics.
+- 164 unit and integration tests pass in both Debug and Release, including deterministic long-session coverage for rolling-context novelty, current-card insight requests, explicit capture/transcription-overload shutdown before audio eviction, pause/resume continuity, elapsed transcription feedback, saved-transcript navigation, same-meeting capture-interruption recovery, frame-liveness recovery and bounded exhaustion, direct system-audio permission recovery, custom meeting-profile persistence and guidance, automatic transcription chunking and keyword hints, bounded cross-batch transcription context, transient transcription retry, app-isolated data-protection Keychain selection, and privacy-safe OpenAI and session-failure diagnostics.
 - Debug and Release builds pass with warnings treated as errors and Swift 6 complete strict-concurrency checking enabled.
 - Static privacy scans confirm that production diagnostics contain only structured non-content metadata and that meeting-derived persistence remains limited to the bounded two-day history.
 - The development-signed application passes entitlement verification. A clean launch leaves Rio running as a menu-bar-only accessory without opening or restoring a window, activating over Finder, or appearing in the Dock/app switcher.
@@ -53,7 +53,7 @@ Goal: make the vertical slice work with actual remote meetings.
 
 Exit criterion: Rio can listen to meeting audio in common conferencing apps and maintain an accurate listening state.
 
-Implementation status: system audio capture is wired through a private Core Audio tap with Rio's own process audio excluded. Bounded raw/decoded queue loss fails explicitly instead of silently skipping meeting audio. Sleep/default-output-device interruptions now keep the active meeting and transcription stream alive while capture retries on a bounded schedule; recovery preserves finalized segments on both sides of the interruption and marks the saved transcript incomplete for any possible hardware gap. Live permission, browser-meeting, interruption, and long-running validation are still required before this milestone can be marked complete.
+Implementation status: system audio capture is wired through a private Core Audio tap with Rio's own process audio excluded. Bounded raw/decoded queue loss fails explicitly instead of silently skipping meeting audio. Sleep/default-output-device interruptions now keep the active meeting and transcription stream alive while capture retries on a bounded schedule; recovery preserves finalized segments on both sides of the interruption and marks the saved transcript incomplete for any possible hardware gap. An open capture stream that stops delivering frames now enters the same bounded recovery path, and a replacement stream is not considered healthy until its first frame arrives. Live permission, browser-meeting, interruption, and long-running validation are still required before this milestone can be marked complete.
 
 ## Milestone 3: Useful live insights
 
@@ -121,7 +121,9 @@ most two same-batch transient retries without relaxing the bounded backlog.
 Deterministic acceptance coverage now verifies that an interrupted Core Audio
 stream reconnects inside the same meeting without restarting transcription or
 losing finalized segments, and that terminal interruption occurs only after the
-capture recovery bound is exhausted. The one-hour hardware soak and live
+capture recovery bound is exhausted. It also verifies that an open stream with
+no frames cannot leave Rio indefinitely claiming to listen and that repeated
+frame-less starts exhaust the same bound. The one-hour hardware soak and live
 interruption checks remain outstanding.
 
 ## Deferred until after the MVP

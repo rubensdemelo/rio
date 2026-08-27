@@ -701,8 +701,12 @@ final class SessionLifecycleTests: XCTestCase {
             throwing: PipelineFailure.stage(.audioCapture, .interrupted)
         )
         await waitUntil(capture: capture, startCount: 2)
-        XCTAssertEqual(coordinator.status, .listening)
+        XCTAssertEqual(coordinator.status, .interrupted)
         XCTAssertTrue(historyRecorder.records().isEmpty)
+
+        let recoveredAudioStream = await capture.lastStream()
+        recoveredAudioStream?.yield(makeAudioChunk(sequence: 1))
+        await waitUntil { coordinator.status == .listening }
 
         let segmentAfterInterruption = FinalizedSpeechSegment(
             sequenceNumber: 2,
@@ -739,12 +743,75 @@ final class SessionLifecycleTests: XCTestCase {
         let audioStream = await capture.lastStream()
         audioStream?.finish(throwing: PipelineFailure.cancelled)
         await waitUntil(capture: capture, startCount: 2)
+        XCTAssertEqual(coordinator.status, .interrupted)
+
+        let recoveredAudioStream = await capture.lastStream()
+        recoveredAudioStream?.yield(makeAudioChunk(sequence: 1))
+        await waitUntil { coordinator.status == .listening }
 
         let captureStarts = await capture.startCount()
         XCTAssertEqual(captureStarts, 2)
         XCTAssertEqual(coordinator.status, .listening)
         XCTAssertNil(coordinator.failure)
         await coordinator.stop()
+    }
+
+    func testOpenCaptureStreamWithoutAudioFramesTriggersSameMeetingRecovery() async throws {
+        let capture = TestSessionAudioCapture()
+        let speech = TestSessionSpeechRecognizer()
+        let coordinator = makeCoordinator(
+            capture: capture,
+            speech: speech,
+            captureInactivityTimeout: .milliseconds(20),
+            captureRecoveryDelays: [.zero]
+        )
+
+        try await coordinator.start()
+
+        await waitUntil(capture: capture, startCount: 2)
+        XCTAssertEqual(coordinator.status, .interrupted)
+
+        let recoveredAudioStream = await capture.lastStream()
+        recoveredAudioStream?.yield(makeAudioChunk(sequence: 1))
+        await waitUntil { coordinator.status == .listening }
+
+        let captureStarts = await capture.startCount()
+        let recognitionStarts = await speech.recognizeCount()
+        XCTAssertEqual(captureStarts, 2)
+        XCTAssertEqual(recognitionStarts, 1)
+        XCTAssertEqual(coordinator.status, .listening)
+        XCTAssertNil(coordinator.failure)
+        await coordinator.stop()
+    }
+
+    func testRepeatedCaptureStartsWithoutAudioFramesExhaustRecoveryBound() async throws {
+        let capture = TestSessionAudioCapture()
+        let speech = TestSessionSpeechRecognizer()
+        let historyRecorder = TestMeetingHistoryRecorder()
+        let coordinator = makeCoordinator(
+            capture: capture,
+            speech: speech,
+            historyRecorder: historyRecorder,
+            captureInactivityTimeout: .milliseconds(20),
+            captureRecoveryDelays: [.zero, .zero, .zero]
+        )
+
+        try await coordinator.start()
+
+        await waitUntil(timeout: .seconds(1)) {
+            coordinator.status == .interrupted
+                && historyRecorder.records().count == 1
+        }
+
+        let captureStarts = await capture.startCount()
+        let recognitionStarts = await speech.recognizeCount()
+        XCTAssertEqual(captureStarts, 4)
+        XCTAssertEqual(recognitionStarts, 1)
+        XCTAssertEqual(
+            coordinator.failure,
+            .stage(.audioCapture, .interrupted)
+        )
+        XCTAssertTrue(historyRecorder.records().first?.incompleteTranscript == true)
     }
 
     func testCaptureInterruptionEndsMeetingOnlyAfterRecoveryAttemptsAreExhausted() async throws {
@@ -908,6 +975,7 @@ final class SessionLifecycleTests: XCTestCase {
         transcriptCollector: any TranscriptCollecting = TestTranscriptCollector(),
         historyRecorder: any MeetingHistoryRecording = TestMeetingHistoryRecorder(),
         failureRecorder: any SessionFailureRecording = TestSessionFailureRecorder(),
+        captureInactivityTimeout: Duration = .seconds(5),
         captureRecoveryDelays: [Duration] = [
             .zero,
             .milliseconds(500),
@@ -925,6 +993,7 @@ final class SessionLifecycleTests: XCTestCase {
             transcriptCollector: transcriptCollector,
             historyRecorder: historyRecorder,
             failureRecorder: failureRecorder,
+            captureInactivityTimeout: captureInactivityTimeout,
             captureRecoveryDelays: captureRecoveryDelays
         )
     }
@@ -966,6 +1035,17 @@ final class SessionLifecycleTests: XCTestCase {
             text: text,
             startOffset: .zero,
             endOffset: .seconds(1)
+        )
+    }
+
+    private func makeAudioChunk(sequence: UInt64) -> AudioChunk {
+        AudioChunk(
+            sequenceNumber: sequence,
+            duration: .milliseconds(20),
+            sampleRate: 48_000,
+            channelCount: 2,
+            samples: [0, 0],
+            inputLevel: 0
         )
     }
 
