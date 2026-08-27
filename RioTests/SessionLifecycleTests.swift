@@ -735,6 +735,68 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertTrue(historyRecorder.records().first?.incompleteTranscript == true)
     }
 
+    func testUnexpectedNormalCaptureCompletionRecoversWithinTheSameMeeting() async throws {
+        let capture = TestSessionAudioCapture()
+        let speech = TestSessionSpeechRecognizer()
+        let transcriptCollector = TestTranscriptCollector()
+        let historyRecorder = TestMeetingHistoryRecorder()
+        let coordinator = makeCoordinator(
+            capture: capture,
+            speech: speech,
+            transcriptCollector: transcriptCollector,
+            historyRecorder: historyRecorder
+        )
+
+        try await coordinator.start()
+        let speechStream = await speech.lastStream()
+        let segmentBeforeCompletion = makeSegment(
+            sequence: 1,
+            text: "finalized before unexpected capture completion"
+        )
+        speechStream?.yield(segmentBeforeCompletion)
+        await waitUntil {
+            transcriptCollector.segments == [segmentBeforeCompletion]
+        }
+
+        let audioStream = await capture.lastStream()
+        audioStream?.finish()
+
+        await waitUntil(capture: capture, startCount: 2)
+        XCTAssertEqual(coordinator.status, .interrupted)
+        XCTAssertTrue(historyRecorder.records().isEmpty)
+
+        let recoveredAudioStream = await capture.lastStream()
+        recoveredAudioStream?.yield(makeAudioChunk(sequence: 1))
+        await waitUntil { coordinator.status == .listening }
+
+        let segmentAfterCompletion = FinalizedSpeechSegment(
+            sequenceNumber: 2,
+            text: "finalized after capture recovery",
+            startOffset: .seconds(1),
+            endOffset: .seconds(2)
+        )
+        speechStream?.yield(segmentAfterCompletion)
+        await waitUntil {
+            transcriptCollector.segments == [
+                segmentBeforeCompletion,
+                segmentAfterCompletion,
+            ]
+        }
+
+        await coordinator.stop()
+
+        let captureStarts = await capture.startCount()
+        let recognitionStarts = await speech.recognizeCount()
+        XCTAssertEqual(captureStarts, 2)
+        XCTAssertEqual(recognitionStarts, 1)
+        XCTAssertEqual(historyRecorder.records().count, 1)
+        XCTAssertEqual(
+            historyRecorder.records().first?.transcript,
+            [segmentBeforeCompletion, segmentAfterCompletion]
+        )
+        XCTAssertTrue(historyRecorder.records().first?.incompleteTranscript == true)
+    }
+
     func testUnexpectedCaptureCancellationUsesTheSameRecoveryPath() async throws {
         let capture = TestSessionAudioCapture()
         let coordinator = makeCoordinator(capture: capture)

@@ -638,8 +638,13 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
                         inactivityTask = makeCaptureInactivityTask(sessionID: sessionID)
                     }
                     inactivityTask.cancel()
-                    continuation?.finish()
-                    return
+                    guard !Task.isCancelled,
+                          activeSessionID == sessionID,
+                          status != .paused else {
+                        continuation?.finish(throwing: PipelineFailure.cancelled)
+                        return
+                    }
+                    throw PipelineFailure.stage(.audioCapture, .interrupted)
                 } catch {
                     inactivityTask.cancel()
                     let reportedFailure = normalizedCaptureFailure(error)
