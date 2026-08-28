@@ -35,6 +35,6 @@ if grep -Fq 'com.apple.security.get-task-allow' <<<"$entitlements"; then
 fi
 
 xcrun stapler validate "$dmg_path"
-spctl --assess --type open --context context:primary-signature --verbose=4 "$dmg_path"
+spctl --assess --type execute --context context:primary-signature --verbose=4 "$app_path"
 
 echo "Rio Developer ID release verification passed."
