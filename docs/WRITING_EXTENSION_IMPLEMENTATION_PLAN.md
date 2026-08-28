@@ -18,7 +18,7 @@ MacOS Services remain an optional compatibility fallback, not the primary UX.
 - A small inline action surface with Proofread and Concise.
 - Bounded selected text (maximum 8,000 UTF-8 bytes).
 - A revision hash and origin metadata on every request.
-- A signed native messaging host named `com.rio.app`.
+- A signed native messaging host named `com.rubensmelo.rio`.
 - An authenticated app-group bridge between the extension host and the running
   Rio app.
 - Rio preview, accept, dismiss, stale-selection rejection, cancellation, and

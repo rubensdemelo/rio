@@ -34,7 +34,7 @@ verify-signing:
 ifneq ($(wildcard Config/Development.xcconfig),)
 	@echo "Verifying the stable development signature..."
 	@codesign -dv --verbose=4 .build/Iteration/Build/Products/Debug/Rio.app 2>&1 | grep -Fq -e 'Authority=Apple Development:' -e 'Authority=Mac Development:'
-	@codesign -d --entitlements - .build/Iteration/Build/Products/Debug/Rio.app 2>&1 | grep -Fq '.com.rio.app'
+	@codesign -d --entitlements - .build/Iteration/Build/Products/Debug/Rio.app 2>&1 | grep -Fq '.com.rubensmelo.rio'
 endif
 
 verify-keychain-access:

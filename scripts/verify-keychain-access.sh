@@ -11,14 +11,14 @@ if [[ ! -x "$executable_path" ]]; then
 fi
 
 signature_details="$(codesign -dv --verbose=4 "$app_path" 2>&1 || true)"
-if ! grep -Fq -e 'Authority=Apple Development:' -e 'Authority=Mac Development:' <<<"$signature_details"; then
-    echo "Keychain verification failed: Rio is not signed by an Apple or Mac Development identity." >&2
+if ! grep -Fq -e 'Authority=Apple Development:' -e 'Authority=Mac Development:' -e 'Authority=Developer ID Application:' <<<"$signature_details"; then
+	echo "Keychain verification failed: Rio is not signed by an Apple Development, Mac Development, or Developer ID Application identity." >&2
     exit 1
 fi
 
 entitlements="$(codesign -d --entitlements - "$app_path" 2>&1 || true)"
 if ! grep -Fq 'keychain-access-groups' <<<"$entitlements" \
-    || ! grep -Fq '.com.rio.app' <<<"$entitlements"; then
+    || ! grep -Fq '.com.rubensmelo.rio' <<<"$entitlements"; then
     echo "Keychain verification failed: Rio does not contain its Keychain access-group entitlement." >&2
     exit 1
 fi

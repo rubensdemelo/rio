@@ -1,0 +1,126 @@
+name: Release Rio
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: macos-26
+    env:
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+      APPLE_DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_BASE64 }}
+      APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+      APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+      APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+      APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+      APPLE_NOTARY_PRIVATE_KEY_BASE64: ${{ secrets.APPLE_NOTARY_PRIVATE_KEY_BASE64 }}
+
+    steps:
+      - name: Check out Rio
+        uses: actions/checkout@v4
+
+      - name: Build, sign, notarize, and package Rio
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          : "${APPLE_TEAM_ID:?APPLE_TEAM_ID repository variable is required}"
+          : "${APPLE_DEVELOPER_ID_CERTIFICATE_BASE64:?APPLE_DEVELOPER_ID_CERTIFICATE_BASE64 secret is required}"
+          : "${APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD:?APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD secret is required}"
+          : "${APPLE_PROVISIONING_PROFILE_BASE64:?APPLE_PROVISIONING_PROFILE_BASE64 secret is required}"
+          : "${APPLE_NOTARY_KEY_ID:?APPLE_NOTARY_KEY_ID secret is required}"
+          : "${APPLE_NOTARY_ISSUER_ID:?APPLE_NOTARY_ISSUER_ID secret is required}"
+          : "${APPLE_NOTARY_PRIVATE_KEY_BASE64:?APPLE_NOTARY_PRIVATE_KEY_BASE64 secret is required}"
+
+          version="${GITHUB_REF_NAME#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tags must look like v1.2.3; received $GITHUB_REF_NAME." >&2
+            exit 1
+          fi
+
+          keychain_path="$RUNNER_TEMP/rio-release.keychain-db"
+          keychain_password="$(uuidgen)"
+          certificate_path="$RUNNER_TEMP/developer-id.p12"
+          profile_path="$RUNNER_TEMP/rio.provisionprofile"
+          profile_plist_path="$RUNNER_TEMP/rio-profile.plist"
+          notary_key_path="$RUNNER_TEMP/AuthKey_${APPLE_NOTARY_KEY_ID}.p8"
+          archive_path="$RUNNER_TEMP/Rio.xcarchive"
+          release_directory="$GITHUB_WORKSPACE/dist"
+          app_path="$archive_path/Products/Applications/Rio.app"
+          dmg_path="$release_directory/Rio-$version.dmg"
+
+          cleanup() {
+            security delete-keychain "$keychain_path" >/dev/null 2>&1 || true
+            rm -f "$certificate_path" "$profile_path" "$profile_plist_path" "$notary_key_path"
+          }
+          trap cleanup EXIT
+
+          printf '%s' "$APPLE_DEVELOPER_ID_CERTIFICATE_BASE64" | base64 --decode > "$certificate_path"
+          printf '%s' "$APPLE_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$profile_path"
+          printf '%s' "$APPLE_NOTARY_PRIVATE_KEY_BASE64" | base64 --decode > "$notary_key_path"
+
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" -k "$keychain_path" -P "$APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain_path" >/dev/null
+          security list-keychain -d user -s "$keychain_path"
+
+          openssl smime -inform DER -verify -noverify \
+            -in "$profile_path" \
+            -out "$profile_plist_path" \
+            >/dev/null 2>&1
+          profile_uuid="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$profile_plist_path")"
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$profile_path" "$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.provisionprofile"
+
+          xcodebuild test \
+            -project Rio.xcodeproj \
+            -scheme Rio \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/RioTests" \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+          xcodebuild archive \
+            -project Rio.xcodeproj \
+            -scheme Rio \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -archivePath "$archive_path" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY='Developer ID Application' \
+            PROVISIONING_PROFILE_SPECIFIER="$profile_uuid" \
+            ENABLE_HARDENED_RUNTIME=YES \
+            MARKETING_VERSION="$version" \
+            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
+
+          scripts/verify-keychain-access.sh "$app_path"
+          mkdir -p "$release_directory"
+          scripts/package-dmg.sh "$app_path" "$dmg_path"
+
+          xcrun notarytool submit "$dmg_path" \
+            --key "$notary_key_path" \
+            --key-id "$APPLE_NOTARY_KEY_ID" \
+            --issuer "$APPLE_NOTARY_ISSUER_ID" \
+            --wait
+          xcrun stapler staple "$dmg_path"
+          scripts/verify-release.sh "$app_path" "$dmg_path"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          dmg_path="$(find dist -maxdepth 1 -type f -name 'Rio-*.dmg' -print -quit)"
+          test -n "$dmg_path"
+          gh release create "$GITHUB_REF_NAME" "$dmg_path" --title "Rio ${GITHUB_REF_NAME#v}" --generate-notes

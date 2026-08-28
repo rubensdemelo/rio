@@ -110,6 +110,41 @@ On first launch, use **Provider** to add your own OpenAI API key. Rio stores it 
 make final
 ```
 
+## GitHub-hosted macOS release
+
+Rio's reusable distribution is a notarized Developer ID DMG. The release
+workflow builds a versioned universal app, preserves Rio's sandbox and
+Keychain entitlement, enables Hardened Runtime, notarizes the DMG, verifies
+the stapled result, and attaches it to a GitHub Release. The OpenAI API key is
+never part of the app, DMG, repository, or workflow; each Mac enters its own
+key in Provider and Rio stores it in that Mac's login Keychain.
+
+The repository-side automation is in
+[`release.yml`](.github/workflows/release.yml), with a one-time credential
+wizard at [`scripts/setup-github-release.sh`](scripts/setup-github-release.sh).
+Run the wizard from the repository root after installing and authenticating
+the GitHub CLI:
+
+```sh
+scripts/setup-github-release.sh
+```
+
+The wizard stores only the Developer ID certificate, provisioning profile, and
+Apple notarization credentials as GitHub Actions secrets, and stores the Apple
+Team ID as a repository variable. Keep the exported `.p12` and `.p8` files
+outside the repository and remove local copies when setup is complete.
+
+After the one-time setup, publish a release by pushing a semantic-version tag:
+
+```sh
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+On a new Mac, download the DMG from GitHub, drag Rio to Applications, grant
+microphone/system-audio permission, and add the OpenAI API key once. Xcode,
+Apple signing setup, and provisioning profiles are not needed on that Mac.
+
 `make final` stops any running Rio instance, runs the complete test suite,
 reuses the generated `.build/` directory, builds the Debug application with
 warnings treated as errors, verifies its development signature and Keychain

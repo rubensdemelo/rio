@@ -29,6 +29,7 @@ Verified on macOS 26.5.2:
 - Static privacy scans confirm that production diagnostics contain only structured non-content metadata and that meeting-derived persistence remains limited to the bounded two-day history.
 - The development-signed application passes entitlement verification. A clean launch leaves Rio running as a menu-bar-only accessory without opening or restoring a window, activating over Finder, or appearing in the Dock/app switcher.
 - The built application launches and exits cleanly without creating audio or transcript files; its inspected container contains only app preferences and the bounded local insight-history file after cards are generated.
+- The repository includes a repeatable Release workflow that builds a universal Developer ID app, packages a drag-installable DMG, notarizes and staples it, and publishes it to a GitHub Release after the Apple credentials are configured.
 
 Not yet verified:
 
@@ -94,7 +95,7 @@ Goal: ship a technical preview that behaves predictably for a full meeting.
 - Confirm that no audio is written to logs, caches, crash annotations, or persistent storage, and that local transcript-plus-insight meeting history expires after two days.
 - Test missing and rejected OpenAI API keys, unavailable network/service responses, and bounded transcription backpressure.
 - Add accessibility, keyboard control, and basic VoiceOver coverage.
-- Produce a verified local app bundle; notarization and App Store packaging are not required for this personal-only release.
+- Produce a verified, notarized Developer ID DMG for GitHub-hosted installation; App Store packaging remains out of scope.
 
 Exit criterion: a one-hour meeting completes without unbounded memory growth, silent capture loss, persistent audio or transcript data, or manual recovery from ordinary interruptions.
 
@@ -130,6 +131,12 @@ capture recovery bound is exhausted. It also verifies that an open stream with
 no frames cannot leave Rio indefinitely claiming to listen and that repeated
 frame-less starts exhaust the same bound. The one-hour hardware soak and live
 interruption checks remain outstanding.
+
+Release packaging automation is checked in at `.github/workflows/release.yml`
+with `scripts/package-dmg.sh`, `scripts/verify-release.sh`, and the one-time
+credential setup wizard `scripts/setup-github-release.sh`. A live notarization
+run remains dependent on configuring the user's Developer ID certificate,
+provisioning profile, and App Store Connect API key as GitHub credentials.
 
 ## Deferred until after the MVP
 
