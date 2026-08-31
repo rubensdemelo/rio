@@ -92,9 +92,14 @@ For the incident-copilot evaluation target, the useful signal set is symptoms, e
 The app does not display a live transcript. Finalized transcript segments are collected in memory during the session and saved as a read-only meeting record when the session stops. The saved record contains no audio and expires after two days.
 
 If decoded audio frames continue but contain no signal for a sustained period,
-the interface warns that meeting audio may be silent. If no audio frames arrive
-at all within the capture-liveness bound, Rio treats the open stream as a Core
-Audio interruption rather than continuing to claim that listening is healthy.
+the interface warns that meeting audio may be silent. After ten consecutive
+minutes of decoded silence, Rio stops listening and releases the active
+pipeline. It saves a normal completed meeting when finalized transcript or
+insight content exists, and discards an entirely empty session instead of
+adding a useless Recent Meetings entry. Any detected meeting-audio signal
+resets the silence interval. If no audio frames arrive at all within the
+capture-liveness bound, Rio treats the open stream as a Core Audio interruption
+rather than continuing to claim that listening is healthy.
 For an ordinary Core Audio interruption, Rio keeps the same meeting and
 transcription pipeline open while it makes bounded capture-reconnection
 attempts; a replacement stream remains interrupted until its first frame

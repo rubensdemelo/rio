@@ -63,7 +63,7 @@ final class AudioInputLevelMonitor: @unchecked Sendable {
         lastLevel = min(1, max(0, level))
         lastUpdate = now
         hasReceivedAudio = true
-        if level >= 0.015 {
+        if level >= AudioChunk.signalThreshold {
             lastSignal = now
         }
     }

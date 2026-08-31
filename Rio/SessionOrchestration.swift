@@ -76,9 +76,12 @@ struct BoundedMeetingContextFactory: MeetingContextFactory, Sendable {
 final class SessionLifecycleCoordinator: SessionLifecycle {
     private enum CleanupKind {
         case stop
+        case sustainedSilence
         case cancel
         case failure(PipelineFailure)
     }
+
+    private static let sustainedSilenceTimeout: Duration = .seconds(600)
 
     private let localeIdentifier: String
     private let capture: any SessionAudioCapture
@@ -538,11 +541,15 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
             failureRecorder.record(failure)
         }
 
+        let transcript = transcriptCollector.snapshot()
+        let insights = insightState.cards
         let meetingRecord: MeetingHistoryRecord? = {
             let shouldRecord: Bool
             switch kind {
             case .stop:
                 shouldRecord = true
+            case .sustainedSilence:
+                shouldRecord = !transcript.isEmpty || !insights.isEmpty
             case .failure:
                 shouldRecord = status != .checkingAvailability
             case .cancel:
@@ -557,8 +564,8 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
                 meetingID: meetingID,
                 startedAt: startedAt,
                 endedAt: Date(),
-                transcript: transcriptCollector.snapshot(),
-                insights: insightState.cards,
+                transcript: transcript,
+                insights: insights,
                 incompleteTranscript: incompleteTranscript,
                 profile: activeMeetingProfile
             )
@@ -585,7 +592,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         generationTask?.cancel()
 
         switch kind {
-        case .stop:
+        case .stop, .sustainedSilence:
             await speechRecognizer.stop()
             await capture.stop()
             await insightGenerator.stop()
@@ -603,7 +610,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         case .failure(let failure):
             self.failure = failure
             status = status(for: failure)
-        case .stop, .cancel:
+        case .stop, .sustainedSilence, .cancel:
             failure = nil
             status = .stopped
         }
@@ -615,6 +622,17 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         transcriptCollector.reset()
     }
 
+    private func stopForSustainedSilence(sessionID: UInt64) async {
+        guard activeSessionID == sessionID else {
+            return
+        }
+
+        // This is called by the forwarding task itself. Detach its handle before
+        // cleanup so that cleanup never tries to cancel its currently executing task.
+        audioForwardingTask = nil
+        await cleanup(sessionID: sessionID, kind: .sustainedSilence)
+    }
+
     private func makeForwardedAudioStream(
         _ source: AudioStream,
         sessionID: UInt64
@@ -624,6 +642,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         let task = Task { [weak self] in
             var currentSource = source
             var nextRecoveryAttempt = 0
+            var consecutiveSilence = Duration.zero
 
             while let self {
                 var inactivityTask = makeCaptureInactivityTask(sessionID: sessionID)
@@ -633,6 +652,16 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
                         nextRecoveryAttempt = 0
                         if status == .interrupted {
                             status = .listening
+                        }
+                        if chunk.inputLevel < AudioChunk.signalThreshold {
+                            consecutiveSilence += chunk.duration
+                            if consecutiveSilence >= Self.sustainedSilenceTimeout {
+                                await stopForSustainedSilence(sessionID: sessionID)
+                                continuation?.finish()
+                                return
+                            }
+                        } else {
+                            consecutiveSilence = .zero
                         }
                         continuation?.yield(chunk)
                         inactivityTask = makeCaptureInactivityTask(sessionID: sessionID)

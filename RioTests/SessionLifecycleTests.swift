@@ -846,6 +846,89 @@ final class SessionLifecycleTests: XCTestCase {
         await coordinator.stop()
     }
 
+    func testSustainedSilentFramesEndAndDiscardAnEmptyMeeting() async throws {
+        let capture = TestSessionAudioCapture()
+        let speech = TestSessionSpeechRecognizer()
+        let generator = TestSessionInsightGenerator()
+        let historyRecorder = TestMeetingHistoryRecorder()
+        let coordinator = makeCoordinator(
+            capture: capture,
+            speech: speech,
+            generator: generator,
+            historyRecorder: historyRecorder
+        )
+
+        try await coordinator.start()
+        let audioStream = await capture.lastStream()
+        audioStream?.yield(makeAudioChunk(sequence: 1, duration: .seconds(300)))
+        audioStream?.yield(makeAudioChunk(sequence: 2, duration: .seconds(300)))
+
+        await waitUntil { coordinator.status == .stopped }
+
+        let captureStops = await capture.stopCount()
+        let speechStops = await speech.stopCount()
+        let generatorStops = await generator.stopCount()
+        XCTAssertNil(coordinator.failure)
+        XCTAssertTrue(historyRecorder.records().isEmpty)
+        XCTAssertEqual(captureStops, 1)
+        XCTAssertEqual(speechStops, 1)
+        XCTAssertEqual(generatorStops, 1)
+    }
+
+    func testSustainedSilenceAutoStopSavesExistingMeetingContent() async throws {
+        let capture = TestSessionAudioCapture()
+        let speech = TestSessionSpeechRecognizer()
+        let transcriptCollector = TestTranscriptCollector()
+        let historyRecorder = TestMeetingHistoryRecorder()
+        let coordinator = makeCoordinator(
+            capture: capture,
+            speech: speech,
+            transcriptCollector: transcriptCollector,
+            historyRecorder: historyRecorder
+        )
+
+        try await coordinator.start()
+        let segment = makeSegment(sequence: 1, text: "content before the meeting ended")
+        let speechStream = await speech.lastStream()
+        speechStream?.yield(segment)
+        await waitUntil { transcriptCollector.segments == [segment] }
+
+        let audioStream = await capture.lastStream()
+        audioStream?.yield(makeAudioChunk(sequence: 1, duration: .seconds(600)))
+        await waitUntil { coordinator.status == .stopped }
+
+        let record = try XCTUnwrap(historyRecorder.records().first)
+        XCTAssertEqual(record.transcript, [segment])
+        XCTAssertFalse(record.incompleteTranscript)
+    }
+
+    func testDetectedSignalResetsSustainedSilenceInterval() async throws {
+        let capture = TestSessionAudioCapture()
+        let historyRecorder = TestMeetingHistoryRecorder()
+        let coordinator = makeCoordinator(
+            capture: capture,
+            historyRecorder: historyRecorder
+        )
+
+        try await coordinator.start()
+        let audioStream = await capture.lastStream()
+        audioStream?.yield(makeAudioChunk(sequence: 1, duration: .seconds(599)))
+        audioStream?.yield(
+            makeAudioChunk(
+                sequence: 2,
+                duration: .milliseconds(20),
+                inputLevel: AudioChunk.signalThreshold
+            )
+        )
+        audioStream?.yield(makeAudioChunk(sequence: 3, duration: .seconds(1)))
+
+        try await Task.sleep(for: .milliseconds(50))
+
+        XCTAssertEqual(coordinator.status, .listening)
+        XCTAssertTrue(historyRecorder.records().isEmpty)
+        await coordinator.stop()
+    }
+
     func testRepeatedCaptureStartsWithoutAudioFramesExhaustRecoveryBound() async throws {
         let capture = TestSessionAudioCapture()
         let speech = TestSessionSpeechRecognizer()
@@ -1100,14 +1183,18 @@ final class SessionLifecycleTests: XCTestCase {
         )
     }
 
-    private func makeAudioChunk(sequence: UInt64) -> AudioChunk {
+    private func makeAudioChunk(
+        sequence: UInt64,
+        duration: Duration = .milliseconds(20),
+        inputLevel: Float = 0
+    ) -> AudioChunk {
         AudioChunk(
             sequenceNumber: sequence,
-            duration: .milliseconds(20),
+            duration: duration,
             sampleRate: 48_000,
             channelCount: 2,
             samples: [0, 0],
-            inputLevel: 0
+            inputLevel: inputLevel
         )
     }
 

@@ -540,6 +540,9 @@ enum SessionStatus: Sendable, Equatable {
 }
 
 struct AudioChunk: Sendable, Equatable {
+    /// The lowest normalized level that counts as meeting-audio signal.
+    static let signalThreshold: Float = 0.015
+
     let sequenceNumber: UInt64
     let duration: Duration
     let sampleRate: Double

@@ -77,12 +77,16 @@ telemetry before handing audio to transcription; callbacks perform no model
 requests, UI work, PCM conversion, or blocking synchronization.
 
 The session forwarding bridge applies a five-second frame-liveness bound to
-each capture stream. Zero-amplitude frames are healthy capture activity and
-remain the separate silent-audio UI condition. An open stream that delivers no
-frames is interrupted and re-enters bounded capture-only recovery. A restarted
-stream does not reset that retry budget or return the UI to listening until it
-delivers a frame; repeated frame-less starts therefore end explicitly instead
-of looping while the UI claims to listen.
+each capture stream. Zero-amplitude frames are healthy capture activity for
+that watchdog, while the bridge separately accumulates their decoded audio
+duration for the silent-audio UI condition and a ten-minute graceful auto-stop.
+Any frame at or above the shared input-signal threshold resets the consecutive
+silence duration. A silence auto-stop uses normal cleanup and history recording,
+except that a session with no finalized transcript or insights is discarded.
+An open stream that delivers no frames is interrupted and re-enters bounded
+capture-only recovery. A restarted stream does not reset that retry budget or
+return the UI to listening until it delivers a frame; repeated frame-less starts
+therefore end explicitly instead of looping while the UI claims to listen.
 
 If the Core Audio tap cannot provide the required system-audio behavior on the
 minimum supported macOS release, keep the capture interface stable and report
