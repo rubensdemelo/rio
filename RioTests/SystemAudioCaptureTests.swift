@@ -2,11 +2,7 @@ import CoreAudio
 import Foundation
 import XCTest
 
-final class RioTests: XCTestCase {
-    func testTestBundleLoads() {
-        XCTAssertTrue(true)
-    }
-
+final class SystemAudioCaptureTests: XCTestCase {
     func testSystemAudioSampleDecoderDecodesFloatPCM() {
         let source: [Float] = [-0.5, 0, 0.5]
         let bytes = source.withUnsafeBytes { Data($0) }

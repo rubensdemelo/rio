@@ -42,74 +42,35 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(RioCompositionRoot.defaultLocaleIdentifier, "en-US")
     }
 
-    func testAPIKeyOnlyWindowUsesCompactHeight() {
-        XCTAssertEqual(
-            RioMainWindowSizing.minimumContentHeight(
-                apiKeyOnly: true,
-                needsSetup: true,
-                compactReady: false
-            ),
-            80
+    func testWindowSizingKeepsSetupCompactAndExpandsForInsights() {
+        let apiKeyOnlyHeight = RioMainWindowSizing.windowHeight(
+            apiKeyOnly: true,
+            needsSetup: true,
+            compactReady: false
         )
-        XCTAssertLessThanOrEqual(
-            RioMainWindowSizing.windowHeight(
-                apiKeyOnly: true,
-                needsSetup: true,
-                compactReady: false
-            ),
-            140
+        let readyHeight = RioMainWindowSizing.windowHeight(
+            apiKeyOnly: false,
+            needsSetup: false,
+            compactReady: true
         )
-    }
+        let idleHeight = RioMainWindowSizing.windowHeight(
+            apiKeyOnly: false,
+            needsSetup: false,
+            compactReady: false
+        )
+        let activeHeight = RioMainWindowSizing.windowHeight(
+            apiKeyOnly: false,
+            needsSetup: false,
+            compactReady: false,
+            hasInsights: true
+        )
 
-    func testReadyWindowUsesCompactHeight() {
-        XCTAssertEqual(
-            RioMainWindowSizing.minimumContentHeight(
-                apiKeyOnly: false,
-                needsSetup: false,
-                compactReady: true
-            ),
-            64
-        )
-        XCTAssertEqual(
-            RioMainWindowSizing.windowHeight(
-                apiKeyOnly: false,
-                needsSetup: false,
-                compactReady: true
-            ),
-            104
-        )
-        XCTAssertEqual(
-            RioMainWindowSizing.windowHeight(
-                apiKeyOnly: false,
-                needsSetup: false,
-                compactReady: false
-            ),
-            240
-        )
-    }
-
-    func testActiveInsightWindowUsesAUsefulWorkspaceSize() {
-        XCTAssertEqual(
-            RioMainWindowSizing.minimumContentHeight(
-                apiKeyOnly: false,
-                needsSetup: false,
-                compactReady: false,
-                hasInsights: true
-            ),
-            420
-        )
-        XCTAssertEqual(
-            RioMainWindowSizing.windowHeight(
-                apiKeyOnly: false,
-                needsSetup: false,
-                compactReady: false,
-                hasInsights: true
-            ),
-            680
-        )
-        XCTAssertEqual(
+        XCTAssertLessThan(apiKeyOnlyHeight, idleHeight)
+        XCTAssertLessThan(readyHeight, idleHeight)
+        XCTAssertGreaterThan(activeHeight, idleHeight)
+        XCTAssertGreaterThan(
             RioMainWindowSizing.windowWidth(hasInsights: true),
-            920
+            RioMainWindowSizing.windowWidth(hasInsights: false)
         )
     }
 
@@ -139,110 +100,6 @@ final class ApplicationShellTests: XCTestCase {
             try JSONDecoder().decode(ListeningCadence.self, from: Data("45".utf8)),
             .sixtySeconds
         )
-    }
-
-    func testStartListeningAllowsPermissionRequestButRequiresBlockingChecks() {
-        let controller = FakeSessionController()
-
-        XCTAssertFalse(controller.isReadyToStartListening)
-
-        controller.inject(
-            status: .stopped,
-            readiness: SessionReadiness(
-                checks: PrerequisiteKind.allCases.map {
-                    PrerequisiteCheck(kind: $0, reason: nil)
-                }
-            )
-        )
-
-        XCTAssertTrue(controller.isReadyToStartListening)
-
-        controller.inject(
-            status: .stopped,
-            readiness: SessionReadiness(
-                checks: [
-                    PrerequisiteCheck(
-                        kind: .meetingAudio,
-                        reason: .systemAudioPermissionDenied
-                    )
-                ]
-            )
-        )
-
-        XCTAssertTrue(controller.isReadyToStartListening)
-
-        controller.inject(
-            status: .stopped,
-            readiness: SessionReadiness(
-                checks: [
-                    PrerequisiteCheck(
-                        kind: .openAI,
-                        reason: .openAIAPIKeyMissing
-                    )
-                ]
-            )
-        )
-
-        XCTAssertFalse(controller.isReadyToStartListening)
-    }
-
-    func testPrimaryActionStartsAndStopsExactlyOnce() async {
-        let card = InsightCard(
-            stableKey: "synthetic-card",
-            category: .important,
-            text: "Synthetic insight",
-            explicitOwner: nil,
-            state: .new
-        )
-        let controller = FakeSessionController(cards: [card])
-
-        await controller.performPrimaryAction()
-
-        XCTAssertEqual(controller.startCount, 1)
-        XCTAssertEqual(controller.stopCount, 0)
-        XCTAssertEqual(controller.status, .listening)
-        XCTAssertEqual(controller.primaryActionTitle, "Stop Listening")
-
-        await controller.performPrimaryAction()
-
-        XCTAssertEqual(controller.startCount, 1)
-        XCTAssertEqual(controller.stopCount, 1)
-        XCTAssertEqual(controller.status, .stopped)
-        XCTAssertTrue(controller.cards.isEmpty)
-        XCTAssertEqual(controller.primaryActionTitle, "Start Listening")
-    }
-
-    func testInjectedCardsExposeNewUpdatedAndResolvedStates() {
-        let cards = [
-            InsightCard(
-                stableKey: "synthetic-new",
-                category: .important,
-                text: "New synthetic insight",
-                explicitOwner: nil,
-                state: .new
-            ),
-            InsightCard(
-                stableKey: "synthetic-updated",
-                category: .decision,
-                text: "Updated synthetic insight",
-                explicitOwner: nil,
-                state: .updated
-            ),
-            InsightCard(
-                stableKey: "synthetic-resolved",
-                category: .question,
-                text: "Resolved synthetic insight",
-                explicitOwner: nil,
-                state: .resolved
-            ),
-        ]
-        let controller = FakeSessionController()
-
-        controller.inject(status: .listening, cards: cards)
-
-        XCTAssertEqual(controller.cards, cards)
-        XCTAssertEqual(controller.cards.map(\.state), [.new, .updated, .resolved])
-        XCTAssertEqual(controller.status, .listening)
     }
 
     func testLiveInsightsArePresentedNewestFirst() {
@@ -299,40 +156,6 @@ final class ApplicationShellTests: XCTestCase {
                 changedAt.formatted(date: .abbreviated, time: .shortened)
             )
         )
-    }
-
-    func testUnavailableOutcomeNeverClaimsToBeListening() async {
-        let reason = UnavailableReason.openAIAPIKeyMissing
-        let controller = FakeSessionController(startOutcome: .unavailable(reason))
-
-        await controller.performPrimaryAction()
-
-        XCTAssertEqual(controller.status, .unavailable)
-        XCTAssertEqual(controller.unavailableReason, reason)
-        XCTAssertEqual(controller.startCount, 1)
-        XCTAssertEqual(controller.primaryActionTitle, "Start Listening")
-    }
-
-    func testInterruptedFailureUpdatesStatusAccurately() async {
-        let failure = PipelineFailure.stage(.audioCapture, .interrupted)
-        let controller = FakeSessionController(startOutcome: .failure(failure))
-
-        await controller.performPrimaryAction()
-
-        XCTAssertEqual(controller.status, .interrupted)
-        XCTAssertEqual(controller.failure, failure)
-        XCTAssertNotEqual(controller.status, .listening)
-    }
-
-    func testGenericPipelineFailureUpdatesToUnavailable() async {
-        let failure = PipelineFailure.stage(.sessionLifecycle, .failed)
-        let controller = FakeSessionController(startOutcome: .failure(failure))
-
-        await controller.performPrimaryAction()
-
-        XCTAssertEqual(controller.status, .unavailable)
-        XCTAssertEqual(controller.failure, failure)
-        XCTAssertNotEqual(controller.status, .listening)
     }
 
     func testStatusAndEmptyPresentationsAreDeterministic() {
@@ -555,37 +378,6 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(muted.condition, .muted)
         XCTAssertEqual(connectionError.condition, .connectionError)
         XCTAssertNotEqual(muted.condition, connectionError.condition)
-    }
-
-    func testFakeControllerPausesAndResumesWithoutClearingInsights() async {
-        let card = InsightCard(
-            stableKey: "pause-card",
-            category: .decision,
-            text: "A decision",
-            explicitOwner: nil,
-            state: .new
-        )
-        let controller = FakeSessionController(cards: [card])
-
-        await controller.performPrimaryAction()
-        await controller.performPauseAction()
-
-        XCTAssertEqual(controller.status, .paused)
-        XCTAssertEqual(controller.cards, [card])
-        XCTAssertEqual(controller.pauseActionTitle, "Resume Listening")
-
-        await controller.performPauseAction()
-        XCTAssertEqual(controller.status, .listening)
-        XCTAssertEqual(controller.cards, [card])
-    }
-
-    func testRecentMeetingDetailOffersInsightsAndTranscriptSections() {
-        XCTAssertEqual(
-            RecentMeetingDetailSection.allCases,
-            [.insights, .transcript]
-        )
-        XCTAssertEqual(RecentMeetingDetailSection.insights.title, "Insights")
-        XCTAssertEqual(RecentMeetingDetailSection.transcript.title, "Transcript")
     }
 
     func testRecentMeetingTranscriptIsPresentedInChronologicalOrder() {

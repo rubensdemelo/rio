@@ -15,21 +15,17 @@ final class LiveSessionController: SessionShellControlling {
 
     let lifecycle: SessionLifecycleCoordinator
     let insightStore: InMemoryInsightStore
-    private let insightHistory: InsightHistoryStore?
     private let meetingProfileSettings: MeetingProfileSettings?
 
     private var monitoringTask: Task<Void, Never>?
-    private var insightHistorySessionID: UUID?
 
     init(
         lifecycle: SessionLifecycleCoordinator,
         insightStore: InMemoryInsightStore,
-        insightHistory: InsightHistoryStore? = nil,
         meetingProfileSettings: MeetingProfileSettings? = nil
     ) {
         self.lifecycle = lifecycle
         self.insightStore = insightStore
-        self.insightHistory = insightHistory
         self.meetingProfileSettings = meetingProfileSettings
         observeInsightStore()
         status = lifecycle.status
@@ -109,7 +105,6 @@ final class LiveSessionController: SessionShellControlling {
                 profile: meetingProfileSettings?.selection ?? .fallback
             )
             try await lifecycle.start()
-            insightHistorySessionID = UUID()
             startMonitoring()
         } catch let startFailure {
             apply(startFailure)
@@ -118,10 +113,8 @@ final class LiveSessionController: SessionShellControlling {
     }
 
     private func stopListening() async {
-        persistCurrentInsights()
         await lifecycle.stop()
         stopMonitoring()
-        insightHistorySessionID = nil
     }
 
     func performPauseAction() async {
@@ -199,16 +192,6 @@ final class LiveSessionController: SessionShellControlling {
                 self?.observeInsightStore()
             }
         }
-        persist(cards: cards)
-    }
-
-    private func persistCurrentInsights() {
-        persist(cards: insightStore.cards)
-    }
-
-    private func persist(cards: [InsightCard]) {
-        guard let insightHistory, let insightHistorySessionID else { return }
-        insightHistory.record(cards: cards, sessionID: insightHistorySessionID)
     }
 
     private func apply(_ startFailure: PipelineFailure) {
@@ -228,7 +211,6 @@ enum RioCompositionRoot {
     static let defaultLocaleIdentifier = "en-US"
 
     static func makeLiveController(
-        insightHistory: InsightHistoryStore? = nil,
         meetingHistory: MeetingHistoryStore? = nil,
         meetingProfileSettings: MeetingProfileSettings? = nil,
         apiKeyStore: any OpenAIAPIKeyStore = KeychainOpenAIAPIKeyStore()
@@ -275,7 +257,6 @@ enum RioCompositionRoot {
         return LiveSessionController(
             lifecycle: lifecycle,
             insightStore: insightStore,
-            insightHistory: insightHistory,
             meetingProfileSettings: meetingProfileSettings
         )
     }

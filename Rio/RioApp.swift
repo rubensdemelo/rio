@@ -27,6 +27,7 @@ struct RioApp: App {
             Darwin.exit(succeeded ? EXIT_SUCCESS : EXIT_FAILURE)
         }
 
+        try? LegacyInsightHistoryFile.remove()
         let meetingHistory = MeetingHistoryStore()
         let meetingProfileSettings = MeetingProfileSettings()
         let apiKeyStore = OpenAIAPIKeyStoreFactory.makeRuntimeStore()

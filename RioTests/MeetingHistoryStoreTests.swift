@@ -212,6 +212,22 @@ final class MeetingHistoryStoreTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
     }
 
+    func testLegacyInsightHistoryFileIsRemoved() throws {
+        let directoryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directoryURL) }
+        let fileURL = directoryURL.appendingPathComponent("recent-insights.json")
+        try FileManager.default.createDirectory(
+            at: directoryURL,
+            withIntermediateDirectories: true
+        )
+        try Data("legacy insight text".utf8).write(to: fileURL)
+
+        try LegacyInsightHistoryFile.remove(at: fileURL)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
     private func meeting(
         id: UUID,
         endedAt: TimeInterval,

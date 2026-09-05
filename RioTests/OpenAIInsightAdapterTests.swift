@@ -337,57 +337,31 @@ final class OpenAIInsightAdapterTests: XCTestCase {
         }
     }
 
-    func testIncompleteResponsesResultCanBeRetried() async throws {
-        let client = RecordingOpenAIHTTPClient(
-            responseData: makeIncompleteAPIResponseData()
-        )
-        let generator = OpenAIInsightGenerator(
-            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
-            client: client
-        )
+    func testNonCompletedResponsesBecomeRetryableFailures() async throws {
+        let cases: [(name: String, responseData: Data)] = [
+            ("incomplete", makeIncompleteAPIResponseData()),
+            ("refusal", makeRefusalAPIResponseData()),
+            ("unknown status", makeAPIResponseData(status: "cancelled")),
+        ]
 
-        try await generator.startSession(localeIdentifier: "en-US")
-        do {
-            _ = try await generator.generate(from: makeBatch(text: "Synthetic meeting text"))
-            XCTFail("An incomplete response must be exposed as a retryable failure")
-        } catch let failure {
-            XCTAssertEqual(failure, .stage(.insightGeneration, .failed))
-        }
-    }
+        for testCase in cases {
+            let client = RecordingOpenAIHTTPClient(responseData: testCase.responseData)
+            let generator = OpenAIInsightGenerator(
+                configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+                client: client
+            )
 
-    func testRefusalResponseCanBeRetried() async throws {
-        let client = RecordingOpenAIHTTPClient(
-            responseData: makeRefusalAPIResponseData()
-        )
-        let generator = OpenAIInsightGenerator(
-            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
-            client: client
-        )
-
-        try await generator.startSession(localeIdentifier: "en-US")
-        do {
-            _ = try await generator.generate(from: makeBatch(text: "Synthetic meeting text"))
-            XCTFail("A refusal response must be exposed as a retryable failure")
-        } catch let failure {
-            XCTAssertEqual(failure, .stage(.insightGeneration, .failed))
-        }
-    }
-
-    func testUnknownResponseStatusCanBeRetried() async throws {
-        let client = RecordingOpenAIHTTPClient(
-            responseData: makeAPIResponseData(status: "cancelled")
-        )
-        let generator = OpenAIInsightGenerator(
-            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
-            client: client
-        )
-
-        try await generator.startSession(localeIdentifier: "en-US")
-        do {
-            _ = try await generator.generate(from: makeBatch(text: "Synthetic meeting text"))
-            XCTFail("An unrecognized response status must be exposed as a retryable failure")
-        } catch let failure {
-            XCTAssertEqual(failure, .stage(.insightGeneration, .failed))
+            try await generator.startSession(localeIdentifier: "en-US")
+            do {
+                _ = try await generator.generate(from: makeBatch(text: "Synthetic meeting text"))
+                XCTFail("Expected \(testCase.name) response to be retryable")
+            } catch let failure {
+                XCTAssertEqual(
+                    failure,
+                    .stage(.insightGeneration, .failed),
+                    "Unexpected failure for \(testCase.name) response"
+                )
+            }
         }
     }
 

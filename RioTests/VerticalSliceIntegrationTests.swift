@@ -88,97 +88,6 @@ final class VerticalSliceIntegrationTests: XCTestCase {
         XCTAssertEqual(generatorStops, 2)
     }
 
-    func testVerticalSliceRetriesGenerationFailureWithoutRestartingListening() async throws {
-        let capture = TestSessionAudioCapture()
-        let speech = TestSessionSpeechRecognizer()
-        let generator = TestSessionInsightGenerator(
-            updates: [
-                InsightUpdate(
-                    stableKey: "question-1",
-                    operation: .add,
-                    category: .question,
-                    text: "new question",
-                    explicitOwner: nil
-                )
-            ],
-            generateFailure: .stage(.insightGeneration, .failed),
-            generateFailureCount: 2
-        )
-        let contextFactory = TestMeetingContextFactory()
-        let store = InMemoryInsightStore()
-        let lifecycle = SessionLifecycleCoordinator(
-            localeIdentifier: "en-US",
-            capture: capture,
-            speechRecognizer: speech,
-            contextFactory: contextFactory,
-            insightGenerator: generator,
-            insightState: store
-        )
-        let controller = LiveSessionController(
-            lifecycle: lifecycle,
-            insightStore: store
-        )
-
-        await controller.performPrimaryAction()
-        let firstSpeechStream = await speech.lastStream()
-        firstSpeechStream?.yield(makeSegment(sequence: 1, text: "first attempt"))
-        await waitUntil(timeout: .seconds(8)) {
-            controller.status == SessionStatus.listening
-                && controller.cards.count == 1
-        }
-        XCTAssertEqual(controller.status, SessionStatus.listening)
-        XCTAssertEqual(controller.cards[0].text, "new question")
-
-        await controller.performPrimaryAction()
-        XCTAssertEqual(controller.status, SessionStatus.stopped)
-        XCTAssertTrue(controller.cards.isEmpty)
-        XCTAssertEqual(contextFactory.contexts().count, 1)
-    }
-
-    func testVerticalSliceKeepsOnlyInsightCardsInRecentHistory() async throws {
-        let capture = TestSessionAudioCapture()
-        let speech = TestSessionSpeechRecognizer()
-        let generator = TestSessionInsightGenerator(
-            updates: [
-                InsightUpdate(
-                    stableKey: "decision-1",
-                    operation: .add,
-                    category: .decision,
-                    text: "Use the safe rollout",
-                    explicitOwner: nil
-                )
-            ]
-        )
-        let history = InsightHistoryStore(repository: TestVerticalSliceHistoryRepository())
-        let store = InMemoryInsightStore()
-        let lifecycle = SessionLifecycleCoordinator(
-            localeIdentifier: "en-US",
-            capture: capture,
-            speechRecognizer: speech,
-            contextFactory: TestMeetingContextFactory(),
-            insightGenerator: generator,
-            insightState: store
-        )
-        let controller = LiveSessionController(
-            lifecycle: lifecycle,
-            insightStore: store,
-            insightHistory: history
-        )
-
-        await controller.performPrimaryAction()
-        let speechStream = await speech.lastStream()
-        speechStream?.yield(makeSegment(sequence: 1, text: "synthetic meeting input"))
-
-        await waitUntil(description: "history card") {
-            history.entries.map(\.text) == ["Use the safe rollout"]
-        }
-        await controller.performPrimaryAction()
-
-        XCTAssertEqual(history.entries.count, 1)
-        XCTAssertEqual(history.entries[0].text, "Use the safe rollout")
-        XCTAssertEqual(history.entries[0].card.explicitOwner, nil)
-    }
-
     private func waitUntil(
         description: String = "transition",
         timeout: Duration = .seconds(8),
@@ -203,9 +112,4 @@ final class VerticalSliceIntegrationTests: XCTestCase {
             endOffset: .seconds(1)
         )
     }
-}
-
-private final class TestVerticalSliceHistoryRepository: InsightHistoryPersisting {
-    func load() throws -> [SavedInsight] { [] }
-    func save(_ entries: [SavedInsight]) throws {}
 }

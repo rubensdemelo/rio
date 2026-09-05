@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 
 struct SavedInsight: Codable, Equatable, Identifiable, Sendable {
@@ -82,110 +81,22 @@ struct SavedInsight: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
-protocol InsightHistoryPersisting {
-    func load() throws -> [SavedInsight]
-    func save(_ entries: [SavedInsight]) throws
-}
-
-struct FileInsightHistoryRepository: InsightHistoryPersisting {
-    private let fileURL: URL
-
-    init(fileURL: URL? = nil) {
-        self.fileURL = fileURL ?? Self.defaultFileURL()
+enum LegacyInsightHistoryFile {
+    static func remove(
+        at fileURL: URL = defaultFileURL(),
+        fileManager: FileManager = .default
+    ) throws {
+        guard fileManager.fileExists(atPath: fileURL.path) else { return }
+        try fileManager.removeItem(at: fileURL)
     }
 
-    func load() throws -> [SavedInsight] {
-        guard FileManager.default.fileExists(atPath: fileURL.path) else {
-            return []
-        }
-        return try JSONDecoder().decode([SavedInsight].self, from: Data(contentsOf: fileURL))
-    }
-
-    func save(_ entries: [SavedInsight]) throws {
-        try FileManager.default.createDirectory(
-            at: fileURL.deletingLastPathComponent(),
-            withIntermediateDirectories: true
-        )
-        let data = try JSONEncoder().encode(entries)
-        try data.write(to: fileURL, options: .atomic)
-    }
-
-    private static func defaultFileURL() -> URL {
-        let directory = FileManager.default.urls(
+    private static func defaultFileURL(fileManager: FileManager = .default) -> URL {
+        let directory = fileManager.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
-        ).first ?? FileManager.default.temporaryDirectory
+        ).first ?? fileManager.temporaryDirectory
         return directory
             .appendingPathComponent("Rio", isDirectory: true)
             .appendingPathComponent("recent-insights.json")
-    }
-}
-
-@MainActor
-final class InsightHistoryStore: ObservableObject {
-    static let retention: TimeInterval = 48 * 60 * 60
-    static let maximumEntryCount = 200
-
-    @Published private(set) var entries: [SavedInsight]
-
-    private let repository: any InsightHistoryPersisting
-
-    init(repository: any InsightHistoryPersisting = FileInsightHistoryRepository()) {
-        self.repository = repository
-        let loadedEntries = (try? repository.load()) ?? []
-        entries = Self.retainedEntries(from: loadedEntries, now: Date())
-        if entries != loadedEntries {
-            try? repository.save(entries)
-        }
-    }
-
-    func record(cards: [InsightCard], sessionID: UUID, now: Date = Date()) {
-        guard !cards.isEmpty else { return }
-
-        var updatedEntries = Self.retainedEntries(from: entries, now: now)
-        for card in cards {
-            if let index = updatedEntries.firstIndex(where: {
-                $0.sessionID == sessionID && $0.stableKey == card.stableKey
-            }) {
-                let existingEntry = updatedEntries[index]
-                guard existingEntry.category.domainValue != card.category
-                    || existingEntry.text != card.text
-                    || existingEntry.state.domainValue != card.state else {
-                    continue
-                }
-
-                updatedEntries[index] = SavedInsight(
-                    id: existingEntry.id,
-                    sessionID: sessionID,
-                    card: card,
-                    savedAt: now
-                )
-            } else {
-                updatedEntries.append(SavedInsight(sessionID: sessionID, card: card, savedAt: now))
-            }
-        }
-
-        updatedEntries = Self.retainedEntries(from: updatedEntries, now: now)
-        guard updatedEntries != entries else { return }
-        entries = updatedEntries
-        try? repository.save(entries)
-    }
-
-    func clear() {
-        guard !entries.isEmpty else { return }
-        entries = []
-        try? repository.save(entries)
-    }
-
-    private static func retainedEntries(
-        from entries: [SavedInsight],
-        now: Date
-    ) -> [SavedInsight] {
-        let earliestRetainedDate = now.addingTimeInterval(-retention)
-        return entries
-            .filter { $0.savedAt >= earliestRetainedDate }
-            .sorted { $0.savedAt > $1.savedAt }
-            .prefix(maximumEntryCount)
-            .map { $0 }
     }
 }
