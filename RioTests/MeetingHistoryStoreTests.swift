@@ -69,7 +69,7 @@ final class MeetingHistoryStoreTests: XCTestCase {
         XCTAssertEqual(history.meetings[0].transcriptSegments.map(\.text), ["Final"])
     }
 
-    func testClearMeetingAndClearAllPersistTheChange() {
+    func testClearMeetingAndClearAllPersistTheChange() throws {
         let repository = TestMeetingHistoryRepository()
         let history = MeetingHistoryStore(repository: repository, now: date(100))
         let first = meeting(id: UUID(), endedAt: 50)
@@ -77,12 +77,48 @@ final class MeetingHistoryStoreTests: XCTestCase {
         history.record(first, now: date(100))
         history.record(second, now: date(100))
 
-        history.clear(meetingID: first.id)
+        try history.clear(meetingID: first.id)
 
         XCTAssertEqual(history.meetings, [second])
         XCTAssertEqual(repository.meetings, [second])
 
-        history.clearAll()
+        try history.clearAll()
+
+        XCTAssertTrue(history.meetings.isEmpty)
+        XCTAssertTrue(repository.meetings.isEmpty)
+    }
+
+    func testClearMeetingFailureKeepsEveryMeetingVisibleAndCanRetry() throws {
+        let first = meeting(id: UUID(), endedAt: 50)
+        let second = meeting(id: UUID(), endedAt: 60)
+        let repository = TestMeetingHistoryRepository(meetings: [second, first])
+        let history = MeetingHistoryStore(repository: repository, now: date(100))
+        repository.shouldFailSaves = true
+
+        XCTAssertThrowsError(try history.clear(meetingID: first.id))
+        XCTAssertEqual(history.meetings, [second, first])
+        XCTAssertEqual(repository.meetings, [second, first])
+
+        repository.shouldFailSaves = false
+        try history.clear(meetingID: first.id)
+
+        XCTAssertEqual(history.meetings, [second])
+        XCTAssertEqual(repository.meetings, [second])
+    }
+
+    func testClearAllFailureKeepsMeetingsVisibleAndCanRetry() throws {
+        let first = meeting(id: UUID(), endedAt: 50)
+        let second = meeting(id: UUID(), endedAt: 60)
+        let repository = TestMeetingHistoryRepository(meetings: [second, first])
+        let history = MeetingHistoryStore(repository: repository, now: date(100))
+        repository.shouldFailSaves = true
+
+        XCTAssertThrowsError(try history.clearAll())
+        XCTAssertEqual(history.meetings, [second, first])
+        XCTAssertEqual(repository.meetings, [second, first])
+
+        repository.shouldFailSaves = false
+        try history.clearAll()
 
         XCTAssertTrue(history.meetings.isEmpty)
         XCTAssertTrue(repository.meetings.isEmpty)
@@ -216,6 +252,7 @@ final class MeetingHistoryStoreTests: XCTestCase {
 
 private final class TestMeetingHistoryRepository: MeetingHistoryPersisting {
     var meetings: [SavedMeeting]
+    var shouldFailSaves = false
 
     init(meetings: [SavedMeeting] = []) {
         self.meetings = meetings
@@ -224,6 +261,13 @@ private final class TestMeetingHistoryRepository: MeetingHistoryPersisting {
     func load() throws -> [SavedMeeting] { meetings }
 
     func save(_ meetings: [SavedMeeting]) throws {
+        if shouldFailSaves {
+            throw TestError.saveFailed
+        }
         self.meetings = meetings
+    }
+
+    private enum TestError: Error {
+        case saveFailed
     }
 }

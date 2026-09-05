@@ -157,6 +157,9 @@ Transcription is a cloud stage: Rio sends bounded in-memory WAV chunks to OpenAI
 - The two-day local history contains meeting timing, finalized transcript segments, and generated card category, state, text, and save time; it never contains audio or guessed action-owner metadata.
 - The two-day local history also records the selected custom profile, or the general-guidance fallback, so a saved meeting can be interpreted in its original mode.
 - Entries older than two days are removed automatically, and the user can clear the local history at any time.
+- Deleting a meeting or clearing history updates Recent Meetings only after the
+  deletion is saved successfully. If saving fails, the meetings remain visible
+  and Rio shows a concise error so the user can retry.
 - The user-provided OpenAI API key is retained separately in the macOS Keychain as configuration, not meeting data, in every build configuration.
 - The bounded user-provided technical vocabulary is retained locally as
   configuration, not meeting data; it must not contain meeting notes or other

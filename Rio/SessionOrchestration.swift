@@ -82,6 +82,10 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     }
 
     private static let sustainedSilenceTimeout: Duration = .seconds(600)
+    // The system-audio capture output is bounded to 32 chunks, while microphone
+    // capture is bounded to eight. Keep the forwarding bridge within the larger
+    // producer bound so a stalled transcription consumer cannot retain unbounded audio.
+    private static let forwardedAudioBufferCapacity = 32
 
     private let localeIdentifier: String
     private let capture: any SessionAudioCapture
@@ -633,12 +637,27 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         await cleanup(sessionID: sessionID, kind: .sustainedSilence)
     }
 
+    private func failForAudioForwarding(
+        _ failure: PipelineFailure, sessionID: UInt64
+    ) async {
+        guard activeSessionID == sessionID else {
+            return
+        }
+
+        // This is called by the forwarding task itself. Detach its handle before
+        // cleanup so that cleanup never tries to cancel its currently executing task.
+        audioForwardingTask = nil
+        await fail(failure, sessionID: sessionID)
+    }
+
     private func makeForwardedAudioStream(
         _ source: AudioStream,
         sessionID: UInt64
     ) -> (stream: AudioStream, task: Task<Void, Never>) {
         var continuation: AudioStream.Continuation?
-        let stream = AudioStream { continuation = $0 }
+        let stream = AudioStream(
+            bufferingPolicy: .bufferingOldest(Self.forwardedAudioBufferCapacity)
+        ) { continuation = $0 }
         let task = Task { [weak self] in
             var currentSource = source
             var nextRecoveryAttempt = 0
@@ -663,7 +682,34 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
                         } else {
                             consecutiveSilence = .zero
                         }
-                        continuation?.yield(chunk)
+                        switch continuation?.yield(chunk) {
+                        case .enqueued:
+                            break
+                        case .dropped:
+                            let overload = PipelineFailure.stage(
+                                .audioCapture,
+                                .overloaded
+                            )
+                            continuation?.finish(
+                                throwing: overload
+                            )
+                            await failForAudioForwarding(overload, sessionID: sessionID)
+                            return
+                        case .terminated, .none:
+                            guard !Task.isCancelled,
+                                  activeSessionID == sessionID,
+                                  status != .paused else { return }
+                            await failForAudioForwarding(
+                                .stage(.audioCapture, .failed), sessionID: sessionID
+                            )
+                            return
+                        @unknown default:
+                            continuation?.finish(throwing: PipelineFailure.cancelled)
+                            await failForAudioForwarding(
+                                .stage(.audioCapture, .failed), sessionID: sessionID
+                            )
+                            return
+                        }
                         inactivityTask = makeCaptureInactivityTask(sessionID: sessionID)
                     }
                     inactivityTask.cancel()

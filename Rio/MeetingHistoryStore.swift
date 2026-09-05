@@ -247,14 +247,15 @@ final class MeetingHistoryStore: ObservableObject {
         try? repository.save(retainedMeetings)
     }
 
-    func clear(meetingID: UUID) {
-        meetings.removeAll { $0.id == meetingID }
-        try? repository.save(meetings)
+    func clear(meetingID: UUID) throws {
+        let updatedMeetings = meetings.filter { $0.id != meetingID }
+        try repository.save(updatedMeetings)
+        meetings = updatedMeetings
     }
 
-    func clearAll() {
+    func clearAll() throws {
+        try repository.save([])
         meetings = []
-        try? repository.save([])
     }
 
     private static func retainedMeetings(

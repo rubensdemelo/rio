@@ -1668,9 +1668,10 @@ struct RecentMeetingDetailPresentation: Equatable {
 
 /// The meeting history UI expects the history agent to provide:
 /// `MeetingHistoryStore.meetings`, `MeetingHistoryStore.clear(meetingID:)`,
-/// `MeetingHistoryStore.clearAll()`, and `SavedMeeting` values with `id`,
-/// `startedAt`, `endedAt`, `insights`, and `transcriptSegments`. Transcript
-/// segments expose `sequenceNumber` and `text`.
+/// `MeetingHistoryStore.clearAll()`, and `SavedMeeting` values with `id`.
+/// The clear operations throw if the history cannot be saved. Saved meetings
+/// expose `startedAt`, `endedAt`, `insights`, and `transcriptSegments`.
+/// Transcript segments expose `sequenceNumber` and `text`.
 struct RecentMeetingsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var meetingHistory: MeetingHistoryStore
@@ -1678,6 +1679,7 @@ struct RecentMeetingsView: View {
     @State private var selectedSection: RecentMeetingDetailSection = .insights
     @State private var meetingPendingDeletion: SavedMeeting?
     @State private var isConfirmingClear = false
+    @State private var historyDeletionErrorMessage: String?
     @State private var transcriptQuery = ""
 
     private var meetings: [SavedMeeting] {
@@ -1724,9 +1726,13 @@ struct RecentMeetingsView: View {
             Button("Delete", role: .destructive) {
                 if let meetingPendingDeletion {
                     let deletedID = meetingPendingDeletion.id
-                    meetingHistory.clear(meetingID: meetingPendingDeletion.id)
-                    if selectedMeetingID == deletedID {
-                        selectedMeetingID = nil
+                    do {
+                        try meetingHistory.clear(meetingID: deletedID)
+                        if selectedMeetingID == deletedID {
+                            selectedMeetingID = nil
+                        }
+                    } catch {
+                        historyDeletionErrorMessage = "Your saved meetings are still available. Try again."
                     }
                 }
                 meetingPendingDeletion = nil
@@ -1741,12 +1747,27 @@ struct RecentMeetingsView: View {
             titleVisibility: .visible
         ) {
             Button("Clear All", role: .destructive) {
-                meetingHistory.clearAll()
-                selectedMeetingID = nil
+                do {
+                    try meetingHistory.clearAll()
+                    selectedMeetingID = nil
+                } catch {
+                    historyDeletionErrorMessage = "Your saved meetings are still available. Try again."
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("This removes the saved transcripts and insights from this Mac.")
+        }
+        .alert(
+            "Couldn't delete saved meetings",
+            isPresented: Binding(
+                get: { historyDeletionErrorMessage != nil },
+                set: { if !$0 { historyDeletionErrorMessage = nil } }
+            )
+        ) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(historyDeletionErrorMessage ?? "")
         }
     }
 

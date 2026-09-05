@@ -184,6 +184,80 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertTrue(historyRecorder.records().first?.incompleteTranscript == true)
     }
 
+    func testTerminatedAudioConsumerStopsCaptureAndMarksTranscriptIncomplete() async throws {
+        let capture = TestSessionAudioCapture()
+        let speech = TestSessionSpeechRecognizer()
+        let historyRecorder = TestMeetingHistoryRecorder()
+        let coordinator = makeCoordinator(
+            capture: capture, speech: speech, historyRecorder: historyRecorder
+        )
+        try await coordinator.start()
+        let audioStream = await capture.lastStream()
+        audioStream?.yield(makeAudioChunk(sequence: 1))
+        await waitUntil(speech: speech, forwardedAudioChunkCount: 1)
+
+        await speech.terminateAudioConsumption()
+        audioStream?.yield(makeAudioChunk(sequence: 2))
+        await waitUntil {
+            coordinator.status == .unavailable && historyRecorder.records().count == 1
+        }
+
+        XCTAssertEqual(coordinator.failure, .stage(.audioCapture, .failed))
+        XCTAssertTrue(historyRecorder.records().first?.incompleteTranscript == true)
+        let starts = await capture.startCount()
+        let cancellations = await capture.cancelCount()
+        let speechCancellations = await speech.cancelCount()
+        XCTAssertEqual(starts, 1)
+        XCTAssertEqual(cancellations, 1)
+        XCTAssertEqual(speechCancellations, 1)
+    }
+
+    func testAudioForwardingOverloadStopsAndMarksSavedTranscriptIncomplete() async throws {
+        let capture = TestSessionAudioCapture()
+        let speech = TestSessionSpeechRecognizer(
+            stallsAfterForwardingFirstAudioChunk: true
+        )
+        let transcriptCollector = TestTranscriptCollector()
+        let historyRecorder = TestMeetingHistoryRecorder()
+        let coordinator = makeCoordinator(
+            capture: capture,
+            speech: speech,
+            transcriptCollector: transcriptCollector,
+            historyRecorder: historyRecorder
+        )
+
+        try await coordinator.start()
+        let segment = makeSegment(sequence: 1, text: "saved prefix before audio overload")
+        let speechStream = await speech.lastStream()
+        speechStream?.yield(segment)
+        await waitUntil { transcriptCollector.segments == [segment] }
+
+        let audioStream = await capture.lastStream()
+        audioStream?.yield(makeAudioChunk(sequence: 1))
+        await waitUntil(speech: speech, forwardedAudioChunkCount: 1)
+        for sequence in 2...34 {
+            audioStream?.yield(makeAudioChunk(sequence: UInt64(sequence)))
+        }
+
+        await waitUntil(timeout: .seconds(1)) {
+            coordinator.status == .unavailable
+                && historyRecorder.records().count == 1
+        }
+
+        XCTAssertEqual(
+            coordinator.failure,
+            .stage(.audioCapture, .overloaded)
+        )
+        XCTAssertEqual(historyRecorder.records().first?.transcript, [segment])
+        XCTAssertTrue(historyRecorder.records().first?.incompleteTranscript == true)
+        let captureStarts = await capture.startCount()
+        let captureCancellations = await capture.cancelCount()
+        let speechCancellations = await speech.cancelCount()
+        XCTAssertEqual(captureStarts, 1)
+        XCTAssertEqual(captureCancellations, 1)
+        XCTAssertEqual(speechCancellations, 1)
+    }
+
     func testPermissionDeniedStopsBeforeStartingPipeline() async throws {
         let capture = TestSessionAudioCapture(
             permission: .denied,
@@ -1174,6 +1248,22 @@ final class SessionLifecycleTests: XCTestCase {
         XCTFail("Timed out waiting for capture restart")
     }
 
+    private func waitUntil(
+        speech: TestSessionSpeechRecognizer,
+        forwardedAudioChunkCount expectedCount: Int,
+        timeout: Duration = .seconds(1)
+    ) async {
+        let deadline = ContinuousClock.now + timeout
+        while ContinuousClock.now < deadline {
+            if await speech.forwardedAudioChunkCount() >= expectedCount {
+                return
+            }
+            await Task.yield()
+            try? await Task.sleep(for: .milliseconds(1))
+        }
+        XCTFail("Timed out waiting for forwarded audio")
+    }
+
     private func makeSegment(sequence: UInt64, text: String) -> FinalizedSpeechSegment {
         FinalizedSpeechSegment(
             sequenceNumber: sequence,
@@ -1320,13 +1410,18 @@ actor TestSessionSpeechRecognizer: SessionSpeechRecognizer {
     private var cancellations = 0
     private var configuredBatchDuration: Duration?
     private var configuredTranscriptionPrompt: String?
+    private let stallsAfterForwardingFirstAudioChunk: Bool
+    private var forwardedAudioChunks = 0
+    private var audioConsumptionTask: Task<Void, Never>?
 
     init(
         availability: Availability = .available,
-        recognizeFailure: PipelineFailure? = nil
+        recognizeFailure: PipelineFailure? = nil,
+        stallsAfterForwardingFirstAudioChunk: Bool = false
     ) {
         configuredAvailability = availability
         self.recognizeFailure = recognizeFailure
+        self.stallsAfterForwardingFirstAudioChunk = stallsAfterForwardingFirstAudioChunk
     }
 
     func availability() async -> Availability {
@@ -1346,6 +1441,8 @@ actor TestSessionSpeechRecognizer: SessionSpeechRecognizer {
 
     func pause() async {
         stops += 1
+        audioConsumptionTask?.cancel()
+        audioConsumptionTask = nil
         currentStream?.finish(throwing: PipelineFailure.cancelled)
         currentStream = nil
     }
@@ -1355,6 +1452,19 @@ actor TestSessionSpeechRecognizer: SessionSpeechRecognizer {
         if let recognizeFailure {
             throw recognizeFailure
         }
+        let shouldStall = stallsAfterForwardingFirstAudioChunk
+        audioConsumptionTask = Task { [weak self] in
+            do {
+                for try await _ in audio {
+                    await self?.recordForwardedAudioChunk()
+                    if shouldStall {
+                        try await Task.sleep(for: .seconds(60))
+                    }
+                }
+            } catch {
+                return
+            }
+        }
         let source = TestStream<FinalizedSpeechSegment>()
         currentStream = source
         return source.stream
@@ -1362,12 +1472,16 @@ actor TestSessionSpeechRecognizer: SessionSpeechRecognizer {
 
     func stop() async {
         stops += 1
+        audioConsumptionTask?.cancel()
+        audioConsumptionTask = nil
         currentStream?.finish(throwing: PipelineFailure.cancelled)
         currentStream = nil
     }
 
     func cancel() async {
         cancellations += 1
+        audioConsumptionTask?.cancel()
+        audioConsumptionTask = nil
         currentStream?.finish(throwing: PipelineFailure.cancelled)
         currentStream = nil
     }
@@ -1375,9 +1489,21 @@ actor TestSessionSpeechRecognizer: SessionSpeechRecognizer {
     func stopCount() -> Int { stops }
     func cancelCount() -> Int { cancellations }
     func recognizeCount() -> Int { recognitions }
+    func forwardedAudioChunkCount() -> Int { forwardedAudioChunks }
     func lastStream() -> TestStream<FinalizedSpeechSegment>? { currentStream }
     func batchDuration() -> Duration? { configuredBatchDuration }
     func transcriptionPrompt() -> String? { configuredTranscriptionPrompt }
+
+    func terminateAudioConsumption() async {
+        let task = audioConsumptionTask
+        task?.cancel()
+        await task?.value
+        audioConsumptionTask = nil
+    }
+
+    private func recordForwardedAudioChunk() {
+        forwardedAudioChunks += 1
+    }
 }
 
 final class TestMeetingContextFactory: MeetingContextFactory, @unchecked Sendable {

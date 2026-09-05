@@ -76,6 +76,13 @@ non-blocking enqueue. A separate worker decodes PCM and calculates input-level
 telemetry before handing audio to transcription; callbacks perform no model
 requests, UI work, PCM conversion, or blocking synchronization.
 
+The forwarding stream between capture and transcription retains at most 32
+audio chunks, matching the Core Audio output queue's chunk capacity. If a slow
+transcription consumer exhausts that buffer, the session stops with an explicit
+audio-overload failure and saves the finalized transcript prefix as incomplete.
+It does not reconnect capture after this overload or continue across a dropped
+audio interval.
+
 The session forwarding bridge applies a five-second frame-liveness bound to
 each capture stream. Zero-amplitude frames are healthy capture activity for
 that watchdog, while the bridge separately accumulates their decoded audio
@@ -209,6 +216,10 @@ The app validates semantic constraints after generation, including nonempty text
 An in-memory insight store applies generated updates on the main actor. Stable keys allow the model to update or resolve an existing card instead of creating duplicates. Each accepted update batch receives one locally generated wall-clock timestamp; cards added, updated, or resolved by that batch store it as their last-changed time. The clock is injected at the store seam for deterministic tests. SwiftUI renders that localized date and time where the earlier New, Updated, or Resolved label appeared, while retaining state for deduplication, resolution, and visual treatment.
 
 The active insight store exists only for the current session. The local meeting-history store saves one completed meeting record containing start/end times, the selected profile, ordered finalized transcript segments, an incomplete-transcript flag, and the generated cards with their last-changed times. It retains records for at most two days, bounds transcript/card counts and text size, prunes on load and every write, and provides per-meeting and clear-all actions. It never receives audio, and it never stores guessed action-owner metadata.
+
+History deletion persists the proposed remaining records before publishing the
+new in-memory list. A failed write leaves the current list intact and reports a
+fixed, content-free error in Recent Meetings; the user can retry the deletion.
 
 ## Data and memory boundaries
 
