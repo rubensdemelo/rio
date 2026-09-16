@@ -2,6 +2,10 @@
 
 The repository contains the native M1 implementation through the vertical-slice integration. Milestone 1 remains open until its hardware and long-running validation gates pass.
 
+General-availability remediation is tracked in the [GA release implementation
+handoff](GA_RELEASE_PLAN.md), based on the [2026-09-16 audit](GA_AUDIT_2026-09-16.md).
+The handoff records proposed work and acceptance gates, not completed milestones.
+
 ## Milestone 1: Native vertical slice
 
 Goal: prove the complete meeting-understanding loop with the smallest possible app.
