@@ -41,6 +41,7 @@ final class OpenAITranscriptionAdapterTests: XCTestCase {
         let recordedRequest = await client.request()
         let request = try XCTUnwrap(recordedRequest)
         XCTAssertEqual(request.url?.path, "/v1/audio/transcriptions")
+        XCTAssertEqual(request.cachePolicy, .reloadIgnoringLocalCacheData)
         XCTAssertTrue(request.value(forHTTPHeaderField: "Content-Type")?.contains("multipart/form-data") == true)
         XCTAssertTrue(request.httpBody?.range(of: Data("name=\"model\"\r\n\r\ngpt-transcribe\r\n".utf8)) != nil)
         XCTAssertTrue(request.httpBody?.range(of: Data("name=\"language\"\r\n\r\nen\r\n".utf8)) != nil)

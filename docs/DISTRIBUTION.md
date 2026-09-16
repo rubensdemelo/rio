@@ -34,16 +34,20 @@ git tag v1.2.3
 git push origin v1.2.3
 ```
 
+The release job uses a full checkout and rejects a tag whose commit is not an
+ancestor of `origin/main`. A semantic version alone is not release provenance.
+
 The workflow in [`.github/workflows/release.yml`](../.github/workflows/release.yml)
 then:
 
 1. Builds the universal Release app.
 2. Signs it with Developer ID Application and Hardened Runtime.
-3. Packages a drag-installable DMG.
+3. Packages and Developer ID-signs a drag-installable DMG.
 4. Submits the DMG to Apple for notarization.
-5. Staples and validates the notarization ticket.
-6. Publishes the DMG as a GitHub Release asset and records its SHA-256 checksum
-   in the workflow output.
+5. Staples the notarization ticket, then verifies the exact DMG and its mounted
+   app payload.
+6. Publishes that verified DMG as a GitHub Release asset and records its final
+   SHA-256 checksum in the workflow output.
 
 The OpenAI API key is never part of the repository, workflow, app bundle, or
 DMG. Each Mac adds its own key through Rio’s Provider settings.
@@ -55,3 +59,18 @@ The packaging and verification helpers are:
 - [`scripts/package-dmg.sh`](../scripts/package-dmg.sh)
 - [`scripts/verify-release.sh`](../scripts/verify-release.sh)
 - [`scripts/verify-keychain-access.sh`](../scripts/verify-keychain-access.sh)
+
+`verify-release.sh` first checks the outer image's Developer ID signature,
+stapled ticket, and Gatekeeper disk-image assessment. It then mounts the image
+read-only, always detaches it on exit, and requires exactly `Rio.app` plus an
+`Applications` symlink. The mounted app must have the expected Developer ID
+team, Hardened Runtime, production entitlements, `arm64` and `x86_64` slices,
+release version/build, macOS 26.0 minimum, and a successful Gatekeeper
+assessment.
+
+Before publishing a GA candidate, retain content-free evidence for the exact
+release commit and final SHA-256 shown by the workflow. Also install that same
+downloaded artifact on a supported clean Mac with quarantine metadata intact
+and record the Gatekeeper launch result. CI verification is necessary but does
+not replace that clean-machine check, the live hardware soak, or the model
+quality gates in the GA release plan.

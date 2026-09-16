@@ -154,7 +154,7 @@ selected cadence.
 
 The API key is the preflight requirement. A rejected key is unavailable; transient network and service failures are explicit transcription failures. TTS is not part of the pipeline.
 
-The capture layer may expose bounded, content-free input telemetry: a normalized level, whether audio buffers have arrived, whether sustained silence suggests a muted input, and the latest finalized meeting offset. It must not expose audio samples or temporary speech text to the UI. While a session remains active, both a capture error and an unexpected normal stream completion are normalized to an audio interruption and enter the same bounded recovery path; only coordinator-requested cancellation, pause, or stop may complete forwarding without recovery. Successful recovery preserves the speech recognizer, transcript collector, segment ordering, and meeting-relative offsets. Exhausted recovery stops visibly and saves the available transcript prefix as incomplete. Pausing cancels the active capture and speech tasks while retaining the in-memory session context; resuming creates fresh capture and speech tasks while preserving segment ordering and meeting-relative offsets. Stopping still clears all session data and resets those counters for the next session.
+The capture layer may expose bounded, content-free input telemetry: a normalized level, whether audio buffers have arrived, whether sustained silence suggests a muted input, and the latest finalized meeting offset. It must not expose audio samples or temporary speech text to the UI. While a session remains active, both a capture error and an unexpected normal stream completion are normalized to an audio interruption and enter the same bounded recovery path; only coordinator-requested cancellation, pause, or stop may complete forwarding without recovery. Successful recovery preserves the speech recognizer, transcript collector, segment ordering, and meeting-relative offsets. Exhausted recovery stops visibly and saves the available transcript prefix as incomplete. Pausing cancels the active capture and speech tasks while retaining the in-memory session context; because cancellation may discard a partial or in-flight transcription batch, the eventual saved prefix remains marked incomplete after a pause. Resuming creates fresh capture and speech tasks while preserving segment ordering and meeting-relative offsets. Stop uses the same prompt-cancellation policy and conservatively marks the saved prefix incomplete before clearing all temporary session data and counters.
 
 ### Rolling meeting context and transcript collection
 
@@ -177,10 +177,22 @@ with cancellation-safe exponential backoff. Rio keeps capture and finalized
 transcript collection alive while these retries run; a batch is skipped only
 after the bounded retry budget is exhausted. Authentication and other
 non-transient request failures remain explicit unavailable states.
+If pause cancels generation after a batch has been selected, the coordinator
+retains that bounded batch and replays it after resume before requesting newer
+work; only a successfully applied batch is cleared from this lifecycle seam.
+Model sessions carry a generation epoch so a cancelled request that finishes
+late cannot deactivate a resumed session or apply stale output.
 
 ### Meeting understanding
 
 Use OpenAI's Responses API with `gpt-5.6-terra` by default. OpenAI is the default and only MVP provider. The user supplies their own API key in Provider settings; Rio stores it only in the macOS Keychain in every build configuration and never in the bundle, source tree, diagnostics, app preferences, or an environment variable. Transcription uses `gpt-transcribe` by default.
+
+Every Responses request explicitly sets `store: false`. The shared OpenAI HTTP
+transport disables `URLCache` and ignores local cached responses for both
+Responses and transcription requests. These controls prevent Responses
+application-state storage and Rio-managed disk response caching; they do not
+claim to disable provider abuse-monitoring retention, every transient provider
+cache, or account-level policies described by OpenAI's data controls.
 
 The general fallback and custom profiles supply model guidance through model
 instructions; meeting text remains untrusted prompt input. Legacy
@@ -209,13 +221,24 @@ InsightUpdate
   explicitOwner: String
 ```
 
-The app validates semantic constraints after generation, including nonempty text, known categories, bounded card counts, and the rule against guessed owners. It sends only the bounded recent/new text and bounded active-card snapshot, does not log request or response content, and cancels in-flight requests when the session ends.
+The app validates semantic constraints after generation, including nonempty text, known categories, bounded card counts, and the rule against guessed owners. Owner metadata requires assignment language and action evidence in the same source clause; unrelated name mentions, partial names, and negated assignments are rejected. Rendered action text is normalized to remove person attribution because the compact MVP does not display owners. It sends only the bounded recent/new text and bounded active-card snapshot, does not log request or response content, and cancels in-flight requests when the session ends.
 
 ### Insight state
 
 An in-memory insight store applies generated updates on the main actor. Stable keys allow the model to update or resolve an existing card instead of creating duplicates. Each accepted update batch receives one locally generated wall-clock timestamp; cards added, updated, or resolved by that batch store it as their last-changed time. The clock is injected at the store seam for deterministic tests. SwiftUI renders that localized date and time where the earlier New, Updated, or Resolved label appeared, while retaining state for deduplication, resolution, and visual treatment.
 
-The active insight store exists only for the current session. The local meeting-history store saves one completed meeting record containing start/end times, the selected profile, ordered finalized transcript segments, an incomplete-transcript flag, and the generated cards with their last-changed times. It retains records for at most two days, bounds transcript/card counts and text size, prunes on load and every write, and provides per-meeting and clear-all actions. It never receives audio, and it never stores guessed action-owner metadata.
+The active insight store exists only for the current session. The local meeting-history store saves one completed meeting record containing start/end times, the selected profile, ordered finalized transcript segments, an incomplete-transcript flag, and the generated cards with their last-changed times. It retains at most 50 records and 8 MB of encoded history in addition to the per-meeting transcript/card bounds. It prunes on launch/load and every write, while the running app also prunes once per minute, on wake, and on Recent Meetings access. If Rio is closed when a record reaches 48 hours, the ordinary history file cannot self-delete; the next launch removes it before presentation. It never receives audio, and it never stores guessed action-owner metadata.
+
+Meeting saves persist before the record is published as durable history. A
+failed save retains one already-bounded in-memory retry snapshot, exposes a
+content-free persistence failure, and blocks another session from replacing the
+snapshot. Expiry failures hide expired content from the UI but remain explicit
+at-rest removal failures until a later write succeeds. Ordinary app termination
+is asynchronous: the application delegate awaits session stop and save, retries
+a pending snapshot once, and refuses termination if persistence still fails.
+If stop/save cleanup was already underway, termination joins that same cleanup
+before it inspects the pending-save state.
+Forced process termination is outside this guarantee.
 
 History deletion persists the proposed remaining records before publishing the
 new in-memory list. A failed write leaves the current list intact and reports a
@@ -228,7 +251,7 @@ All queues and buffers are bounded:
 - Audio queues have a fixed duration limit and drop or signal overload rather than grow indefinitely.
 - Temporary finalized text is limited by age and token budget.
 - The insight store has a maximum active-card count.
-- The local meeting history bounds meeting count, transcript segment count, transcript text bytes, and card count, and removes records older than two days.
+- The local meeting history bounds meeting count (50), aggregate encoded bytes (8 MB), transcript segment count, transcript text bytes, and card count, and removes records older than two days while running or on the next launch.
 - In-flight API requests are cancelled and their in-memory request context is released when listening stops.
 
 Diagnostics may record durations, queue depth, model availability, and error codes. Failed OpenAI requests record only a fixed endpoint label, HTTP status, transport category and code, sanitized OpenAI request ID, and sanitized API error type and code. The HTTP transport observes response headers, response data, and task metrics separately so an early server rejection remains available even when URLSession later reports an upload timeout. Every terminal listening failure also crosses the session-lifecycle cleanup seam, which emits one structured stage, reason, and HTTP-status record before state is cleared. Diagnostics never record request or response bodies, free-form API error messages, the API key, audio, transcript text, generated insight text, prompts, or other meeting content.
@@ -266,7 +289,7 @@ sheet from the main window; Recent Meetings is its own floating window so it can
 stay above normal app windows and be moved independently while the live insight
 stream remains visible.
 Open Rio targets the main window scene by ID, Recent Meetings and Diagnostics
-target their own scene IDs, and Quit Rio terminates the application. Menu commands use the
+target their own scene IDs, and Quit Rio enters the application delegate's asynchronous stop-and-save termination path. Menu commands use the
 `MenuBarExtra` scene's SwiftUI `openWindow` action rather than searching
 `NSApp.windows`, because no window exists yet after a menu-bar-only launch. The
 scene observes provider and session readiness directly so Start Listening

@@ -426,6 +426,139 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(presentation.transcriptText, "The customer described the sign-in issue.\nThe billing workspace still returns 403.")
     }
 
+    func testTerminationCoordinatorCoalescesRepeatedQuitRequests() async {
+        let state = TerminationPreparationState()
+        let preparationStarted = expectation(description: "preparation started")
+        let allowTermination = expectation(description: "termination allowed")
+        let coordinator = RioApplicationTerminationCoordinator {
+            state.preparationCount += 1
+            preparationStarted.fulfill()
+            await Task.yield()
+            return true
+        }
+
+        coordinator.request { allowed in
+            XCTAssertTrue(allowed)
+            allowTermination.fulfill()
+        }
+        coordinator.request { _ in
+            XCTFail("A repeated quit must join the in-flight preparation")
+        }
+
+        await fulfillment(of: [preparationStarted, allowTermination])
+        XCTAssertEqual(state.preparationCount, 1)
+    }
+
+    func testTerminationCoordinatorRefusesQuitAfterSaveFailureAndAllowsRetry() async {
+        let state = TerminationPreparationState()
+        let firstReply = expectation(description: "first reply")
+        let secondReply = expectation(description: "second reply")
+        let coordinator = RioApplicationTerminationCoordinator {
+            state.shouldSucceed
+        }
+
+        coordinator.request { allowed in
+            state.replies.append(allowed)
+            firstReply.fulfill()
+        }
+        await fulfillment(of: [firstReply])
+
+        state.shouldSucceed = true
+        coordinator.request { allowed in
+            state.replies.append(allowed)
+            secondReply.fulfill()
+        }
+        await fulfillment(of: [secondReply])
+
+        XCTAssertEqual(state.replies, [false, true])
+    }
+
+    func testTerminationPreparationStopsSessionBeforeRetryingPendingHistory() async {
+        let events = TerminationEventState()
+        let session = TestTerminationSession(events: events)
+        let history = TestTerminationHistory(events: events, hasPendingRecord: true)
+        let preparation = RioTerminationPreparation(session: session, history: history)
+
+        let allowed = await preparation.prepare()
+
+        XCTAssertTrue(allowed)
+        XCTAssertEqual(events.values, ["stop", "retry"])
+        XCTAssertEqual(history.retryCount, 1)
+    }
+
+    func testTerminationPreparationRefusesQuitWhenRetryStillFails() async {
+        let events = TerminationEventState()
+        let session = TestTerminationSession(events: events)
+        let history = TestTerminationHistory(
+            events: events,
+            hasPendingRecord: true,
+            retryFails: true
+        )
+        let preparation = RioTerminationPreparation(session: session, history: history)
+
+        let allowed = await preparation.prepare()
+
+        XCTAssertFalse(allowed)
+        XCTAssertEqual(events.values, ["stop", "retry"])
+        XCTAssertTrue(history.hasPendingTerminationRecord)
+    }
+
+}
+
+@MainActor
+private final class TerminationPreparationState {
+    var preparationCount = 0
+    var shouldSucceed = false
+    var replies: [Bool] = []
+}
+
+@MainActor
+private final class TerminationEventState {
+    var values: [String] = []
+}
+
+@MainActor
+private final class TestTerminationSession: RioTerminationSessionPreparing {
+    private let events: TerminationEventState
+
+    init(events: TerminationEventState) {
+        self.events = events
+    }
+
+    func prepareForTermination() async {
+        events.values.append("stop")
+    }
+}
+
+@MainActor
+private final class TestTerminationHistory: RioTerminationHistoryPreparing {
+    private let events: TerminationEventState
+    private let retryFails: Bool
+    private(set) var hasPendingTerminationRecord: Bool
+    private(set) var retryCount = 0
+
+    init(
+        events: TerminationEventState,
+        hasPendingRecord: Bool,
+        retryFails: Bool = false
+    ) {
+        self.events = events
+        hasPendingTerminationRecord = hasPendingRecord
+        self.retryFails = retryFails
+    }
+
+    func retryPendingTerminationRecord() throws {
+        events.values.append("retry")
+        retryCount += 1
+        if retryFails {
+            throw TestFailure.saveFailed
+        }
+        hasPendingTerminationRecord = false
+    }
+
+    private enum TestFailure: Error {
+        case saveFailed
+    }
 }
 
 private final class TestOpenAIAPIKeyStore: OpenAIAPIKeyStore, @unchecked Sendable {

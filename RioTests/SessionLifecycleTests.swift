@@ -72,7 +72,7 @@ final class SessionLifecycleTests: XCTestCase {
         await coordinator.stop()
     }
 
-    func testNormalStopRecordsMeetingSnapshotWithTranscriptAndCurrentInsights() async throws {
+    func testNormalStopRecordsMeetingSnapshotAndConservativelyMarksCancelledTailIncomplete() async throws {
         let speech = TestSessionSpeechRecognizer()
         let generator = TestSessionInsightGenerator(
             updates: [makeUpdate(text: "captured insight")]
@@ -101,8 +101,30 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertEqual(records.count, 1)
         XCTAssertEqual(records[0].transcript, [segment])
         XCTAssertEqual(records[0].insights, expectedInsights)
-        XCTAssertFalse(records[0].incompleteTranscript)
+        XCTAssertTrue(records[0].incompleteTranscript)
         XCTAssertLessThanOrEqual(records[0].startedAt, records[0].endedAt)
+    }
+
+    func testFailedHistorySaveSurfacesFailurePreservesRetrySnapshotAndBlocksRestart() async throws {
+        let historyRecorder = TestMeetingHistoryRecorder(shouldFail: true)
+        let coordinator = makeCoordinator(historyRecorder: historyRecorder)
+
+        try await coordinator.start()
+        await coordinator.stop()
+
+        XCTAssertEqual(coordinator.status, .unavailable)
+        XCTAssertEqual(
+            coordinator.failure,
+            .stage(.meetingHistory, .failed)
+        )
+        XCTAssertNotNil(historyRecorder.pendingRecord())
+
+        do {
+            try await coordinator.start()
+            XCTFail("An unsaved meeting must block a new session")
+        } catch let failure {
+            XCTAssertEqual(failure, .stage(.meetingHistory, .failed))
+        }
     }
 
     func testTranscriptionFailureSavesTheAvailableTranscriptAsIncomplete() async throws {
@@ -311,19 +333,56 @@ final class SessionLifecycleTests: XCTestCase {
         let generatorStopsAfterPause = await generator.stopCount()
         XCTAssertEqual(startsAfterPause, 1)
         XCTAssertEqual(stopsAfterPause, 1)
-        XCTAssertEqual(generatorStopsAfterPause, 0)
+        XCTAssertEqual(generatorStopsAfterPause, 1)
 
         try await coordinator.resume()
         XCTAssertEqual(coordinator.status, .listening)
         let startsAfterResume = await capture.startCount()
+        let generatorStartsAfterResume = await generator.startSessionCount()
         XCTAssertEqual(startsAfterResume, 2)
+        XCTAssertEqual(generatorStartsAfterResume, 2)
 
         await coordinator.stop()
         XCTAssertEqual(coordinator.status, .stopped)
         let stopsAfterStop = await capture.stopCount()
         let generatorStopsAfterStop = await generator.stopCount()
         XCTAssertEqual(stopsAfterStop, 2)
-        XCTAssertEqual(generatorStopsAfterStop, 1)
+        XCTAssertEqual(generatorStopsAfterStop, 2)
+    }
+
+    func testPauseDuringGenerationReplaysPendingInsightBatchAndMarksTranscriptIncomplete() async throws {
+        let speech = TestSessionSpeechRecognizer()
+        let generator = TestSessionInsightGenerator(
+            delay: .seconds(5),
+            updates: [makeUpdate(text: "replayed synthetic result")],
+            ignoresCancellation: true
+        )
+        let state = TestSessionInsightState()
+        let historyRecorder = TestMeetingHistoryRecorder()
+        let coordinator = makeCoordinator(
+            speech: speech,
+            generator: generator,
+            state: state,
+            historyRecorder: historyRecorder
+        )
+
+        try await coordinator.start()
+        let segment = makeSegment(sequence: 1, text: "synthetic pending batch")
+        let speechStream = await speech.lastStream()
+        speechStream?.yield(segment)
+        await waitUntil { coordinator.status == SessionStatus.processing }
+
+        await coordinator.pause()
+        try await coordinator.resume()
+        await waitUntil(timeout: .seconds(8)) { state.appliedContexts.count == 1 }
+        await coordinator.stop()
+
+        let generated = await generator.generatedBatches()
+        XCTAssertGreaterThanOrEqual(generated.count, 2)
+        XCTAssertEqual(generated[0].newSegments, [segment])
+        XCTAssertEqual(generated[1].newSegments, [segment])
+        XCTAssertEqual(state.appliedContexts.count, 0, "Stop clears active insight state")
+        XCTAssertTrue(historyRecorder.records().first?.incompleteTranscript == true)
     }
 
     func testTranscriptionUnavailableStopsBeforeCapture() async throws {
@@ -973,7 +1032,7 @@ final class SessionLifecycleTests: XCTestCase {
 
         let record = try XCTUnwrap(historyRecorder.records().first)
         XCTAssertEqual(record.transcript, [segment])
-        XCTAssertFalse(record.incompleteTranscript)
+        XCTAssertTrue(record.incompleteTranscript)
     }
 
     func testDetectedSignalResetsSustainedSilenceInterval() async throws {
@@ -1125,6 +1184,26 @@ final class SessionLifecycleTests: XCTestCase {
         XCTAssertEqual(captureStops, 1)
         XCTAssertEqual(speechStops, 1)
         XCTAssertEqual(generatorStops, 1)
+    }
+
+    func testStopJoinsAnAlreadyRunningCleanupBeforeReturning() async throws {
+        let capture = TestSessionAudioCapture(stopDelay: .milliseconds(100))
+        let historyRecorder = TestMeetingHistoryRecorder()
+        let coordinator = makeCoordinator(
+            capture: capture,
+            historyRecorder: historyRecorder
+        )
+
+        try await coordinator.start()
+        let firstStop = Task { await coordinator.stop() }
+        while await capture.stopCount() == 0 {
+            try await Task.sleep(for: .milliseconds(1))
+        }
+
+        await coordinator.stop()
+
+        XCTAssertEqual(historyRecorder.records().count, 1)
+        await firstStop.value
     }
 
     func testCleanupAfterSpeechStartupFailureResetsEveryComponent() async throws {
@@ -1340,19 +1419,22 @@ actor TestSessionAudioCapture: SessionAudioCapture {
     private var starts = 0
     private var stops = 0
     private var cancellations = 0
+    private let stopDelay: Duration
 
     init(
         permission: MicrophonePermission = .granted,
         availability: Availability = .available,
         startFailure: PipelineFailure? = nil,
         startFailureCount: Int = 1,
-        inputSnapshot: AudioInputSnapshot = .inactive
+        inputSnapshot: AudioInputSnapshot = .inactive,
+        stopDelay: Duration = .zero
     ) {
         configuredPermission = permission
         configuredAvailability = availability
         self.startFailure = startFailure
         remainingStartFailures = startFailure == nil ? 0 : startFailureCount
         configuredInputSnapshot = inputSnapshot
+        self.stopDelay = stopDelay
     }
 
     func permission() async -> MicrophonePermission {
@@ -1385,6 +1467,9 @@ actor TestSessionAudioCapture: SessionAudioCapture {
 
     func stop() async {
         stops += 1
+        if stopDelay > .zero {
+            try? await Task.sleep(for: stopDelay)
+        }
         currentStream?.finish(throwing: PipelineFailure.cancelled)
         currentStream = nil
     }
@@ -1755,12 +1840,34 @@ final class TestTranscriptCollector: TranscriptCollecting {
 @MainActor
 final class TestMeetingHistoryRecorder: MeetingHistoryRecording {
     private var recordedMeetings: [MeetingHistoryRecord] = []
+    private var pendingMeeting: MeetingHistoryRecord?
+    private let shouldFail: Bool
 
-    func record(_ meeting: MeetingHistoryRecord) {
+    init(shouldFail: Bool = false) {
+        self.shouldFail = shouldFail
+    }
+
+    var hasPendingRecord: Bool {
+        pendingMeeting != nil
+    }
+
+    func record(_ meeting: MeetingHistoryRecord) throws {
+        if shouldFail {
+            pendingMeeting = meeting
+            throw TestMeetingHistoryError.saveFailed
+        }
         recordedMeetings.append(meeting)
     }
 
     func records() -> [MeetingHistoryRecord] {
         recordedMeetings
+    }
+
+    func pendingRecord() -> MeetingHistoryRecord? {
+        pendingMeeting
+    }
+
+    private enum TestMeetingHistoryError: Error {
+        case saveFailed
     }
 }

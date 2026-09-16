@@ -1,6 +1,7 @@
 import AppKit
 import CoreAudio
 import Foundation
+import Synchronization
 
 private final class CoreAudioSystemEventMonitor: @unchecked Sendable {
     private let lock = NSLock()
@@ -106,27 +107,161 @@ enum SystemAudioSampleDecoder {
     }
 }
 
-private struct CoreAudioRawBuffer: Sendable {
+struct CoreAudioRawBuffer: Sendable {
     let sequenceNumber: UInt64
-    let buffers: [Data]
+    fileprivate let slot: CoreAudioRawBufferSlot
+    fileprivate let ownershipToken: UInt64
+
+    var bufferCount: Int {
+        slot.bufferCount
+    }
+
+    func withUnsafeBytes<Result>(
+        at index: Int,
+        _ body: (UnsafeRawBufferPointer) throws -> Result
+    ) rethrows -> Result {
+        try slot.withUnsafeBytes(at: index, body)
+    }
+
+    func release() {
+        slot.release(ownershipToken: ownershipToken)
+    }
 }
 
-private enum CoreAudioRawBufferCopier {
-    static func copy(
+final class CoreAudioRawBufferSlot: @unchecked Sendable {
+    private static let availableToken: UInt64 = 0
+
+    private let ownershipToken = Atomic<UInt64>(availableToken)
+    private let storage: [UnsafeMutableRawBufferPointer]
+    private var byteCounts: [Int]
+    private(set) var bufferCount = 0
+
+    init(bufferCount: Int, byteCapacity: Int) {
+        precondition(bufferCount > 0)
+        precondition(byteCapacity > 0)
+        storage = (0..<bufferCount).map { _ in
+            UnsafeMutableRawBufferPointer.allocate(
+                byteCount: byteCapacity,
+                alignment: MemoryLayout<UInt64>.alignment
+            )
+        }
+        byteCounts = Array(repeating: 0, count: bufferCount)
+    }
+
+    deinit {
+        storage.forEach { $0.deallocate() }
+    }
+
+    fileprivate func tryAcquire(ownershipToken requestedToken: UInt64) -> Bool {
+        precondition(requestedToken != Self.availableToken)
+        return ownershipToken.compareExchange(
+            expected: Self.availableToken,
+            desired: requestedToken,
+            ordering: .acquiringAndReleasing
+        ).exchanged
+    }
+
+    fileprivate func copy(
         _ inputData: UnsafePointer<AudioBufferList>,
-        sequenceNumber: UInt64
-    ) -> CoreAudioRawBuffer? {
+        ownershipToken: UInt64
+    ) -> Bool {
         let buffers = UnsafeMutableAudioBufferListPointer(
             UnsafeMutablePointer(mutating: inputData)
         )
-        let copiedBuffers = buffers.compactMap { buffer -> Data? in
+        guard buffers.count <= storage.count else { return false }
+
+        var copiedBufferCount = 0
+        for buffer in buffers {
             guard let data = buffer.mData, buffer.mDataByteSize > 0 else {
+                continue
+            }
+            let byteCount = Int(buffer.mDataByteSize)
+            guard byteCount <= storage[copiedBufferCount].count else { return false }
+            storage[copiedBufferCount].baseAddress?.copyMemory(
+                from: data,
+                byteCount: byteCount
+            )
+            byteCounts[copiedBufferCount] = byteCount
+            copiedBufferCount += 1
+        }
+        guard copiedBufferCount > 0 else { return false }
+
+        bufferCount = copiedBufferCount
+        for index in copiedBufferCount..<byteCounts.count {
+            byteCounts[index] = 0
+        }
+        return true
+    }
+
+    fileprivate func withUnsafeBytes<Result>(
+        at index: Int,
+        _ body: (UnsafeRawBufferPointer) throws -> Result
+    ) rethrows -> Result {
+        precondition(index >= 0 && index < bufferCount)
+        return try body(UnsafeRawBufferPointer(rebasing: storage[index][..<byteCounts[index]]))
+    }
+
+    fileprivate func release(ownershipToken expectedToken: UInt64) {
+        _ = ownershipToken.compareExchange(
+            expected: expectedToken,
+            desired: Self.availableToken,
+            ordering: .acquiringAndReleasing
+        )
+    }
+
+    fileprivate var isAvailable: Bool {
+        ownershipToken.load(ordering: .acquiring) == Self.availableToken
+    }
+}
+
+final class CoreAudioRawBufferPool: @unchecked Sendable {
+    private let isAccepting = Atomic(true)
+    private let slots: [CoreAudioRawBufferSlot]
+
+    init(capacity: Int, bufferCount: Int, byteCapacity: Int) {
+        precondition(capacity > 0)
+        slots = (0..<capacity).map { _ in
+            CoreAudioRawBufferSlot(
+                bufferCount: bufferCount,
+                byteCapacity: byteCapacity
+            )
+        }
+    }
+
+    func copy(
+        _ inputData: UnsafePointer<AudioBufferList>,
+        sequenceNumber: UInt64
+    ) -> CoreAudioRawBuffer? {
+        guard isAccepting.load(ordering: .acquiring) else { return nil }
+
+        // Zero means available, so offset the sequence while retaining its order.
+        let ownershipToken = sequenceNumber &+ 1
+        guard ownershipToken != 0 else { return nil }
+        for slot in slots where slot.tryAcquire(ownershipToken: ownershipToken) {
+            guard isAccepting.load(ordering: .acquiring),
+                  slot.copy(inputData, ownershipToken: ownershipToken) else {
+                slot.release(ownershipToken: ownershipToken)
                 return nil
             }
-            return Data(bytes: data, count: Int(buffer.mDataByteSize))
+            return CoreAudioRawBuffer(
+                sequenceNumber: sequenceNumber,
+                slot: slot,
+                ownershipToken: ownershipToken
+            )
         }
-        guard !copiedBuffers.isEmpty else { return nil }
-        return CoreAudioRawBuffer(sequenceNumber: sequenceNumber, buffers: copiedBuffers)
+        return nil
+    }
+
+    func stopAccepting() {
+        isAccepting.store(false, ordering: .releasing)
+    }
+
+    var isAcceptingBuffers: Bool {
+        isAccepting.load(ordering: .acquiring)
+    }
+
+    var availableSlotCount: Int {
+        slots.count(where: \CoreAudioRawBufferSlot.isAvailable)
     }
 }
 
@@ -135,6 +270,7 @@ private enum CoreAudioSampleChunkDecoder {
         from rawBuffer: CoreAudioRawBuffer,
         format: AudioStreamBasicDescription,
     ) -> AudioChunk? {
+        defer { rawBuffer.release() }
         guard format.mChannelsPerFrame > 0,
               format.mSampleRate > 0 else {
             return nil
@@ -142,12 +278,12 @@ private enum CoreAudioSampleChunkDecoder {
 
         let channelCount = Int(format.mChannelsPerFrame)
         let isNonInterleaved = format.mFormatFlags & kAudioFormatFlagIsNonInterleaved != 0
-        let decodedBuffers = rawBuffer.buffers.compactMap { data in
-            data.withUnsafeBytes { bytes in
+        let decodedBuffers = (0..<rawBuffer.bufferCount).compactMap { index in
+            rawBuffer.withUnsafeBytes(at: index) { bytes in
                 SystemAudioSampleDecoder.decode(
-                bytes: bytes,
-                bitsPerChannel: format.mBitsPerChannel,
-                formatFlags: format.mFormatFlags
+                    bytes: bytes,
+                    bitsPerChannel: format.mBitsPerChannel,
+                    formatFlags: format.mFormatFlags
                 )
             }
         }
@@ -192,28 +328,45 @@ private enum CoreAudioSampleChunkDecoder {
     }
 }
 
-private final class CoreAudioCaptureCallbackState: @unchecked Sendable {
+final class CoreAudioCaptureCallbackState: @unchecked Sendable {
     let rawQueue: BoundedQueue<CoreAudioRawBuffer>
+    private let rawBufferPool: CoreAudioRawBufferPool
+    private let onBufferUnavailable: @Sendable () -> Void
 
-    private let sequenceLock = NSLock()
+    // Core Audio invokes this state only on the serial outputQueue.
     private var sequenceNumber: UInt64 = 0
 
     init(
-        rawQueue: BoundedQueue<CoreAudioRawBuffer>
+        rawQueue: BoundedQueue<CoreAudioRawBuffer>,
+        rawBufferPool: CoreAudioRawBufferPool,
+        onBufferUnavailable: @escaping @Sendable () -> Void
     ) {
         self.rawQueue = rawQueue
+        self.rawBufferPool = rawBufferPool
+        self.onBufferUnavailable = onBufferUnavailable
     }
 
     func receive(_ inputData: UnsafePointer<AudioBufferList>) {
-        let sequenceNumber = sequenceLock.withLock {
-            defer { self.sequenceNumber &+= 1 }
-            return self.sequenceNumber
-        }
-        guard let rawBuffer = CoreAudioRawBufferCopier.copy(
+        let sequenceNumber = self.sequenceNumber
+        self.sequenceNumber &+= 1
+        guard let rawBuffer = rawBufferPool.copy(
             inputData,
             sequenceNumber: sequenceNumber
-        ) else { return }
-        _ = rawQueue.enqueue(rawBuffer)
+        ) else {
+            if rawBufferPool.isAcceptingBuffers {
+                onBufferUnavailable()
+            }
+            return
+        }
+        let outcome = rawQueue.enqueue(rawBuffer)
+        guard outcome.result == .accepted else {
+            rawBuffer.release()
+            return
+        }
+    }
+
+    func stopAccepting() {
+        rawBufferPool.stopAccepting()
     }
 }
 
@@ -273,6 +426,9 @@ enum CoreAudioCaptureError: Error, Equatable {
 /// Captures system/meeting audio with Core Audio taps without creating a
 /// display-capture stream or receiving screen pixels.
 actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
+    private static let minimumCallbackFrameCapacity = 4_096
+    private static let maximumCallbackFrameCapacity = 16_384
+
     private let outputQueue = DispatchQueue(label: "app.rio.system-audio", qos: .userInitiated)
     private let queueCapacity: Int
     private let inputLevelMonitor: AudioInputLevelMonitor
@@ -354,7 +510,10 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
         )
 
         do {
-            let resources = try makeResources(rawQueue: rawQueue)
+            let resources = try makeResources(
+                rawQueue: rawQueue,
+                onBufferUnavailable: reportOverload
+            )
             self.queue = queue
             self.rawQueue = rawQueue
             self.continuityFailures = continuityFailures
@@ -407,7 +566,8 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
     }
 
     private func makeResources(
-        rawQueue: BoundedQueue<CoreAudioRawBuffer>
+        rawQueue: BoundedQueue<CoreAudioRawBuffer>,
+        onBufferUnavailable: @escaping @Sendable () -> Void
     ) throws -> CoreAudioCaptureResources {
         let system = AudioHardwareSystem.shared
         guard try system.defaultOutputDevice != nil else {
@@ -446,8 +606,22 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
             }
             aggregate = createdAggregate
 
+            let format = try createdTap.format
+            let isNonInterleaved = format.mFormatFlags & kAudioFormatFlagIsNonInterleaved != 0
+            let bufferCount = isNonInterleaved ? Int(format.mChannelsPerFrame) : 1
+            let bytesPerFrame = Int(format.mBytesPerFrame)
+            guard bufferCount > 0, bytesPerFrame > 0 else {
+                throw CoreAudioCaptureError.tapCreationFailed
+            }
+            let rawBufferPool = CoreAudioRawBufferPool(
+                capacity: queueCapacity,
+                bufferCount: bufferCount,
+                byteCapacity: bytesPerFrame * callbackFrameCapacity(for: createdAggregate.id)
+            )
             let callbackState = CoreAudioCaptureCallbackState(
-                rawQueue: rawQueue
+                rawQueue: rawQueue,
+                rawBufferPool: rawBufferPool,
+                onBufferUnavailable: onBufferUnavailable
             )
             self.callbackState = callbackState
 
@@ -486,6 +660,31 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
         }
     }
 
+    private func callbackFrameCapacity(for deviceID: AudioObjectID) -> Int {
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyBufferFrameSizeRange,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var range = AudioValueRange()
+        var dataSize = UInt32(MemoryLayout<AudioValueRange>.size)
+        let status = AudioObjectGetPropertyData(
+            deviceID,
+            &address,
+            0,
+            nil,
+            &dataSize,
+            &range
+        )
+        guard status == kAudioHardwareNoError, range.mMaximum.isFinite else {
+            return Self.minimumCallbackFrameCapacity
+        }
+        return min(
+            Self.maximumCallbackFrameCapacity,
+            max(Self.minimumCallbackFrameCapacity, Int(range.mMaximum.rounded(.up)))
+        )
+    }
+
     private func finish(throwing failure: PipelineFailure?) async {
         if isStarting {
             cancellationRequested = true
@@ -494,6 +693,7 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
         let resources = self.resources
         self.resources = nil
         activeCaptureID = nil
+        callbackState?.stopAccepting()
         callbackState = nil
         activeStream = nil
         isRunning = false
@@ -506,11 +706,11 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
         systemEventMonitor = nil
         continuityFailures?.finish(throwing: failure)
         continuityFailures = nil
+        resources?.stop()
         rawQueue?.finish(throwing: failure)
         rawQueue = nil
         queue?.finish(throwing: failure)
         queue = nil
-        resources?.stop()
     }
 
     private func makeDecodingTask(
@@ -563,13 +763,5 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
         guard isRunning else { return }
         continuityTask = nil
         await finish(throwing: failure)
-    }
-}
-
-private extension NSLock {
-    func withLock<T>(_ body: () -> T) -> T {
-        lock()
-        defer { unlock() }
-        return body()
     }
 }

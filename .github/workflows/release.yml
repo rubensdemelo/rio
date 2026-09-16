@@ -28,6 +28,21 @@ jobs:
     steps:
       - name: Check out Rio
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify release provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          release_commit="$(git rev-parse "${GITHUB_SHA}^{commit}")"
+          if ! git merge-base --is-ancestor "$release_commit" refs/remotes/origin/main; then
+            echo "Release tag $GITHUB_REF_NAME does not point to a commit on origin/main." >&2
+            exit 1
+          fi
+          echo "Release commit: $release_commit"
 
       - name: Prepare release signing
         shell: bash
@@ -61,6 +76,12 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$RUNNER_TEMP/rio-release.keychain-db" >/dev/null
           security list-keychain -d user -s "$RUNNER_TEMP/rio-release.keychain-db"
 
+          signing_identity="$(security find-identity -v -p codesigning "$RUNNER_TEMP/rio-release.keychain-db" | awk -v team="($APPLE_TEAM_ID)" '/Developer ID Application:/ && index($0, team) && !found { print $2; found = 1 } END { if (!found) exit 1 }')"
+          if [[ -z "$signing_identity" ]]; then
+            echo "No Developer ID Application identity was found for team $APPLE_TEAM_ID." >&2
+            exit 1
+          fi
+
           openssl smime -inform DER -verify -noverify \
             -in "$RUNNER_TEMP/rio.provisionprofile" \
             -out "$RUNNER_TEMP/rio-profile.plist" \
@@ -68,6 +89,8 @@ jobs:
           profile_uuid="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$RUNNER_TEMP/rio-profile.plist")"
           {
             echo "RELEASE_VERSION=$version"
+            echo "RELEASE_BUILD=$GITHUB_RUN_NUMBER"
+            echo "SIGNING_IDENTITY=$signing_identity"
             echo "PROFILE_UUID=$profile_uuid"
             echo "APP_PATH=$RUNNER_TEMP/Rio.xcarchive/Products/Applications/Rio.app"
             echo "DMG_PATH=$GITHUB_WORKSPACE/dist/Rio-$version.dmg"
@@ -105,11 +128,13 @@ jobs:
             -archivePath "$RUNNER_TEMP/Rio.xcarchive" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY='Developer ID Application' \
+            CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" \
             PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID" \
             ENABLE_HARDENED_RUNTIME=YES \
             MARKETING_VERSION="$RELEASE_VERSION" \
-            CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            CURRENT_PROJECT_VERSION="$RELEASE_BUILD" \
+            ARCHS='arm64 x86_64' \
+            ONLY_ACTIVE_ARCH=NO \
             SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
             COMPILER_INDEX_STORE_ENABLE=NO
 
@@ -120,7 +145,7 @@ jobs:
           set -euo pipefail
           scripts/verify-keychain-access.sh "$APP_PATH"
           mkdir -p "$GITHUB_WORKSPACE/dist"
-          scripts/package-dmg.sh "$APP_PATH" "$DMG_PATH"
+          scripts/package-dmg.sh "$APP_PATH" "$DMG_PATH" "$SIGNING_IDENTITY"
 
           xcrun notarytool submit "$DMG_PATH" \
             --key "$RUNNER_TEMP/rio-notary-key.p8" \
@@ -128,7 +153,13 @@ jobs:
             --issuer "$APPLE_NOTARY_ISSUER_ID" \
             --wait
           xcrun stapler staple "$DMG_PATH"
-          scripts/verify-release.sh "$APP_PATH" "$DMG_PATH"
+          scripts/verify-release.sh \
+            "$DMG_PATH" \
+            "$RELEASE_VERSION" \
+            "$RELEASE_BUILD" \
+            "$APPLE_TEAM_ID" \
+            26.0
+          echo "Published artifact candidate: $(shasum -a 256 "$DMG_PATH")"
 
       - name: Publish GitHub Release
         env:

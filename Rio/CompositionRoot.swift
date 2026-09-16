@@ -3,7 +3,7 @@ import Foundation
 import Observation
 
 @MainActor
-final class LiveSessionController: SessionShellControlling {
+final class LiveSessionController: SessionShellControlling, RioTerminationSessionPreparing {
     @Published private(set) var status: SessionStatus = .stopped
     @Published private(set) var cards: [InsightCard] = []
     @Published private(set) var feedback: SessionFeedbackSnapshot = .inactive
@@ -115,6 +115,12 @@ final class LiveSessionController: SessionShellControlling {
     private func stopListening() async {
         await lifecycle.stop()
         stopMonitoring()
+    }
+
+    func prepareForTermination() async {
+        await lifecycle.stop()
+        stopMonitoring()
+        await refreshSnapshot()
     }
 
     func performPauseAction() async {
@@ -270,7 +276,11 @@ private final class MeetingHistoryStoreRecorder: MeetingHistoryRecording {
         self.store = store
     }
 
-    func record(_ meeting: MeetingHistoryRecord) {
+    var hasPendingRecord: Bool {
+        store.pendingMeeting != nil
+    }
+
+    func record(_ meeting: MeetingHistoryRecord) throws {
         let savedMeeting = SavedMeeting(
             id: meeting.meetingID,
             startedAt: meeting.startedAt,
@@ -293,7 +303,7 @@ private final class MeetingHistoryStoreRecorder: MeetingHistoryRecording {
             incompleteTranscript: meeting.incompleteTranscript,
             profile: meeting.profile
         )
-        store.record(savedMeeting, now: meeting.endedAt)
+        try store.record(savedMeeting, now: meeting.endedAt)
     }
 }
 

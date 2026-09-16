@@ -79,6 +79,15 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         case sustainedSilence
         case cancel
         case failure(PipelineFailure)
+
+        var discardsUnfinalizedAudio: Bool {
+            switch self {
+            case .stop, .sustainedSilence, .failure:
+                true
+            case .cancel:
+                false
+            }
+        }
     }
 
     private static let sustainedSilenceTimeout: Duration = .seconds(600)
@@ -109,6 +118,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     private var audioForwardingTask: Task<Void, Never>?
     private var speechTask: Task<Void, Never>?
     private var generationTask: Task<Void, Never>?
+    private var pendingInsightBatch: MeetingContextBatch?
     private var finalizedSpeechSegmentCount = 0
     private var latestFinalizedSpeechEndOffset: Duration?
     private var activeMeetingID: UUID?
@@ -116,6 +126,8 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     private var incompleteTranscript = false
     private var configuredProfile: MeetingProfile = .fallback
     private var activeMeetingProfile: MeetingProfile = .fallback
+    private var cleanupInProgress = false
+    private var cleanupWaiters: [CheckedContinuation<Void, Never>] = []
 
     init(
         localeIdentifier: String,
@@ -246,6 +258,16 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     }
 
     func start() async throws(PipelineFailure) {
+        if cleanupInProgress {
+            await waitForCleanupCompletion()
+        }
+        guard !historyRecorder.hasPendingRecord else {
+            let failure = PipelineFailure.stage(.meetingHistory, .failed)
+            self.failure = failure
+            status = .unavailable
+            failureRecorder.record(failure)
+            throw failure
+        }
         guard activeSessionID == nil, status != .checkingAvailability else {
             let failure = PipelineFailure.stage(.sessionLifecycle, .invalidState)
             failureRecorder.record(failure)
@@ -284,6 +306,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         activeMeetingStartedAt = Date()
         activeMeetingProfile = configuredProfile
         incompleteTranscript = false
+        pendingInsightBatch = nil
         failure = nil
         status = .checkingAvailability
 
@@ -333,6 +356,10 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     }
 
     func stop() async {
+        if cleanupInProgress {
+            await waitForCleanupCompletion()
+            return
+        }
         guard let sessionID = activeSessionID else {
             status = .stopped
             insightState.reset()
@@ -354,6 +381,10 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         self.speechTask = nil
         self.generationTask = nil
 
+        // Pause cancels the current transcription collector and can discard a
+        // partial or in-flight audio batch. Preserve that fact in the eventual
+        // saved meeting instead of presenting the transcript as complete.
+        incompleteTranscript = true
         status = .paused
 
         audioTask?.cancel()
@@ -361,6 +392,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         generationTask?.cancel()
         await speechRecognizer.pause()
         await capture.stop()
+        await insightGenerator.stop()
         guard activeSessionID == sessionID else { return }
     }
 
@@ -372,6 +404,8 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         }
 
         do {
+            try await insightGenerator.startSession(localeIdentifier: localeIdentifier)
+            try ensureActive(sessionID)
             let audio = try await capture.start()
             try ensureActive(sessionID)
 
@@ -456,8 +490,15 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
 
         do {
             while activeSessionID == sessionID {
-                guard let batch = try await context.nextBatch() else {
-                    return
+                let batch: MeetingContextBatch
+                if let pendingInsightBatch {
+                    batch = pendingInsightBatch
+                } else {
+                    guard let nextBatch = try await context.nextBatch() else {
+                        return
+                    }
+                    pendingInsightBatch = nextBatch
+                    batch = nextBatch
                 }
                 guard activeSessionID == sessionID else {
                     return
@@ -473,10 +514,11 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
                     for: generationBatch,
                     sessionID: sessionID
                 )
-                guard activeSessionID == sessionID else {
+                guard !Task.isCancelled, activeSessionID == sessionID else {
                     return
                 }
                 try insightState.apply(updates, supportedBy: generationBatch)
+                pendingInsightBatch = nil
                 status = .listening
             }
         } catch let failure {
@@ -537,12 +579,21 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
     }
 
     private func cleanup(sessionID: UInt64, kind: CleanupKind) async {
+        if cleanupInProgress {
+            await waitForCleanupCompletion()
+            return
+        }
         guard activeSessionID == sessionID else {
             return
         }
+        cleanupInProgress = true
 
         if case .failure(let failure) = kind {
             failureRecorder.record(failure)
+        }
+
+        if kind.discardsUnfinalizedAudio {
+            incompleteTranscript = true
         }
 
         let transcript = transcriptCollector.snapshot()
@@ -581,6 +632,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         activeMeetingID = nil
         activeMeetingStartedAt = nil
         incompleteTranscript = false
+        pendingInsightBatch = nil
         let context = activeContext
         activeContext = nil
 
@@ -620,10 +672,35 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
         }
 
         if let meetingRecord {
-            historyRecorder.record(meetingRecord)
+            do {
+                try historyRecorder.record(meetingRecord)
+            } catch {
+                let persistenceFailure = PipelineFailure.stage(
+                    .meetingHistory,
+                    .failed
+                )
+                failureRecorder.record(persistenceFailure)
+                failure = persistenceFailure
+                status = .unavailable
+            }
         }
 
         transcriptCollector.reset()
+        completeCleanup()
+    }
+
+    private func waitForCleanupCompletion() async {
+        guard cleanupInProgress else { return }
+        await withCheckedContinuation { continuation in
+            cleanupWaiters.append(continuation)
+        }
+    }
+
+    private func completeCleanup() {
+        cleanupInProgress = false
+        let waiters = cleanupWaiters
+        cleanupWaiters.removeAll(keepingCapacity: false)
+        waiters.forEach { $0.resume() }
     }
 
     private func stopForSustainedSilence(sessionID: UInt64) async {

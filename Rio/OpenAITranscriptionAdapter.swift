@@ -122,6 +122,7 @@ private enum OpenAITranscriptionRequest {
         body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
 
         var request = URLRequest(url: URL(string: "https://api.openai.com/v1/audio/transcriptions")!)
+        request.cachePolicy = .reloadIgnoringLocalCacheData
         request.httpMethod = "POST"
         request.timeoutInterval = timeoutInterval
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")

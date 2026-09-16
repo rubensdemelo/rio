@@ -89,7 +89,7 @@ When the user starts listening:
 
 For the incident-copilot evaluation target, the useful signal set is symptoms, errors, product/version/environment facts, recent changes, failed checks, and unanswered diagnostic questions. Rio may formulate intent for trusted local manuals and runbooks and offer evidence-grounded possible investigation directions and next-best questions. It does not state diagnoses as facts, infer action owners, fabricate source evidence, or execute automatic actions.
 
-The app does not display a live transcript. Finalized transcript segments are collected in memory during the session and saved as a read-only meeting record when the session stops. The saved record contains no audio and expires after two days.
+The app does not display a live transcript. Finalized transcript segments are collected in memory during the session and saved as a read-only meeting record when the session stops. Stop and pause cancel partial, queued, or in-flight transcription promptly, so the saved finalized prefix is conservatively marked incomplete rather than claiming that the captured tail was transcribed. The saved record contains no audio and expires after two days according to the local enforcement rules below.
 
 If decoded audio frames continue but contain no signal for a sustained period,
 the interface warns that meeting audio may be silent. After ten consecutive
@@ -134,7 +134,7 @@ treatment, but the card's right-side label shows the more useful timestamp
 instead of a state tag. Evidence text and transcript navigation are not
 required for the MVP.
 
-Rio must not guess an action-item owner. Owner attribution is validated only when the temporary meeting text explicitly names one, but it is not displayed on the compact MVP insight cards.
+Rio must not guess an action-item owner. Owner attribution is retained only when the temporary meeting text assigns that person to the same action. Compact MVP card text is normalized to omit a person attribution even when separately grounded metadata exists.
 
 ## OpenAI API
 
@@ -143,6 +143,8 @@ Rio uses OpenAI's `gpt-transcribe` API for speech-to-text and the Responses API 
 Before listening, Rio checks system audio availability and whether the user has added an OpenAI API key in Provider settings. Rio stores the key only in its app-isolated macOS data-protection Keychain group in every build configuration, never in the app bundle, preferences, logs, or an environment variable. A missing or rejected key blocks listening with direct guidance. The UI retains the direct button to the System Audio Recording privacy pane. There are no macOS speech assets to install.
 
 Transcription is a cloud stage: Rio sends bounded in-memory WAV chunks to OpenAI, receives temporary finalized text, and immediately feeds it into the bounded insight context. TTS is not used because Rio never plays or generates meeting audio.
+
+Rio sends `store: false` on Responses requests and disables its local HTTP response cache for both transcription and insight traffic. This disables Responses application-state storage for these requests and prevents Rio from writing provider responses into a local URL cache. It does not override OpenAI account-level data controls or imply that provider abuse-monitoring logs and every transient provider cache have zero retention; provider-side handling remains governed by the applicable OpenAI data controls.
 
 ## Data lifecycle
 
@@ -156,7 +158,9 @@ Transcription is a cloud stage: Rio sends bounded in-memory WAV chunks to OpenAI
 - Current insight cards disappear from the active session when it ends, but Rio stores them with the meeting's finalized transcript locally for up to two days so they remain available through Recent Meetings.
 - The two-day local history contains meeting timing, finalized transcript segments, and generated card category, state, text, and save time; it never contains audio or guessed action-owner metadata.
 - The two-day local history also records the selected custom profile, or the general-guidance fallback, so a saved meeting can be interpreted in its original mode.
-- Entries older than two days are removed automatically, and the user can clear the local history at any time.
+- While Rio is running, entries older than two days are hidden and removal is attempted at least once per minute, when the Mac wakes, and whenever Recent Meetings is opened. If Rio is closed at the deadline, an ordinary file cannot delete itself; expiry is enforced on the next launch before the record is shown. A failed expiry write is surfaced as an at-rest removal failure and retried rather than reported as successful.
+- Total history is capped at 50 meetings and 8 MB of encoded records, in addition to per-meeting transcript and insight bounds; the oldest records are evicted first.
+- A failed meeting save is not displayed as durable history. Rio retains one bounded in-memory retry snapshot, blocks another session from replacing it, and offers Retry Save. Ordinary quit waits for stop/save and is refused while that retry still fails; forced process termination cannot provide this guarantee.
 - Deleting a meeting or clearing history updates Recent Meetings only after the
   deletion is saved successfully. If saving fails, the meetings remain visible
   and Rio shows a concise error so the user can retry.

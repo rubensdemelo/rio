@@ -115,6 +115,34 @@ final class CoreContractsTests: XCTestCase {
     }
 
     @MainActor
+    func testDeletingSelectedCustomProfileRestoresEditedDefaultConfiguration() throws {
+        let suiteName = "RioTests.ProfileDeletionDefault.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = MeetingProfileSettings(defaults: defaults)
+        XCTAssertTrue(
+            settings.updateDefaultProfile(
+                name: "Edited default",
+                guidance: "Prioritize confirmed decisions.",
+                insightPace: .ninetySeconds,
+                technicalVocabulary: "Db2, z/OS"
+            )
+        )
+        let custom = try XCTUnwrap(
+            settings.addCustomProfile(name: "Temporary", guidance: "Temporary guidance")
+        )
+
+        settings.deleteCustomProfile(id: custom.id)
+
+        XCTAssertEqual(settings.selection, settings.defaultProfile)
+        XCTAssertEqual(settings.selection.name, "Edited default")
+        XCTAssertEqual(settings.selection.guidance, "Prioritize confirmed decisions.")
+        XCTAssertEqual(settings.selection.insightPace, .ninetySeconds)
+        XCTAssertEqual(settings.selection.technicalVocabulary, "Db2, z/OS")
+        XCTAssertEqual(MeetingProfileSettings(defaults: defaults).selection, settings.defaultProfile)
+    }
+
+    @MainActor
     func testDefaultMeetingProfileCanBeEditedAndPersists() {
         let suiteName = "RioTests.DefaultMeetingProfileMutation.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -432,6 +460,230 @@ final class InMemoryInsightStoreTests: XCTestCase {
         XCTAssertNil(store.cards[1].explicitOwner)
         XCTAssertNil(store.cards[2].explicitOwner)
         XCTAssertNil(store.cards[3].explicitOwner)
+    }
+
+    func testActionOwnerMustBeAssignedToSameActionAndRenderedTextStaysOwnerless() throws {
+        let store = InMemoryInsightStore()
+        let source = context(
+            text: "Alex described the outage. Sam will run the migration. Alex will not run the migration."
+        )
+
+        try store.apply(
+            [
+                update(
+                    key: "action-unrelated-owner",
+                    category: .action,
+                    text: "Alex will run the migration",
+                    owner: "Alex"
+                ),
+                update(
+                    key: "action-supported-owner",
+                    category: .action,
+                    text: "Sam will run the migration",
+                    owner: "Sam"
+                ),
+            ],
+            supportedBy: source
+        )
+
+        XCTAssertNil(store.cards[0].explicitOwner)
+        XCTAssertEqual(store.cards[0].text, "Run the migration")
+        XCTAssertEqual(store.cards[1].explicitOwner, "Sam")
+        XCTAssertEqual(store.cards[1].text, "Run the migration")
+    }
+
+    func testActionOwnerAssignmentMustSyntacticallyBelongToThatPerson() throws {
+        let store = InMemoryInsightStore()
+        let source = context(text: "Alex said Sam will run the migration.")
+
+        try store.apply(
+            [
+                update(
+                    key: "action-wrong-subject",
+                    category: .action,
+                    text: "Run the migration",
+                    owner: "Alex"
+                ),
+                update(
+                    key: "action-right-subject",
+                    category: .action,
+                    text: "Run the migration",
+                    owner: "Sam"
+                ),
+            ],
+            supportedBy: source
+        )
+
+        XCTAssertNil(store.cards[0].explicitOwner)
+        XCTAssertEqual(store.cards[1].explicitOwner, "Sam")
+    }
+
+    func testActionOwnerDoesNotInheritADelegatedPersonsAction() throws {
+        let store = InMemoryInsightStore()
+        let source = context(text: "Alex will ask Sam to run the migration.")
+
+        try store.apply(
+            [update(
+                key: "action-delegated",
+                category: .action,
+                text: "Run the migration",
+                owner: "Alex"
+            )],
+            supportedBy: source
+        )
+
+        XCTAssertNil(store.cards[0].explicitOwner)
+    }
+
+    func testActionOwnerMustMatchTheAssignedActionObject() throws {
+        let store = InMemoryInsightStore()
+        let source = context(text: "Alex will run diagnostics and Sam will run the migration.")
+
+        try store.apply(
+            [
+                update(
+                    key: "action-wrong-object",
+                    category: .action,
+                    text: "Run the migration",
+                    owner: "Alex"
+                ),
+                update(
+                    key: "action-right-object",
+                    category: .action,
+                    text: "Run the migration",
+                    owner: "Sam"
+                ),
+            ],
+            supportedBy: source
+        )
+
+        XCTAssertNil(store.cards[0].explicitOwner)
+        XCTAssertEqual(store.cards[1].explicitOwner, "Sam")
+    }
+
+    func testActionOwnerEvidenceStopsAtWhileAndPunctuationAssignments() throws {
+        for sourceText in [
+            "Alex will run diagnostics while Sam will run the migration.",
+            "Alex will run diagnostics, Sam will run the migration.",
+            "Alex will run diagnostics because sam will run the migration.",
+        ] {
+            let store = InMemoryInsightStore()
+            try store.apply(
+                [update(
+                    key: "action-wrong-clause",
+                    category: .action,
+                    text: "Run the migration",
+                    owner: "Alex"
+                )],
+                supportedBy: context(text: sourceText)
+            )
+
+            XCTAssertNil(store.cards[0].explicitOwner, sourceText)
+        }
+    }
+
+    func testRejectedOwnerRemainingInActionTextRejectsTheBatch() {
+        let store = InMemoryInsightStore()
+
+        XCTAssertThrowsError(
+            try store.apply(
+                [update(
+                    key: "unsupported-owner-form",
+                    category: .action,
+                    text: "Alex leads the migration",
+                    owner: "Alex"
+                )],
+                supportedBy: context(text: "The migration is still being planned.")
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? PipelineFailure,
+                .stage(.insightState, .invalidState)
+            )
+        }
+    }
+
+    func testRenderedOwnerAttributionRejectsEmptyOrMismatchedMetadata() {
+        for owner in [nil, "Sam"] as [String?] {
+            for text in [
+                "Alex will run the migration",
+                "Alex Smith will run the migration",
+                "Ana de Souza will run the migration",
+                "Project Manager will run the migration",
+                "Alex: Run the migration",
+                "Ana de Souza: Run the migration",
+                "Alex to run the migration",
+                "Run the migration — Ana de Souza",
+            ] {
+                let store = InMemoryInsightStore()
+                XCTAssertThrowsError(
+                    try store.apply(
+                        [update(
+                            key: "rendered-owner",
+                            category: .action,
+                            text: text,
+                            owner: owner
+                        )],
+                        supportedBy: context(text: "Alex will run the migration.")
+                    ),
+                    "metadata=\(owner ?? "empty"), text=\(text)"
+                )
+            }
+        }
+    }
+
+    func testGroundedSuffixOwnerIsRemovedFromDisplayedActionText() throws {
+        let store = InMemoryInsightStore()
+
+        try store.apply(
+            [update(
+                key: "suffix-owner",
+                category: .action,
+                text: "Run the migration — Alex",
+                owner: "Alex"
+            )],
+            supportedBy: context(text: "Alex will run the migration.")
+        )
+
+        XCTAssertEqual(store.cards[0].text, "Run the migration")
+        XCTAssertEqual(store.cards[0].explicitOwner, "Alex")
+    }
+
+    func testOwnerTextNormalizationTargetsAttributionWithoutRemovingSystemSubject() {
+        XCTAssertEqual(
+            ActionOwnerGrounding.ownerlessActionText(
+                "Migration owner: Alex",
+                claimedOwner: "Alex"
+            ),
+            "Migration"
+        )
+        XCTAssertEqual(
+            ActionOwnerGrounding.ownerlessActionText(
+                "Database Migration will start tonight"
+            ),
+            "Database Migration will start tonight"
+        )
+
+        let store = InMemoryInsightStore()
+        XCTAssertNoThrow(
+            try store.apply(
+                [
+                    update(
+                        key: "system-subject",
+                        category: .action,
+                        text: "Database Migration will start tonight"
+                    ),
+                    update(
+                        key: "system-label",
+                        category: .action,
+                        text: "Database Migration: Restart tonight"
+                    ),
+                ],
+                supportedBy: context(text: "Database Migration will start tonight.")
+            )
+        )
+        XCTAssertEqual(store.cards.first?.text, "Database Migration will start tonight")
+        XCTAssertEqual(store.cards.last?.text, "Database Migration: Restart tonight")
     }
 
     func testResetClearsAllInsightState() throws {

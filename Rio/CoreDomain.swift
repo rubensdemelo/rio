@@ -322,7 +322,7 @@ final class MeetingProfileSettings: ObservableObject {
         profiles.removeAll { $0.id == id }
         persistProfiles()
         if selection.id == id {
-            selection = .fallback
+            selection = defaultProfile
         }
     }
 
@@ -723,6 +723,7 @@ enum PipelineStage: Sendable, Equatable {
     case rollingContext
     case insightGeneration
     case insightState
+    case meetingHistory
     case sessionLifecycle
 }
 

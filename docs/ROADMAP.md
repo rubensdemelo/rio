@@ -28,13 +28,15 @@ Exit criterion: meeting audio produces useful, structured insight cards through 
 
 Verified on macOS 26.6.2:
 
-- 139 focused unit and integration tests pass, including behavior-level live-workspace sizing and newest-first insight presentation, long-session coverage for rolling-context novelty, current-card insight requests, explicit capture/transcription-overload shutdown before audio eviction, pause/resume continuity, elapsed transcription feedback, saved-transcript navigation, sustained-silence auto-stop and signal reset, same-meeting recovery from thrown interruption and unexpected normal capture completion, frame-liveness recovery and bounded exhaustion, direct system-audio permission recovery, custom meeting-profile persistence and guidance, automatic transcription chunking and keyword hints, bounded cross-batch transcription context, transient transcription retry, app-isolated data-protection Keychain selection, legacy insight-history cleanup, and privacy-safe OpenAI and session-failure diagnostics.
+- 174 focused unit and integration tests pass, including behavior-level live-workspace sizing and newest-first insight presentation, long-session coverage for rolling-context novelty, current-card insight requests, explicit capture/transcription-overload shutdown before audio eviction, pause/resume continuity and epoch-safe replay of a generation batch cancelled by pause, joinable stop/save cleanup during termination, truthful incomplete-prefix handling on stop and active failures, retryable bounded history persistence and termination, timed expiry and aggregate history bounds, hardened OpenAI request storage/cache policy, action-and-object-bound owner validation and ownerless rendering, nonblocking preallocated capture handoff, asynchronous quit preparation, elapsed transcription feedback, saved-transcript navigation, sustained-silence auto-stop and signal reset, same-meeting recovery from thrown interruption and unexpected normal capture completion, frame-liveness recovery and bounded exhaustion, direct system-audio permission recovery, custom meeting-profile persistence and guidance, automatic transcription chunking and keyword hints, bounded cross-batch transcription context, transient transcription retry, app-isolated data-protection Keychain selection, legacy insight-history cleanup, and privacy-safe OpenAI and session-failure diagnostics.
 - Forwarding-buffer overload and unexpected transcription-consumer termination stop capture explicitly and save an incomplete transcript prefix. Failed single-meeting and clear-all deletions preserve the visible history and allow retry. All four regression tests fail against the previous implementation and pass with the fixes. `make final` passes the signed build, Keychain round-trip, and launch checks.
 - Debug and Release builds pass with warnings treated as errors and Swift 6 complete strict-concurrency checking enabled.
 - Static privacy scans confirm that production diagnostics contain only structured non-content metadata and that meeting-derived persistence remains limited to the bounded two-day history.
 - The development-signed application passes entitlement verification. A clean launch leaves Rio running as a menu-bar-only accessory without opening or restoring a window, activating over Finder, or appearing in the Dock/app switcher.
 - The built application launches and exits cleanly without creating audio or transcript files; its inspected container contains only app preferences and the bounded local insight-history file after cards are generated.
-- The repository includes a repeatable Release workflow that builds a universal Developer ID app, packages a drag-installable DMG, notarizes and staples it, and publishes it to a GitHub Release after the Apple credentials are configured.
+- The repository includes a repeatable Release workflow that accepts only a tag
+  from `origin/main`, builds a universal Developer ID app, signs and notarizes
+  the drag-installable DMG, and verifies the mounted payload before publishing.
 
 Not yet verified:
 
@@ -144,9 +146,13 @@ interruption checks remain outstanding.
 
 Release packaging automation is checked in at `.github/workflows/release.yml`
 with `scripts/package-dmg.sh`, `scripts/verify-release.sh`, and the one-time
-credential setup wizard `scripts/setup-github-release.sh`. A live notarization
-run remains dependent on configuring the user's Developer ID certificate,
-provisioning profile, and App Store Connect API key as GitHub credentials.
+credential setup wizard `scripts/setup-github-release.sh`. Historical v1.0.1
+and v1.0.2 releases confirm that notarization credentials were configured, but
+the audited v1.0.2 outer DMG was unsigned. The hardened workflow now signs and
+assesses the outer image and verifies its read-only mounted payload. A signed,
+notarized candidate from the intended release commit and a quarantined
+clean-machine install still need current evidence, alongside the outstanding
+hardware soak and live interruption checks above.
 
 ## Deferred until after the MVP
 

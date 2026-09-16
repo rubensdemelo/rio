@@ -1,6 +1,6 @@
 # Rio GA release implementation handoff
 
-Status: **proposed work; implementation and release approval remain open**.
+Status: **repository remediation implemented; external GA evidence and release approval remain open**.
 
 Prepared 2026-09-16 from the audit of `main` at `1efc99e`. See the
 [dated audit](GA_AUDIT_2026-09-16.md) for triggers, source references, evidence,
@@ -15,17 +15,14 @@ the no-live-transcript and bounded-history product boundaries.
 
 ## Decisions needed before dependent implementation
 
-- [ ] **D1 — Retention while Rio is closed.** Decide how to satisfy the existing
-  at-rest two-day promise when no process is running. Timed pruning while running
-  fixes the observed idle-app defect but does not solve this case. Do not silently
-  weaken the promise; record the approved product/architecture decision in the
-  corresponding documents. Define handling of corrupt history and failed expiry
-  writes, including the UI's truthful state.
-- [ ] **D2 — Stop and pause semantics.** Decide between bounded transcription
-  draining and immediate cancellation with an explicitly incomplete saved prefix.
-  Preserve prompt stop/cancellation and bounded memory. Define save-failure and
-  quit behavior together so termination cannot discard the only retryable record
-  without a deliberate user choice.
+- [x] **D1 — Retention while Rio is closed.** Rio prunes every minute while
+  running and before presentation on the next launch after a closed-app expiry.
+  This enforcement model, corrupt-history behavior, and failed-expiry state are
+  recorded in `PRODUCT.md` and `ARCHITECTURE.md`; an ordinary file cannot delete
+  itself while Rio is not running.
+- [x] **D2 — Stop and pause semantics.** Rio uses immediate cancellation and an
+  explicitly incomplete saved prefix; save failure remains retryable and blocks
+  replacement or ordinary termination.
 - [ ] **D3 — Model acceptance and consent.** Resolve the open decisions in the
   [evaluation pack](evaluation/incident-copilot-mvp/README.md), including consent,
   supported evaluation domains, acceptance thresholds, and model/build baseline.
@@ -34,20 +31,20 @@ the no-live-transcript and bounded-history product boundaries.
 
 ## Work packages and acceptance criteria
 
-All boxes are initially unchecked. P1 items block GA; P2 items require a fix or
-an explicit, documented disposition before signoff. A risk is not a reproduced
-failure unless the audit identifies a concrete reproduction.
+The boxes below reflect the current repository state. P1 items block GA; P2
+items require a fix or an explicit, documented disposition before signoff. A
+risk is not a reproduced failure unless the audit identifies a concrete reproduction.
 
 ### GA-01 — Disable unnecessary provider and local network storage (P1)
 
 Primary ownership: `Rio/OpenAIInsightAdapter.swift` and its tests.
 
-- [ ] Set `store: false` on every insight Responses request and assert the actual
+- [x] Set `store: false` on every insight Responses request and assert the actual
   serialized request body in tests.
-- [ ] Configure production transport to avoid disk caching of meeting-derived
+- [x] Configure production transport to avoid disk caching of meeting-derived
   responses; add a focused configuration/cache regression check. Shared caching
   is a hardening gap, not a proven current provider leak.
-- [ ] Update privacy/product documentation to distinguish local retention,
+- [x] Update privacy/product documentation to distinguish local retention,
   Responses application-state storage, and provider abuse-monitoring/cache
   policies. Do not claim `store: false` guarantees zero provider retention.
 
@@ -60,15 +57,15 @@ the implementation and the supported account configuration.
 Primary ownership: `Rio/MeetingHistoryStore.swift`, history tests, and the history
 recording interface. Coordinate UI/lifecycle changes with GA-03 and GA-04.
 
-- [ ] Prune on an appropriate schedule while running and on wake/access; ensure
+- [x] Prune on an appropriate schedule while running and on wake/access; ensure
   opening Recent Meetings cannot reveal expired entries. Resolve D1.
-- [ ] Handle load/decode and expiry-write failures explicitly. Hiding records
+- [x] Handle load/decode and expiry-write failures explicitly. Hiding records
   must not be represented as successful deletion from disk.
-- [ ] Add aggregate meeting-count and byte bounds with deterministic eviction,
+- [x] Add aggregate meeting-count and byte bounds with deterministic eviction,
   preserving existing per-meeting bounds and retention.
-- [ ] Propagate record-save errors instead of swallowing them. Preserve a bounded
+- [x] Propagate record-save errors instead of swallowing them. Preserve a bounded
   retryable in-memory record and display a concise save-failure state.
-- [ ] Test clock advancement without another meeting, failed prune/save/retry,
+- [x] Test clock advancement without another meeting, failed prune/save/retry,
   corrupt history, aggregate overflow, and successful deletion after failure.
 
 Acceptance: an open idle app expires records on time; failed persistence is
@@ -82,13 +79,13 @@ Primary ownership: `Rio/SessionOrchestration.swift`,
 `Rio/OpenAITranscriptionAdapter.swift`, context batching in
 `Rio/CoreContracts.swift`, and related tests.
 
-- [ ] Implement D2 for partial, queued, and in-flight transcription on stop/pause.
+- [x] Implement D2 for partial, queued, and in-flight transcription on stop/pause.
   Never label a transcript complete when a captured interval was discarded.
-- [ ] Ensure a pause during generation does not permanently consume the pending
+- [x] Ensure a pause during generation does not permanently consume the pending
   insight batch. Acknowledge successful application or retain a bounded retry.
-- [ ] Preserve session isolation, ordering, cancellation, and idempotent cleanup;
+- [x] Preserve session isolation, ordering, cancellation, and idempotent cleanup;
   do not expose a new pause control as part of this fix without a product decision.
-- [ ] Test stopping before the first batch completes, stopping during upload,
+- [x] Test stopping before the first batch completes, stopping during upload,
   stopping with backlog, pausing mid-batch/mid-generation, resuming, and restarting
   while stale asynchronous results finish. Cover 30/60/90-second cadence bounds
   with deterministic generated audio and injected delays.
@@ -102,12 +99,13 @@ temporary data is cleared according to the chosen policy.
 Primary ownership: `Rio/RioApp.swift`, `Rio/ApplicationShell.swift`, and
 `Rio/CompositionRoot.swift`. Depends on GA-02/GA-03 lifecycle/save contracts.
 
-- [ ] Use the application termination lifecycle to await bounded stop/save before
+- [x] Use the application termination lifecycle to await bounded stop/save before
   completing an ordinary quit, including Command-Q/menu quit.
-- [ ] Define and test save failure during quit without losing the retryable
+- [x] Define and test save failure during quit without losing the retryable
   meeting or claiming success. Do not rely on a forced-kill cleanup guarantee.
-- [ ] Test quit while listening, processing, paused, interrupted, and stopped;
-  repeated quit requests; cancellation of in-flight requests; and no double save.
+- [x] Test quit preparation together with the lifecycle's listening, processing,
+  paused, interrupted, stopped, repeated-stop, cancellation, and no-double-save paths;
+  repeated quit requests are coalesced.
 
 Acceptance: an ordinary quit preserves finalized meeting content according to D2,
 releases capture, and does not terminate while an unhandled save failure remains.
@@ -117,17 +115,17 @@ releases capture, and does not terminate while an unhandled save failure remains
 Primary ownership: `.github/workflows/release.yml`, `scripts/package-dmg.sh`,
 `scripts/verify-release.sh`, and distribution documentation.
 
-- [ ] Sign the DMG with Developer ID Application before notarization and stapling.
-- [ ] Assess the DMG using `spctl --assess --type open --context
+- [x] Sign the DMG with Developer ID Application before notarization and stapling.
+- [x] Assess the DMG using `spctl --assess --type open --context
   context:primary-signature --verbose=4`, not only the archive app.
-- [ ] Mount the packaged image read-only and verify its actual app payload:
+- [x] Mount the packaged image read-only and verify its actual app payload:
   signature, hardened runtime, entitlements, architectures, version, minimum OS,
   notarization, and expected drag-install contents. Always detach on failure.
-- [ ] Enforce the documented release-from-main policy if mandatory; do not treat
+- [x] Enforce the documented release-from-main policy if mandatory; do not treat
   a syntactically valid tag as proof of provenance.
 - [ ] Validate a candidate from the actual intended release commit. Keep publishing
   and tag creation subject to the user's explicit release instruction.
-- [ ] Correct the stale roadmap statement that notarization credentials have never
+- [x] Correct the stale roadmap statement that notarization credentials have never
   been configured, while preserving outstanding hardware/evaluation gates.
 
 Acceptance: the exact candidate DMG passes signature and notarization checks and
@@ -140,12 +138,13 @@ Primary ownership: insight translation/validation in `OpenAIInsightAdapter.swift
 and `CoreContracts.swift`, plus related tests/evaluations. Schedule after GA-01
 and GA-03 to avoid overlapping file ownership.
 
-- [ ] Replace mere name-occurrence validation with evidence tied to the action,
+- [x] Replace mere name-occurrence validation with evidence tied to the action,
   or conservatively omit unsupported attribution under an approved design.
-- [ ] Cover owner claims inside displayed card text as well as `explicitOwner`.
-- [ ] Test absent names, unrelated mentioned names, negated assignments, partial
-  names, and supported assignments. Include adversarial live-model evaluations;
-  metadata validation alone cannot establish semantic correctness of free text.
+- [x] Cover owner claims inside displayed card text as well as `explicitOwner`.
+- [x] Test absent names, unrelated mentioned names, negated assignments, partial
+  names, wrong grammatical subjects, displayed attribution, and supported assignments.
+- [ ] Include adversarial live-model evaluations; metadata validation alone cannot
+  establish semantic correctness of free text.
 
 Acceptance: the synthetic owner cases cannot render an unsupported assignment;
 model evaluation records any failures and does not average critical failures away.
@@ -154,18 +153,18 @@ model evaluation records any failures and does not average critical failures awa
 
 Primary ownership: `Rio/CoreDomain.swift` and relevant profile tests.
 
-- [ ] Selecting then deleting a custom profile must select the configured
+- [x] Selecting then deleting a custom profile must select the configured
   `defaultProfile`, not the static factory fallback.
-- [ ] Verify edited Default guidance, cadence, and vocabulary in the next session
+- [x] Verify edited Default guidance, cadence, and vocabulary in the next session
   and after restart.
 
 ### GA-08 — Remove blocking work from capture callbacks (P2)
 
 Primary ownership: `Rio/SystemAudioCapture.swift` and capture tests.
 
-- [ ] Remove the callback's blocking sequence lock and assess bounded preallocated
+- [x] Remove the callback's blocking sequence lock and assess bounded preallocated
   storage for audio copies, preserving correct ownership/lifetime and ordering.
-- [ ] Verify overload, stop/start, callback teardown, and pressure behavior.
+- [x] Verify overload, stop/start, callback teardown, and pressure behavior.
 - [ ] Measure callback timing and dropped/overloaded audio under a hardware soak.
 
 Acceptance: callback work satisfies the documented nonblocking contract; queue
@@ -188,8 +187,10 @@ violation, not a reproduced hardware dropout.
 
 ## GA acceptance evidence
 
-- [ ] Run relevant regression tests and `make final` after every implementation
-  change, as required by `AGENTS.md`. A failed gate is not complete work.
+- [x] Run relevant regression tests and `make final` after every implementation
+  change, as required by `AGENTS.md`. The remediation passes 174 tests, the
+  warnings-as-errors build, development-signature verification, the built-app
+  Keychain round trip, and the launch smoke check.
 - [ ] Build the universal Release target with compiler warnings treated as errors;
   verify both architectures and the actual signed candidate's Keychain path.
 - [ ] Exercise live system-audio grant/denial/revocation, actual capture through
@@ -211,6 +212,12 @@ violation, not a reproduced hardware dropout.
   creating/publishing a release under an explicit release instruction.
 
 ## Starting evidence and limits
+
+Current repository-only evidence also includes shell syntax checks for both
+release helpers, parsed workflow YAML, a clean `git diff --check`, and successful
+validation of all six synthetic evaluation fixtures. This is not a live-model
+evaluation, a signed GA candidate, a clean-machine install, or hardware-soak
+evidence.
 
 At audit revision `1efc99e`, all 139 tests, a universal unsigned Release build,
 the signed Debug synthetic Keychain verifier, shell syntax checks, and validation

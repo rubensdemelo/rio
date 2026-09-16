@@ -2,9 +2,30 @@ import AppKit
 import Darwin
 import SwiftUI
 
+@MainActor
 final class RioAppDelegate: NSObject, NSApplicationDelegate {
+    static var terminationPreparation: RioApplicationTerminationCoordinator.Preparation = {
+        true
+    }
+
+    private lazy var terminationCoordinator = RioApplicationTerminationCoordinator(
+        preparation: Self.terminationPreparation
+    )
+    private var terminationApproved = false
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(RioLaunchPresentation.activationPolicy)
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard !terminationApproved else { return .terminateNow }
+        terminationCoordinator.request { [weak self, weak sender] shouldTerminate in
+            if shouldTerminate {
+                self?.terminationApproved = true
+            }
+            sender?.reply(toApplicationShouldTerminate: shouldTerminate)
+        }
+        return .terminateLater
     }
 }
 
@@ -36,6 +57,13 @@ struct RioApp: App {
             meetingProfileSettings: meetingProfileSettings,
             apiKeyStore: apiKeyStore
         )
+        let terminationPreparation = RioTerminationPreparation(
+            session: sessionController,
+            history: meetingHistory
+        )
+        RioAppDelegate.terminationPreparation = { [terminationPreparation] in
+            await terminationPreparation.prepare()
+        }
         _sessionController = StateObject(wrappedValue: sessionController)
         let providerSettings = OpenAIProviderSettings(keyStore: apiKeyStore)
         _providerSettings = StateObject(wrappedValue: providerSettings)
@@ -43,6 +71,20 @@ struct RioApp: App {
         let panelRouter = RioPanelRouter()
         _panelRouter = StateObject(wrappedValue: panelRouter)
         _meetingProfileSettings = StateObject(wrappedValue: meetingProfileSettings)
+
+        // Start independently of the menu's presentation lifecycle so an open,
+        // idle menu-bar app continues enforcing the at-rest retention window.
+        Task { @MainActor [weak meetingHistory] in
+            while !Task.isCancelled {
+                do {
+                    try await Task.sleep(for: .seconds(60))
+                } catch {
+                    return
+                }
+                guard let meetingHistory else { return }
+                try? meetingHistory.pruneExpired()
+            }
+        }
 
         Task { @MainActor in
             await sessionController.checkReadiness()
@@ -56,6 +98,13 @@ struct RioApp: App {
                 providerSettings: providerSettings,
                 panelRouter: panelRouter
             )
+            .onReceive(
+                NSWorkspace.shared.notificationCenter.publisher(
+                    for: NSWorkspace.didWakeNotification
+                )
+            ) { _ in
+                meetingHistory.load()
+            }
         } label: {
             Image("RioMenuBarIcon")
                 .accessibilityLabel("Rio")

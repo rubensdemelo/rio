@@ -265,6 +265,7 @@ private extension PipelineStage {
         case .rollingContext: "rolling_context"
         case .insightGeneration: "insight_generation"
         case .insightState: "insight_state"
+        case .meetingHistory: "meeting_history"
         case .sessionLifecycle: "session_lifecycle"
         }
     }

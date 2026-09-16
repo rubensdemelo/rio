@@ -7,6 +7,66 @@ enum RioLaunchPresentation {
     static let opensMainWindowOnLaunch = false
 }
 
+@MainActor
+final class RioApplicationTerminationCoordinator {
+    typealias Preparation = @MainActor () async -> Bool
+
+    private let preparation: Preparation
+    private var task: Task<Void, Never>?
+
+    init(preparation: @escaping Preparation) {
+        self.preparation = preparation
+    }
+
+    func request(reply: @escaping @MainActor (Bool) -> Void) {
+        guard task == nil else { return }
+        task = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let shouldTerminate = await preparation()
+            task = nil
+            reply(shouldTerminate)
+        }
+    }
+}
+
+@MainActor
+protocol RioTerminationSessionPreparing: AnyObject {
+    func prepareForTermination() async
+}
+
+@MainActor
+protocol RioTerminationHistoryPreparing: AnyObject {
+    var hasPendingTerminationRecord: Bool { get }
+    func retryPendingTerminationRecord() throws
+}
+
+@MainActor
+final class RioTerminationPreparation {
+    private weak var session: (any RioTerminationSessionPreparing)?
+    private weak var history: (any RioTerminationHistoryPreparing)?
+
+    init(
+        session: any RioTerminationSessionPreparing,
+        history: any RioTerminationHistoryPreparing
+    ) {
+        self.session = session
+        self.history = history
+    }
+
+    func prepare() async -> Bool {
+        guard let session, let history else { return true }
+        await session.prepareForTermination()
+        if history.hasPendingTerminationRecord {
+            do {
+                try history.retryPendingTerminationRecord()
+            } catch {
+                return false
+            }
+        }
+        return !history.hasPendingTerminationRecord
+    }
+}
+
 enum RioWindow: String {
     case main
     case diagnostics
@@ -1710,7 +1770,15 @@ struct RecentMeetingsView: View {
         }
         .frame(minWidth: 680, idealWidth: 760, minHeight: 500, idealHeight: 620)
         .onAppear {
+            meetingHistory.load()
             selectFirstMeetingIfNeeded()
+        }
+        .onReceive(
+            NSWorkspace.shared.notificationCenter.publisher(
+                for: NSWorkspace.didWakeNotification
+            )
+        ) { _ in
+            meetingHistory.load()
         }
         .onChange(of: meetingHistory.meetings) { _, _ in
             selectFirstMeetingIfNeeded()
@@ -1787,6 +1855,25 @@ struct RecentMeetingsView: View {
             .padding(.horizontal, 16)
             .padding(.top, 16)
 
+            if let issue = meetingHistory.persistenceIssue {
+                VStack(alignment: .leading, spacing: 6) {
+                    Label(
+                        historyIssueMessage(issue),
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+
+                    if meetingHistory.pendingMeeting != nil {
+                        Button("Retry Save") {
+                            try? meetingHistory.retryPendingMeeting()
+                        }
+                        .font(.caption)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+
             if meetings.isEmpty {
                 ContentUnavailableView(
                     "No meetings",
@@ -1815,6 +1902,19 @@ struct RecentMeetingsView: View {
             }
         }
         .frame(width: 250)
+    }
+
+    private func historyIssueMessage(
+        _ issue: MeetingHistoryPersistenceIssue
+    ) -> String {
+        switch issue {
+        case .loadFailed:
+            "Rio couldn’t read saved meetings. The history file was left unchanged."
+        case .saveFailed:
+            "The latest meeting isn’t saved yet. Retry before quitting."
+        case .expirySaveFailed:
+            "Expired meetings are hidden, but Rio couldn’t remove them from disk yet."
+        }
     }
 
     @ViewBuilder
@@ -2351,6 +2451,8 @@ private extension PipelineFailure {
             "OpenAI returned an unexpected insight response. Start listening again; if it repeats, check the configured model."
         case .stage(.insightGeneration, .failed):
             "Insight generation stopped unexpectedly. Start listening again."
+        case .stage(.meetingHistory, .failed):
+            "Rio couldn’t save this meeting. Open Recent Meetings to retry before quitting."
         case .stage(_, .interrupted):
             "Listening was interrupted."
         case .stage(_, .overloaded):

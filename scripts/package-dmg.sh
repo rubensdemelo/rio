@@ -3,18 +3,23 @@
 set -euo pipefail
 
 usage() {
-    echo "Usage: $0 APP_PATH OUTPUT_DMG [VOLUME_NAME]" >&2
+    echo "Usage: $0 APP_PATH OUTPUT_DMG SIGNING_IDENTITY [VOLUME_NAME]" >&2
     exit 2
 }
 
-[[ $# -ge 2 && $# -le 3 ]] || usage
+[[ $# -ge 3 && $# -le 4 ]] || usage
 
 app_path="$1"
 output_path="$2"
-volume_name="${3:-Rio}"
+signing_identity="$3"
+volume_name="${4:-Rio}"
 
 if [[ ! -d "$app_path" || ! -x "$app_path/Contents/MacOS/Rio" ]]; then
     echo "DMG packaging failed: Rio.app was not found at $app_path." >&2
+    exit 1
+fi
+if [[ -z "$signing_identity" ]]; then
+    echo "DMG packaging failed: a Developer ID Application signing identity is required." >&2
     exit 1
 fi
 
@@ -41,5 +46,10 @@ if [[ ! -s "$output_path" ]]; then
     exit 1
 fi
 
+if ! codesign --force --sign "$signing_identity" --timestamp "$output_path"; then
+    echo "DMG packaging failed while signing $output_path." >&2
+    exit 1
+fi
+codesign --verify --strict --verbose=2 "$output_path"
+
 echo "Created $output_path"
-shasum -a 256 "$output_path"

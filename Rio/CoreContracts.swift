@@ -480,6 +480,205 @@ protocol InsightGenerator: Sendable {
     func cancel() async
 }
 
+enum ActionOwnerGrounding {
+    private struct AssignmentActionEvidence {
+        let lead: String
+        let terms: Set<String>
+    }
+
+    private static let directAssignmentPrefixes = [
+        "will ", "owns ", "own ", "is responsible for ",
+        "is assigned to ", "was assigned to ",
+    ]
+    private static let negationTerms = [
+        " not ", "n't ", " no longer ", " unassigned ", " nobody ",
+    ]
+    private static let ignoredActionWords: Set<String> = [
+        "a", "an", "and", "as", "at", "be", "by", "complete", "for", "from",
+        "handle", "is", "it", "of", "on", "own", "owns", "the", "to", "will",
+    ]
+    private static let nonPersonSubjectTerms: Set<String> = [
+        "api", "app", "application", "backend", "build", "cluster", "database",
+        "deployment", "environment", "frontend", "migration", "network", "pipeline",
+        "platform", "portal", "project", "release", "server", "service", "system",
+    ]
+
+    static func validatedOwner(
+        _ owner: String?,
+        category: InsightCategory,
+        actionText: String,
+        sourceText: String,
+        maximumLength: Int
+    ) -> String? {
+        guard category == .action,
+              let owner else {
+            return nil
+        }
+
+        let candidate = owner.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !candidate.isEmpty,
+              candidate.count <= maximumLength,
+              !containsControlCharacter(candidate) else {
+            return nil
+        }
+
+        let actionTerms = significantTerms(in: actionText, excluding: candidate)
+        return sourceClauses(sourceText).contains { clause in
+            let normalized = " \(clause.lowercased()) "
+            guard let evidence = supportedAssignmentActionEvidence(
+                for: candidate,
+                in: clause
+            ),
+                  !negationTerms.contains(where: normalized.contains) else {
+                return false
+            }
+            return !actionTerms.isEmpty
+                && actionTerms.contains(evidence.lead)
+                && actionTerms.isSubset(of: evidence.terms)
+        } ? candidate : nil
+    }
+
+    static func ownerlessActionText(
+        _ text: String,
+        claimedOwner: String? = nil
+    ) -> String {
+        var result = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        typealias Replacement = (
+            pattern: String,
+            options: NSRegularExpression.Options,
+            template: String
+        )
+        var replacements: [Replacement] = []
+        if let candidate = claimedOwner?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !candidate.isEmpty {
+            let owner = NSRegularExpression.escapedPattern(for: candidate)
+            let ownerReplacements: [Replacement] = [
+                (#"^(?:Action:\s*)?\#(owner)\s+(?:to|will|must|should|needs?\s+to|is\s+to|owns|is\s+responsible\s+for|(?:is|was)\s+assigned\s+to|agreed\s+to|volunteered\s+to)\s+"#, [.caseInsensitive], ""),
+                (#"^(?:Action:\s*)?\#(owner)\s*(?::|—|-)\s*"#, [.caseInsensitive], ""),
+                (#"\s+by\s+\#(owner)([.!]?)$"#, [.caseInsensitive], "$1"),
+                (#"\s+(?:owner|owned\s+by|assigned\s+to)\s*:?\s*\#(owner)([.!]?)$"#, [.caseInsensitive], "$1"),
+                (#"\s+(?:—|-)\s*\#(owner)([.!]?)$"#, [.caseInsensitive], "$1"),
+            ]
+            replacements.append(contentsOf: ownerReplacements)
+        }
+
+        for replacement in replacements {
+            guard let expression = try? NSRegularExpression(
+                pattern: replacement.pattern,
+                options: replacement.options
+            ) else { continue }
+            let range = NSRange(result.startIndex..., in: result)
+            result = expression.stringByReplacingMatches(
+                in: result,
+                range: range,
+                withTemplate: replacement.template
+            )
+        }
+        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let first = result.first else { return result }
+        return first.uppercased() + result.dropFirst()
+    }
+
+    static func containsRenderedOwnerAttribution(in text: String) -> Bool {
+        let modalSubject = #"[\p{L}][\p{L}'’-]*(?:\s+[\p{L}][\p{L}'’-]*){0,3}"#
+        let prefixPattern = #"^(?:Action:\s*)?(\#(modalSubject))\s+(?i:to|will|must|should|needs?\s+to|is\s+to|owns?|leads?|is\s+responsible\s+for|(?:is|was)\s+assigned\s+to|agreed\s+to|volunteered\s+to)\b"#
+        let range = NSRange(text.startIndex..., in: text)
+        if let expression = try? NSRegularExpression(pattern: prefixPattern),
+           let match = expression.firstMatch(in: text, range: range),
+           let subjectRange = Range(match.range(at: 1), in: text) {
+            if !isNonPersonSubject(String(text[subjectRange])) {
+                return true
+            }
+        }
+
+        let patterns = [
+            #"^(?:Action:\s*)?(\#(modalSubject))(?:\s*:\s*|\s+(?:—|-)\s+)\S"#,
+            #"\s+(?i:by)\s+(\#(modalSubject))[.!]?$"#,
+            #"\s+(?i:owner|owned\s+by|assigned\s+to)\s*:?\s*(\#(modalSubject))[.!]?$"#,
+            #"\s+(?:—|-)\s*(\#(modalSubject))[.!]?$"#,
+        ]
+        return patterns.contains { pattern in
+            guard let expression = try? NSRegularExpression(pattern: pattern) else {
+                return false
+            }
+            guard let match = expression.firstMatch(in: text, range: range),
+                  let subjectRange = Range(match.range(at: 1), in: text) else {
+                return false
+            }
+            return !isNonPersonSubject(String(text[subjectRange]))
+        }
+    }
+
+    private static func isNonPersonSubject(_ subject: String) -> Bool {
+        let subjectTerms = Set(words(in: subject))
+        return !subjectTerms.isEmpty
+            && subjectTerms.isSubset(of: nonPersonSubjectTerms)
+    }
+
+    private static func sourceClauses(_ text: String) -> [String] {
+        text.components(separatedBy: CharacterSet(charactersIn: ".!?;\n"))
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private static func significantTerms(in text: String, excluding owner: String) -> Set<String> {
+        let ownerTerms = Set(words(in: owner))
+        return Set(words(in: text).filter {
+            $0.count >= 3 && !ignoredActionWords.contains($0) && !ownerTerms.contains($0)
+        })
+    }
+
+    private static func words(in text: String) -> [String] {
+        text.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { !$0.isEmpty }
+    }
+
+    private static func supportedAssignmentActionEvidence(
+        for name: String,
+        in text: String
+    ) -> AssignmentActionEvidence? {
+        var searchRange = text.startIndex..<text.endIndex
+        while let match = text.range(
+            of: name,
+            options: [.caseInsensitive, .diacriticInsensitive],
+            range: searchRange
+        ) {
+            let startsAtBoundary = match.lowerBound == text.startIndex
+                || !text[text.index(before: match.lowerBound)].isLetter
+                    && !text[text.index(before: match.lowerBound)].isNumber
+            let endsAtBoundary = match.upperBound == text.endIndex
+                || !text[match.upperBound].isLetter && !text[match.upperBound].isNumber
+            if startsAtBoundary && endsAtBoundary {
+                let suffix = String(text[match.upperBound...]
+                    .trimmingCharacters(in: .whitespacesAndNewlines))
+                let normalizedSuffix = suffix.lowercased()
+                if let prefix = directAssignmentPrefixes.first(where: normalizedSuffix.hasPrefix) {
+                    var action = String(suffix.dropFirst(prefix.count))
+                    if let boundary = action.range(
+                        of: #"\b[\p{L}'’-]+\s+(?i:will|owns?|is\s+responsible\s+for|(?:is|was)\s+assigned\s+to)\b"#,
+                        options: .regularExpression
+                    ) {
+                        action = String(action[..<boundary.lowerBound])
+                    }
+                    let terms = Set(words(in: action).filter {
+                        $0.count >= 3 && !ignoredActionWords.contains($0)
+                    })
+                    guard let lead = words(in: action).first(where: {
+                        $0.count >= 3 && !ignoredActionWords.contains($0)
+                    }) else { return nil }
+                    return AssignmentActionEvidence(lead: lead, terms: terms)
+                }
+            }
+            searchRange = match.upperBound..<text.endIndex
+        }
+        return nil
+    }
+
+    private static func containsControlCharacter(_ value: String) -> Bool {
+        value.unicodeScalars.contains { CharacterSet.controlCharacters.contains($0) }
+    }
+}
+
 /// Optional seam for adapters whose model behavior changes by meeting profile.
 protocol ProfileConfigurableInsightGenerator: SessionInsightGenerator {
     func configure(profile: MeetingProfile) async
@@ -542,12 +741,17 @@ final class InMemoryTranscriptCollector: TranscriptCollecting {
 
 @MainActor
 protocol MeetingHistoryRecording: AnyObject {
-    func record(_ meeting: MeetingHistoryRecord)
+    var hasPendingRecord: Bool { get }
+    func record(_ meeting: MeetingHistoryRecord) throws
+}
+
+extension MeetingHistoryRecording {
+    var hasPendingRecord: Bool { false }
 }
 
 @MainActor
 final class NoopMeetingHistoryRecorder: MeetingHistoryRecording {
-    func record(_ meeting: MeetingHistoryRecord) {}
+    func record(_ meeting: MeetingHistoryRecord) throws {}
 }
 
 @MainActor
@@ -638,7 +842,7 @@ final class InMemoryInsightStore: InsightState {
 
         for update in updates {
             let stableKey = normalizedStableKey(update.stableKey)
-            let text = update.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            var text = update.text.trimmingCharacters(in: .whitespacesAndNewlines)
 
             guard !stableKey.isEmpty,
                   stableKey.count <= configuration.maximumStableKeyLength,
@@ -653,11 +857,24 @@ final class InMemoryInsightStore: InsightState {
             validate(update.operation)
             validate(update.category)
 
-            let owner = validatedOwner(
+            let owner = ActionOwnerGrounding.validatedOwner(
                 update.explicitOwner,
                 category: update.category,
-                sourceText: sourceText
+                actionText: update.text,
+                sourceText: sourceText,
+                maximumLength: configuration.maximumOwnerLength
             )
+
+            if update.category == .action {
+                text = ActionOwnerGrounding.ownerlessActionText(
+                    text,
+                    claimedOwner: update.explicitOwner
+                )
+                guard !text.isEmpty,
+                      !ActionOwnerGrounding.containsRenderedOwnerAttribution(in: text) else {
+                    throw invalidGeneratedOutput
+                }
+            }
             validatedUpdates.append(
                 InsightUpdate(
                     stableKey: stableKey,
@@ -756,53 +973,6 @@ final class InMemoryInsightStore: InsightState {
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .precomposedStringWithCanonicalMapping
             .lowercased(with: Locale(identifier: "en_US_POSIX"))
-    }
-
-    private func validatedOwner(
-        _ owner: String?,
-        category: InsightCategory,
-        sourceText: String
-    ) -> String? {
-        guard category == .action,
-              let owner else {
-            return nil
-        }
-
-        let candidate = owner.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !candidate.isEmpty,
-              candidate.count <= configuration.maximumOwnerLength,
-              !containsControlCharacter(candidate),
-              sourceExplicitlyNames(candidate, in: sourceText) else {
-            return nil
-        }
-
-        return candidate
-    }
-
-    private func sourceExplicitlyNames(_ owner: String, in sourceText: String) -> Bool {
-        var searchRange = sourceText.startIndex..<sourceText.endIndex
-
-        while let match = sourceText.range(
-            of: owner,
-            options: [.caseInsensitive, .diacriticInsensitive],
-            range: searchRange
-        ) {
-            let startsAtBoundary = match.lowerBound == sourceText.startIndex
-                || !isLetterOrNumber(sourceText[sourceText.index(before: match.lowerBound)])
-            let endsAtBoundary = match.upperBound == sourceText.endIndex
-                || !isLetterOrNumber(sourceText[match.upperBound])
-
-            if startsAtBoundary && endsAtBoundary {
-                return true
-            }
-            searchRange = match.upperBound..<sourceText.endIndex
-        }
-
-        return false
-    }
-
-    private func isLetterOrNumber(_ character: Character) -> Bool {
-        character.isLetter || character.isNumber
     }
 
     private func containsControlCharacter(_ value: String) -> Bool {

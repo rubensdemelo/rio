@@ -53,12 +53,14 @@ final class OpenAIInsightAdapterTests: XCTestCase {
         XCTAssertEqual(requests.count, 1)
         let request = try XCTUnwrap(requests.first)
         XCTAssertEqual(request.url?.absoluteString, "https://api.openai.com/v1/responses")
+        XCTAssertEqual(request.cachePolicy, .reloadIgnoringLocalCacheData)
         XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer test-key")
 
         let body = try XCTUnwrap(
             try JSONSerialization.jsonObject(with: XCTUnwrap(request.httpBody)) as? [String: Any]
         )
         XCTAssertEqual(body["model"] as? String, OpenAIAPIConfiguration.defaultModel)
+        XCTAssertEqual(body["store"] as? Bool, false)
         XCTAssertEqual(body["instructions"] as? String, OpenAIInsightPrompt.instructions)
         XCTAssertFalse((body["instructions"] as? String ?? "").contains(meetingText))
         XCTAssertTrue((body["input"] as? String ?? "").contains("<NEW_FINALIZED_TEXT>"))
@@ -68,6 +70,25 @@ final class OpenAIInsightAdapterTests: XCTestCase {
         let format = try XCTUnwrap(text["format"] as? [String: Any])
         XCTAssertEqual(format["type"] as? String, "json_schema")
         XCTAssertEqual(format["strict"] as? Bool, true)
+    }
+
+    func testHTTPClientDisablesLocalResponseCaching() {
+        let source = URLSessionConfiguration.default
+        source.urlCache = URLCache(
+            memoryCapacity: 1_024,
+            diskCapacity: 1_024,
+            diskPath: "rio-openai-tests"
+        )
+        source.requestCachePolicy = .useProtocolCachePolicy
+
+        let configuration = URLSessionOpenAIHTTPClient
+            .privacyPreservingConfiguration(basedOn: source)
+
+        XCTAssertNil(configuration.urlCache)
+        XCTAssertEqual(
+            configuration.requestCachePolicy,
+            .reloadIgnoringLocalCacheData
+        )
     }
 
     func testLongMeetingRequestDistinguishesNewSpeechAndSuppliesCurrentInsightState() async throws {
@@ -193,6 +214,125 @@ final class OpenAIInsightAdapterTests: XCTestCase {
 
         XCTAssertEqual(updates[0].explicitOwner, "Alex")
         XCTAssertNil(updates[1].explicitOwner)
+    }
+
+    func testTranslationRemovesRenderedOwnerAndRejectsUnrelatedOrNegatedAssignment() async throws {
+        let client = RecordingOpenAIHTTPClient(
+            responseData: makeAPIResponseData(
+                updates: [
+                    [
+                        "stableKey": "action-alex",
+                        "operation": "add",
+                        "category": "action",
+                        "text": "Alex must run the migration.",
+                        "explicitOwner": "Alex",
+                    ],
+                    [
+                        "stableKey": "action-sam",
+                        "operation": "add",
+                        "category": "action",
+                        "text": "Sam will run the migration.",
+                        "explicitOwner": "Sam",
+                    ],
+                ]
+            )
+        )
+        let generator = OpenAIInsightGenerator(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client
+        )
+
+        try await generator.startSession(localeIdentifier: "en-US")
+        let updates = try await generator.generate(
+            from: makeBatch(
+                text: "Alex described the outage. Alex will not run the migration. Sam will run the migration."
+            )
+        )
+
+        XCTAssertNil(updates[0].explicitOwner)
+        XCTAssertEqual(updates[0].text, "Run the migration.")
+        XCTAssertEqual(updates[1].explicitOwner, "Sam")
+        XCTAssertEqual(updates[1].text, "Run the migration.")
+    }
+
+    func testTranslationRejectsANameThatOnlyIntroducesTheActualAssignee() async throws {
+        let client = RecordingOpenAIHTTPClient(
+            responseData: makeAPIResponseData(
+                updates: [[
+                    "stableKey": "action-alex",
+                    "operation": "add",
+                    "category": "action",
+                    "text": "Run the migration.",
+                    "explicitOwner": "Alex",
+                ]]
+            )
+        )
+        let generator = OpenAIInsightGenerator(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client
+        )
+
+        try await generator.startSession(localeIdentifier: "en-US")
+        let updates = try await generator.generate(
+            from: makeBatch(text: "Alex said Sam will run the migration.")
+        )
+
+        XCTAssertNil(updates[0].explicitOwner)
+    }
+
+    func testTranslationRejectsDelegatorsAsOwnersOfTheDelegatedAction() async throws {
+        let client = RecordingOpenAIHTTPClient(
+            responseData: makeAPIResponseData(
+                updates: [[
+                    "stableKey": "action-delegated",
+                    "operation": "add",
+                    "category": "action",
+                    "text": "Run the migration.",
+                    "explicitOwner": "Alex",
+                ]]
+            )
+        )
+        let generator = OpenAIInsightGenerator(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client
+        )
+
+        try await generator.startSession(localeIdentifier: "en-US")
+        let updates = try await generator.generate(
+            from: makeBatch(text: "Alex will ask Sam to run the migration.")
+        )
+
+        XCTAssertNil(updates[0].explicitOwner)
+    }
+
+    func testCancelledGenerationCannotDeactivateARestartedSession() async throws {
+        let client = DelayedFirstOpenAIHTTPClient(
+            responseData: makeAPIResponseData(updates: [])
+        )
+        let generator = OpenAIInsightGenerator(
+            configuration: OpenAIAPIConfiguration(apiKey: "test-key"),
+            client: client
+        )
+
+        try await generator.startSession(localeIdentifier: "en-US")
+        let firstBatch = makeBatch(text: "first synthetic batch")
+        let firstGeneration = Task {
+            try await generator.generate(from: firstBatch)
+        }
+        while await client.requestCount == 0 {
+            await Task.yield()
+        }
+
+        await generator.stop()
+        try await generator.startSession(localeIdentifier: "en-US")
+        _ = try? await firstGeneration.value
+
+        let updates = try await generator.generate(
+            from: makeBatch(text: "second synthetic batch")
+        )
+        let requestCount = await client.requestCount
+        XCTAssertTrue(updates.isEmpty)
+        XCTAssertEqual(requestCount, 2)
     }
 
     func testInvalidKeyBecomesAnActionableUnavailableState() async throws {
@@ -533,5 +673,28 @@ private actor RecordingOpenAIHTTPClient: OpenAIHTTPClient {
 
     func requests() -> [URLRequest] {
         recordedRequests
+    }
+}
+
+private actor DelayedFirstOpenAIHTTPClient: OpenAIHTTPClient {
+    private let responseData: Data
+    private(set) var requestCount = 0
+
+    init(responseData: Data) {
+        self.responseData = responseData
+    }
+
+    func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        requestCount += 1
+        if requestCount == 1 {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        let response = HTTPURLResponse(
+            url: request.url!,
+            statusCode: 200,
+            httpVersion: nil,
+            headerFields: nil
+        )!
+        return (responseData, response)
     }
 }
