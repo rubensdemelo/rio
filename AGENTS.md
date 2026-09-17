@@ -47,7 +47,7 @@ Keep the interaction small and obvious:
 - A clear listening, processing, interrupted, unavailable, or stopped status.
 - Insight cards for important points, decisions, actions, questions, and risks.
 - Existing cards update or resolve instead of accumulating duplicates.
-- Never infer an action-item owner. Include an owner only when the temporary meeting text explicitly names one.
+- Retain action-item owner metadata only when the temporary meeting text explicitly assigns that person to the same action. Never infer an owner from a name mention alone. Keep compact MVP card text free of person attribution, even when grounded owner metadata exists.
 - Do not expose live temporary transcript text in the interface; expose saved transcript text only through the read-only Recent Meetings view.
 
 Prefer removing complexity over adding configuration. New controls and settings need a concrete MVP requirement.
@@ -79,7 +79,7 @@ Meeting data is ephemeral except for the bounded two-day local meeting history:
 - Perform the same cleanup after errors and cancellation.
 - Persist only finalized transcript segments and generated insight cards (category, state, text, and save time) in a bounded local history that expires after two days; never persist audio, rolling temporary text, or guessed owner metadata.
 - Store a user-provided API key only in the macOS Keychain; never use app preferences, source, an app bundle, logs, or an environment-variable runtime dependency for credentials.
-- Never include audio, transcript text, prompts containing meeting content, secrets, or insight text outside the approved two-day local history in logs, analytics, crash annotations, fixtures, or snapshots.
+- Keep real meeting audio, transcript text, prompts containing real meeting content, and insight text out of logs, analytics, crash annotations, fixtures, and snapshots. Persist real meeting content only in the approved two-day local history, and never persist audio. Synthetic meeting text and generated audio are permitted in test fixtures. Never include secrets in any of these outputs.
 
 Diagnostics may contain non-content metadata such as timing, queue depth, availability state, and error codes.
 
@@ -122,12 +122,13 @@ Hardware-dependent capture and one-hour soak tests must be identified clearly wh
 - Preserve the simple product boundary when proposing abstractions or future-proofing.
 - Add comments for non-obvious constraints and decisions, not line-by-line narration.
 - Keep user-facing language concise and distinguish the live temporary speech-to-text pipeline from the completed read-only transcript history.
-- After every implementation change, run `make final`.
-- Do not report the change complete if `make final` fails.
+- After all implementation edits and review fixes have settled, the primary agent runs `make final` before committing or reporting completion. Builders run focused checks and hand their changes back to the primary agent.
+- Serialize validation that shares build output or controls the running app. Only the primary agent runs `make final`, which stops Rio, runs the full checks, and relaunches it.
+- Do not report an implementation change complete if `make final` fails or has not run against the final changes.
 
 ## Git workflow
 
 - Work directly on `main` by default.
 - Create a separate branch only when the user explicitly requests one.
-- After an implementation is verified, commit the focused changes and push them to the current branch without asking for separate confirmation for each step.
+- The primary agent owns staging, committing, and pushing. After required review and validation are complete, commit the focused changes and push them to the current branch without asking for separate confirmation for each step. Builders return uncommitted changes for integration and review.
 - Keep branch creation, pull requests, and merging opt-in; perform them only when the user explicitly requests them.
