@@ -135,6 +135,56 @@ final class SystemAudioCaptureTests: XCTestCase {
         XCTAssertEqual(pool.availableSlotCount, 1)
     }
 
+    func testRawBufferDecoderPreservesCaptureCancellationFailure() async throws {
+        let rawQueue = BoundedQueue<CoreAudioRawBuffer>(capacity: 1)
+        let destination = BoundedAudioQueue(capacity: 1)
+        let output = destination.makeStream(
+            onOutputDrop: {},
+            onTermination: {}
+        )
+        let task = CoreAudioRawBufferDecodingTask.make(
+            rawQueue: rawQueue,
+            destination: destination,
+            format: AudioStreamBasicDescription(
+                mSampleRate: 48_000,
+                mFormatID: kAudioFormatLinearPCM,
+                mFormatFlags: kAudioFormatFlagIsFloat | kAudioFormatFlagIsPacked,
+                mBytesPerPacket: UInt32(MemoryLayout<Float>.size),
+                mFramesPerPacket: 1,
+                mBytesPerFrame: UInt32(MemoryLayout<Float>.size),
+                mChannelsPerFrame: 1,
+                mBitsPerChannel: 32,
+                mReserved: 0
+            ),
+            inputLevelMonitor: AudioInputLevelMonitor(),
+            onContinuityLoss: {}
+        )
+        let pool = CoreAudioRawBufferPool(
+            capacity: 1,
+            bufferCount: 1,
+            byteCapacity: 16
+        )
+        let rawBuffer = try XCTUnwrap(
+            copy(samples: [0.25, -0.25], into: pool, sequenceNumber: 0)
+        )
+        XCTAssertEqual(rawQueue.enqueue(rawBuffer).result, .accepted)
+        var iterator = output.makeAsyncIterator()
+        let firstChunk = try await iterator.next()
+        XCTAssertNotNil(firstChunk)
+
+        rawQueue.finish(throwing: .cancelled)
+
+        do {
+            _ = try await iterator.next()
+            XCTFail("Expected capture cancellation to terminate decoder output")
+        } catch let failure as PipelineFailure {
+            XCTAssertEqual(failure, .cancelled)
+        } catch {
+            XCTFail("Expected PipelineFailure.cancelled, got \(error)")
+        }
+        await task.value
+    }
+
     private func copy(
         samples: [Float],
         into pool: CoreAudioRawBufferPool,

@@ -328,6 +328,41 @@ private enum CoreAudioSampleChunkDecoder {
     }
 }
 
+enum CoreAudioRawBufferDecodingTask {
+    static func make(
+        rawQueue: BoundedQueue<CoreAudioRawBuffer>,
+        destination: BoundedAudioQueue,
+        format: AudioStreamBasicDescription,
+        inputLevelMonitor: AudioInputLevelMonitor,
+        onContinuityLoss: @escaping @Sendable () -> Void
+    ) -> Task<Void, Never> {
+        let rawStream = rawQueue.makeStream(
+            onOutputDrop: onContinuityLoss,
+            onTermination: {}
+        )
+        return Task.detached(priority: .userInitiated) {
+            do {
+                for try await rawBuffer in rawStream {
+                    try Task.checkCancellation()
+                    guard let chunk = CoreAudioSampleChunkDecoder.chunk(
+                        from: rawBuffer,
+                        format: format
+                    ) else { continue }
+                    inputLevelMonitor.update(level: chunk.inputLevel)
+                    _ = destination.enqueue(chunk)
+                }
+                destination.finish()
+            } catch is CancellationError {
+                destination.finish(throwing: .cancelled)
+            } catch let failure as PipelineFailure {
+                destination.finish(throwing: failure)
+            } catch {
+                destination.finish(throwing: .stage(.audioCapture, .failed))
+            }
+        }
+    }
+}
+
 final class CoreAudioCaptureCallbackState: @unchecked Sendable {
     let rawQueue: BoundedQueue<CoreAudioRawBuffer>
     private let rawBufferPool: CoreAudioRawBufferPool
@@ -522,10 +557,11 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
             systemEventMonitor = CoreAudioSystemEventMonitor {
                 _ = continuityFailures.enqueue(.stage(.audioCapture, .interrupted))
             }
-            decodingTask = makeDecodingTask(
+            decodingTask = CoreAudioRawBufferDecodingTask.make(
                 rawQueue: rawQueue,
                 destination: queue,
                 format: try resources.tap.format,
+                inputLevelMonitor: inputLevelMonitor,
                 onContinuityLoss: reportOverload
             )
             isRunning = true
@@ -711,36 +747,6 @@ actor CoreAudioSystemAudioCapture: NSObject, SessionAudioCapture {
         rawQueue = nil
         queue?.finish(throwing: failure)
         queue = nil
-    }
-
-    private func makeDecodingTask(
-        rawQueue: BoundedQueue<CoreAudioRawBuffer>,
-        destination: BoundedAudioQueue,
-        format: AudioStreamBasicDescription,
-        onContinuityLoss: @escaping @Sendable () -> Void
-    ) -> Task<Void, Never> {
-        let rawStream = rawQueue.makeStream(
-            onOutputDrop: onContinuityLoss,
-            onTermination: {}
-        )
-        return Task.detached(priority: .userInitiated) { [inputLevelMonitor] in
-            do {
-                for try await rawBuffer in rawStream {
-                    try Task.checkCancellation()
-                    guard let chunk = CoreAudioSampleChunkDecoder.chunk(
-                        from: rawBuffer,
-                        format: format
-                    ) else { continue }
-                    inputLevelMonitor.update(level: chunk.inputLevel)
-                    _ = destination.enqueue(chunk)
-                }
-                destination.finish()
-            } catch is CancellationError {
-                destination.finish(throwing: .cancelled)
-            } catch {
-                destination.finish(throwing: .stage(.audioCapture, .failed))
-            }
-        }
     }
 
     private func makeContinuityTask(
