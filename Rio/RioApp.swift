@@ -30,6 +30,35 @@ final class RioAppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
+enum RioMain {
+    static func main() {
+        if CommandLine.arguments.contains(
+            SystemAudioCaptureVerificationCommand.launchArgument
+        ) {
+            let arguments = CommandLine.arguments
+            let application = NSApplication.shared
+            application.setActivationPolicy(.prohibited)
+            DispatchQueue.main.async {
+                Task.detached {
+                    let report = await SystemAudioCaptureVerificationCommand.run(
+                        arguments: arguments,
+                        capture: CoreAudioSystemAudioCapture()
+                    )
+                    if let data = SystemAudioCaptureVerificationCommand.encodedJSON(report) {
+                        FileHandle.standardOutput.write(data)
+                        FileHandle.standardOutput.write(Data("\n".utf8))
+                    }
+                    Darwin.exit(report.succeeded ? EXIT_SUCCESS : EXIT_FAILURE)
+                }
+            }
+            application.run()
+            Darwin.exit(EXIT_FAILURE)
+        }
+
+        RioApp.main()
+    }
+}
+
 struct RioApp: App {
     @NSApplicationDelegateAdaptor(RioAppDelegate.self) private var appDelegate
     @StateObject private var sessionController: LiveSessionController

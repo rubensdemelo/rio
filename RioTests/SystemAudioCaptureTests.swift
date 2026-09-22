@@ -4,6 +4,226 @@ import Synchronization
 import XCTest
 
 final class SystemAudioCaptureTests: XCTestCase {
+    func testVerificationCommandReportsSuccessfulCancelledCaptureCycle() async {
+        let capture = VerificationAudioCapture()
+
+        let report = await SystemAudioCaptureVerificationCommand.run(
+            arguments: [
+                "Rio",
+                "--verify-system-audio-capture",
+                "--capture-cycles=2",
+                "--capture-seconds=1",
+                "--capture-run-token=test-run-token-0001",
+            ],
+            capture: capture,
+            maximumCallbackGap: .milliseconds(750)
+        )
+
+        XCTAssertEqual(report.failureCategory, .none)
+        XCTAssertEqual(report.cyclesRequested, 2)
+        XCTAssertEqual(report.cyclesCompleted, 2)
+        XCTAssertEqual(report.chunksObserved, 20)
+        XCTAssertEqual(report.signalChunksObserved, 20)
+        XCTAssertEqual(report.audioMillisecondsObserved, 2_000)
+        XCTAssertLessThanOrEqual(report.maximumCallbackGapMilliseconds, 750)
+        let cancelCount = await capture.cancelCount()
+        XCTAssertEqual(cancelCount, 2)
+    }
+
+    func testVerificationCommandRejectsOutOfRangeOptions() async {
+        let capture = VerificationAudioCapture()
+
+        for arguments in [
+            [
+                "Rio",
+                "--verify-system-audio-capture",
+                "--capture-cycles=0",
+                "--capture-seconds=1",
+                "--capture-run-token=test-run-token-0001",
+            ],
+            [
+                "Rio",
+                "--verify-system-audio-capture",
+                "--capture-cycles=2",
+                "--capture-seconds=1801",
+                "--capture-run-token=test-run-token-0001",
+            ],
+            [
+                "Rio",
+                "--verify-system-audio-capture",
+                "--capture-cycles=1",
+                "--capture-seconds=1",
+            ],
+            [
+                "Rio",
+                "--verify-system-audio-capture",
+                "--capture-cycles=1",
+                "--capture-seconds=1",
+                "--capture-run-token=unsafe/token/value",
+            ],
+        ] {
+            let report = await SystemAudioCaptureVerificationCommand.run(
+                arguments: arguments,
+                capture: capture
+            )
+
+            XCTAssertEqual(report.failureCategory, .invalidArguments)
+            XCTAssertEqual(report.cyclesCompleted, 0)
+        }
+        let cancelCount = await capture.cancelCount()
+        XCTAssertEqual(cancelCount, 0)
+    }
+
+    func testVerificationCommandRejectsNonCancellationTermination() async {
+        let capture = VerificationAudioCapture(
+            cancelFailure: .stage(.audioCapture, .failed)
+        )
+
+        let report = await SystemAudioCaptureVerificationCommand.run(
+            arguments: [
+                "Rio",
+                "--verify-system-audio-capture",
+                "--capture-cycles=1",
+                "--capture-seconds=1",
+                "--capture-run-token=test-run-token-0001",
+            ],
+            capture: capture
+        )
+
+        XCTAssertEqual(report.failureCategory, .unexpectedFailure)
+        XCTAssertEqual(report.cyclesCompleted, 0)
+        XCTAssertEqual(report.chunksObserved, 10)
+        XCTAssertEqual(report.signalChunksObserved, 10)
+        XCTAssertEqual(report.audioMillisecondsObserved, 1_000)
+    }
+
+    func testVerificationCommandRejectsSilentOnlyCapture() async {
+        let capture = VerificationAudioCapture(inputLevel: 0)
+
+        let report = await SystemAudioCaptureVerificationCommand.run(
+            arguments: [
+                "Rio",
+                "--verify-system-audio-capture",
+                "--capture-cycles=1",
+                "--capture-seconds=1",
+                "--capture-run-token=test-run-token-0001",
+            ],
+            capture: capture
+        )
+
+        XCTAssertEqual(report.failureCategory, .noSignal)
+        XCTAssertEqual(report.cyclesCompleted, 0)
+        XCTAssertEqual(report.chunksObserved, 10)
+        XCTAssertEqual(report.signalChunksObserved, 0)
+        XCTAssertEqual(report.audioMillisecondsObserved, 1_000)
+    }
+
+    func testVerificationCommandRejectsOneSignalChunkThenStall() async {
+        let capture = VerificationAudioCapture(
+            chunkCount: 1,
+            chunkDuration: .milliseconds(20)
+        )
+
+        let report = await SystemAudioCaptureVerificationCommand.run(
+            arguments: [
+                "Rio",
+                "--verify-system-audio-capture",
+                "--capture-cycles=1",
+                "--capture-seconds=1",
+                "--capture-run-token=test-run-token-0001",
+            ],
+            capture: capture
+        )
+
+        XCTAssertEqual(report.failureCategory, .insufficientDuration)
+        XCTAssertEqual(report.cyclesCompleted, 0)
+        XCTAssertEqual(report.chunksObserved, 1)
+        XCTAssertEqual(report.signalChunksObserved, 1)
+        XCTAssertEqual(report.audioMillisecondsObserved, 20)
+    }
+
+    func testVerificationCommandRejectsCallbackStallAfterEnoughAudio() async {
+        let capture = VerificationAudioCapture(emissionInterval: .zero)
+
+        let report = await SystemAudioCaptureVerificationCommand.run(
+            arguments: [
+                "Rio",
+                "--verify-system-audio-capture",
+                "--capture-cycles=1",
+                "--capture-seconds=1",
+                "--capture-run-token=test-run-token-0001",
+            ],
+            capture: capture,
+            maximumCallbackGap: .milliseconds(50)
+        )
+
+        XCTAssertEqual(report.failureCategory, .callbackStalled)
+        XCTAssertEqual(report.cyclesCompleted, 0)
+        XCTAssertEqual(report.audioMillisecondsObserved, 1_000)
+        XCTAssertGreaterThan(report.maximumCallbackGapMilliseconds, 50)
+    }
+
+    func testVerificationCommandRejectsDelayedFirstCallback() async {
+        let capture = VerificationAudioCapture(
+            chunkCount: 16,
+            initialEmissionDelay: .milliseconds(200),
+            emissionInterval: .milliseconds(50)
+        )
+
+        let report = await SystemAudioCaptureVerificationCommand.run(
+            arguments: [
+                "Rio",
+                "--verify-system-audio-capture",
+                "--capture-cycles=1",
+                "--capture-seconds=1",
+                "--capture-run-token=test-run-token-0001",
+            ],
+            capture: capture,
+            maximumCallbackGap: .milliseconds(120)
+        )
+
+        XCTAssertEqual(report.failureCategory, .callbackStalled)
+        XCTAssertEqual(report.cyclesCompleted, 0)
+        XCTAssertGreaterThanOrEqual(report.audioMillisecondsObserved, 800)
+        XCTAssertGreaterThan(report.maximumCallbackGapMilliseconds, 120)
+    }
+
+    func testVerificationReportJSONContainsOnlyContentFreeMetrics() throws {
+        let report = SystemAudioCaptureVerificationReport(
+            cyclesRequested: 2,
+            cyclesCompleted: 2,
+            captureSeconds: 3,
+            chunksObserved: 42,
+            signalChunksObserved: 21,
+            audioMillisecondsObserved: 840,
+            maximumCallbackGapMilliseconds: 40,
+            elapsedMilliseconds: 6_010,
+            failureCategory: .none
+        )
+
+        let data = try XCTUnwrap(
+            SystemAudioCaptureVerificationCommand.encodedJSON(report)
+        )
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
+
+        XCTAssertEqual(
+            Set(object.keys),
+            Set([
+                "cyclesRequested",
+                "cyclesCompleted",
+                "captureSeconds",
+                "chunksObserved",
+                "signalChunksObserved",
+                "audioMillisecondsObserved",
+                "maximumCallbackGapMilliseconds",
+                "elapsedMilliseconds",
+                "failureCategory",
+            ])
+        )
+    }
+
     func testSystemAudioSampleDecoderDecodesFloatPCM() {
         let source: [Float] = [-0.5, 0, 0.5]
         let bytes = source.withUnsafeBytes { Data($0) }
@@ -231,4 +451,85 @@ final class SystemAudioCaptureTests: XCTestCase {
             return withUnsafePointer(to: &bufferList, body)
         }
     }
+}
+
+private actor VerificationAudioCapture: AudioCapture {
+    private let cancelFailure: PipelineFailure
+    private let inputLevel: Float
+    private let chunkCount: Int
+    private let chunkDuration: Duration
+    private let initialEmissionDelay: Duration
+    private let emissionInterval: Duration
+    private var continuation: AudioStream.Continuation?
+    private var producerTask: Task<Void, Never>?
+    private var cancellations = 0
+
+    init(
+        cancelFailure: PipelineFailure = .cancelled,
+        inputLevel: Float = 0.25,
+        chunkCount: Int = 10,
+        chunkDuration: Duration = .milliseconds(100),
+        initialEmissionDelay: Duration = .zero,
+        emissionInterval: Duration = .milliseconds(50)
+    ) {
+        self.cancelFailure = cancelFailure
+        self.inputLevel = inputLevel
+        self.chunkCount = chunkCount
+        self.chunkDuration = chunkDuration
+        self.initialEmissionDelay = initialEmissionDelay
+        self.emissionInterval = emissionInterval
+    }
+
+    func start() async throws(PipelineFailure) -> AudioStream {
+        let stream = AudioStream { continuation in
+            self.continuation = continuation
+        }
+        let producerContinuation = continuation
+        producerTask = Task {
+            if initialEmissionDelay > .zero {
+                do {
+                    try await Task.sleep(for: initialEmissionDelay)
+                } catch {
+                    return
+                }
+            }
+            for sequenceNumber in 0..<chunkCount {
+                if sequenceNumber > 0, emissionInterval > .zero {
+                    do {
+                        try await Task.sleep(for: emissionInterval)
+                    } catch {
+                        return
+                    }
+                }
+                producerContinuation?.yield(
+                    AudioChunk(
+                        sequenceNumber: UInt64(sequenceNumber),
+                        duration: chunkDuration,
+                        sampleRate: 48_000,
+                        channelCount: 2,
+                        samples: [inputLevel, inputLevel],
+                        inputLevel: inputLevel
+                    )
+                )
+            }
+        }
+        return stream
+    }
+
+    func stop() async {
+        producerTask?.cancel()
+        producerTask = nil
+        continuation?.finish()
+        continuation = nil
+    }
+
+    func cancel() async {
+        cancellations += 1
+        producerTask?.cancel()
+        producerTask = nil
+        continuation?.finish(throwing: cancelFailure)
+        continuation = nil
+    }
+
+    func cancelCount() -> Int { cancellations }
 }

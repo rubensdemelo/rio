@@ -3,6 +3,432 @@ import CoreAudio
 import Foundation
 import Synchronization
 
+enum SystemAudioCaptureVerificationFailureCategory: String, Codable, Sendable {
+    case none
+    case invalidArguments = "invalid_arguments"
+    case startFailure = "start_failure"
+    case noSignal = "no_signal"
+    case insufficientDuration = "insufficient_duration"
+    case callbackStalled = "callback_stalled"
+    case terminationTimeout = "termination_timeout"
+    case unexpectedCompletion = "unexpected_completion"
+    case unexpectedFailure = "unexpected_failure"
+    case cancelled
+}
+
+struct SystemAudioCaptureVerificationReport: Codable, Sendable {
+    let cyclesRequested: Int
+    let cyclesCompleted: Int
+    let captureSeconds: Int
+    let chunksObserved: Int
+    let signalChunksObserved: Int
+    let audioMillisecondsObserved: Int
+    let maximumCallbackGapMilliseconds: Int
+    let elapsedMilliseconds: Int
+    let failureCategory: SystemAudioCaptureVerificationFailureCategory
+
+    var succeeded: Bool {
+        failureCategory == .none && cyclesCompleted == cyclesRequested
+    }
+}
+
+enum SystemAudioCaptureVerificationCommand {
+    static let launchArgument = "--verify-system-audio-capture"
+    static let defaultCycles = 2
+    static let defaultCaptureSeconds = 3
+    static let cycleRange = 1...100
+    static let captureSecondsRange = 1...3_600
+
+    private static let terminationTimeout: Duration = .seconds(5)
+
+    static func run(
+        arguments: [String],
+        capture: any AudioCapture,
+        maximumCallbackGap: Duration = .seconds(5)
+    ) async -> SystemAudioCaptureVerificationReport {
+        let startedAt = ContinuousClock.now
+        guard let options = parse(arguments: arguments) else {
+            return report(
+                options: nil,
+                cyclesCompleted: 0,
+                chunksObserved: 0,
+                signalChunksObserved: 0,
+                audioMillisecondsObserved: 0,
+                maximumCallbackGapMilliseconds: 0,
+                failureCategory: .invalidArguments,
+                startedAt: startedAt
+            )
+        }
+
+        var cyclesCompleted = 0
+        var chunksObserved = 0
+        var signalChunksObserved = 0
+        var audioMillisecondsObserved = 0
+        var maximumCallbackGapObserved = Duration.zero
+        for _ in 0..<options.cycles {
+            guard !Task.isCancelled else {
+                await capture.cancel()
+                return report(
+                    options: options,
+                    cyclesCompleted: cyclesCompleted,
+                    chunksObserved: chunksObserved,
+                    signalChunksObserved: signalChunksObserved,
+                    audioMillisecondsObserved: audioMillisecondsObserved,
+                    maximumCallbackGapMilliseconds: milliseconds(
+                        in: maximumCallbackGapObserved
+                    ),
+                    failureCategory: .cancelled,
+                    startedAt: startedAt
+                )
+            }
+
+            let stream: AudioStream
+            do {
+                stream = try await capture.start()
+            } catch {
+                await capture.cancel()
+                return report(
+                    options: options,
+                    cyclesCompleted: cyclesCompleted,
+                    chunksObserved: chunksObserved,
+                    signalChunksObserved: signalChunksObserved,
+                    audioMillisecondsObserved: audioMillisecondsObserved,
+                    maximumCallbackGapMilliseconds: milliseconds(
+                        in: maximumCallbackGapObserved
+                    ),
+                    failureCategory: .startFailure,
+                    startedAt: startedAt
+                )
+            }
+
+            let observationStartedAt = ContinuousClock.now
+            let observationTask = Task {
+                await observe(stream: stream, startedAt: observationStartedAt)
+            }
+            do {
+                try await Task.sleep(for: .seconds(options.captureSeconds))
+            } catch {
+                await capture.cancel()
+                observationTask.cancel()
+                _ = await observationTask.value
+                return report(
+                    options: options,
+                    cyclesCompleted: cyclesCompleted,
+                    chunksObserved: chunksObserved,
+                    signalChunksObserved: signalChunksObserved,
+                    audioMillisecondsObserved: audioMillisecondsObserved,
+                    maximumCallbackGapMilliseconds: milliseconds(
+                        in: maximumCallbackGapObserved
+                    ),
+                    failureCategory: .cancelled,
+                    startedAt: startedAt
+                )
+            }
+
+            await capture.cancel()
+            guard let observation = await observation(
+                from: observationTask,
+                timeout: terminationTimeout
+            ) else {
+                observationTask.cancel()
+                await capture.cancel()
+                return report(
+                    options: options,
+                    cyclesCompleted: cyclesCompleted,
+                    chunksObserved: chunksObserved,
+                    signalChunksObserved: signalChunksObserved,
+                    audioMillisecondsObserved: audioMillisecondsObserved,
+                    maximumCallbackGapMilliseconds: milliseconds(
+                        in: maximumCallbackGapObserved
+                    ),
+                    failureCategory: .terminationTimeout,
+                    startedAt: startedAt
+                )
+            }
+
+            chunksObserved += observation.chunkCount
+            signalChunksObserved += observation.signalChunkCount
+            audioMillisecondsObserved += milliseconds(in: observation.audioDuration)
+            if observation.maximumCallbackGap > maximumCallbackGapObserved {
+                maximumCallbackGapObserved = observation.maximumCallbackGap
+            }
+            guard observation.termination == .cancelled else {
+                return report(
+                    options: options,
+                    cyclesCompleted: cyclesCompleted,
+                    chunksObserved: chunksObserved,
+                    signalChunksObserved: signalChunksObserved,
+                    audioMillisecondsObserved: audioMillisecondsObserved,
+                    maximumCallbackGapMilliseconds: milliseconds(
+                        in: maximumCallbackGapObserved
+                    ),
+                    failureCategory: observation.termination.failureCategory,
+                    startedAt: startedAt
+                )
+            }
+            guard observation.signalChunkCount > 0 else {
+                return report(
+                    options: options,
+                    cyclesCompleted: cyclesCompleted,
+                    chunksObserved: chunksObserved,
+                    signalChunksObserved: signalChunksObserved,
+                    audioMillisecondsObserved: audioMillisecondsObserved,
+                    maximumCallbackGapMilliseconds: milliseconds(
+                        in: maximumCallbackGapObserved
+                    ),
+                    failureCategory: .noSignal,
+                    startedAt: startedAt
+                )
+            }
+            guard observation.audioDuration >= .milliseconds(options.captureSeconds * 800) else {
+                return report(
+                    options: options,
+                    cyclesCompleted: cyclesCompleted,
+                    chunksObserved: chunksObserved,
+                    signalChunksObserved: signalChunksObserved,
+                    audioMillisecondsObserved: audioMillisecondsObserved,
+                    maximumCallbackGapMilliseconds: milliseconds(
+                        in: maximumCallbackGapObserved
+                    ),
+                    failureCategory: .insufficientDuration,
+                    startedAt: startedAt
+                )
+            }
+            guard observation.maximumCallbackGap <= maximumCallbackGap else {
+                return report(
+                    options: options,
+                    cyclesCompleted: cyclesCompleted,
+                    chunksObserved: chunksObserved,
+                    signalChunksObserved: signalChunksObserved,
+                    audioMillisecondsObserved: audioMillisecondsObserved,
+                    maximumCallbackGapMilliseconds: milliseconds(
+                        in: maximumCallbackGapObserved
+                    ),
+                    failureCategory: .callbackStalled,
+                    startedAt: startedAt
+                )
+            }
+            cyclesCompleted += 1
+        }
+
+        return report(
+            options: options,
+            cyclesCompleted: cyclesCompleted,
+            chunksObserved: chunksObserved,
+            signalChunksObserved: signalChunksObserved,
+            audioMillisecondsObserved: audioMillisecondsObserved,
+            maximumCallbackGapMilliseconds: milliseconds(
+                in: maximumCallbackGapObserved
+            ),
+            failureCategory: .none,
+            startedAt: startedAt
+        )
+    }
+
+    static func encodedJSON(
+        _ report: SystemAudioCaptureVerificationReport
+    ) -> Data? {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        return try? encoder.encode(report)
+    }
+
+    private struct Options {
+        let cycles: Int
+        let captureSeconds: Int
+    }
+
+    private struct Observation: Sendable {
+        let chunkCount: Int
+        let signalChunkCount: Int
+        let audioDuration: Duration
+        let maximumCallbackGap: Duration
+        let termination: Termination
+    }
+
+    private enum Termination: Sendable, Equatable {
+        case cancelled
+        case completed
+        case failed
+
+        var failureCategory: SystemAudioCaptureVerificationFailureCategory {
+            switch self {
+            case .cancelled:
+                .none
+            case .completed:
+                .unexpectedCompletion
+            case .failed:
+                .unexpectedFailure
+            }
+        }
+    }
+
+    private static func parse(arguments: [String]) -> Options? {
+        var cycles = defaultCycles
+        var captureSeconds = defaultCaptureSeconds
+        var sawLaunchArgument = false
+        var sawCycles = false
+        var sawCaptureSeconds = false
+        var sawRunToken = false
+
+        for argument in arguments.dropFirst() {
+            if argument == launchArgument {
+                guard !sawLaunchArgument else { return nil }
+                sawLaunchArgument = true
+            } else if argument.hasPrefix("--capture-cycles=") {
+                guard !sawCycles,
+                      let value = integerValue(
+                        in: argument,
+                        prefix: "--capture-cycles="
+                      ),
+                      cycleRange.contains(value) else {
+                    return nil
+                }
+                sawCycles = true
+                cycles = value
+            } else if argument.hasPrefix("--capture-seconds=") {
+                guard !sawCaptureSeconds,
+                      let value = integerValue(
+                        in: argument,
+                        prefix: "--capture-seconds="
+                      ),
+                      captureSecondsRange.contains(value) else {
+                    return nil
+                }
+                sawCaptureSeconds = true
+                captureSeconds = value
+            } else if argument.hasPrefix("--capture-run-token=") {
+                let value = argument.dropFirst("--capture-run-token=".count)
+                guard !sawRunToken, isValidRunToken(value) else { return nil }
+                sawRunToken = true
+            } else {
+                return nil
+            }
+        }
+
+        guard sawLaunchArgument,
+              sawRunToken,
+              cycles * captureSeconds <= 3_600 else {
+            return nil
+        }
+        return Options(cycles: cycles, captureSeconds: captureSeconds)
+    }
+
+    private static func integerValue(in argument: String, prefix: String) -> Int? {
+        let rawValue = argument.dropFirst(prefix.count)
+        guard !rawValue.isEmpty,
+              rawValue.allSatisfy(\.isNumber) else {
+            return nil
+        }
+        return Int(rawValue)
+    }
+
+    private static func isValidRunToken(_ value: Substring) -> Bool {
+        guard (16...64).contains(value.utf8.count) else { return false }
+        return value.utf8.allSatisfy { byte in
+            (48...57).contains(byte)
+                || (65...90).contains(byte)
+                || (97...122).contains(byte)
+                || byte == 45
+        }
+    }
+
+    private static func observe(
+        stream: AudioStream,
+        startedAt: ContinuousClock.Instant
+    ) async -> Observation {
+        let clock = ContinuousClock()
+        var chunkCount = 0
+        var signalChunkCount = 0
+        var audioDuration = Duration.zero
+        var lastChunkAt = startedAt
+        var maximumCallbackGap = Duration.zero
+        let termination: Termination
+        do {
+            for try await chunk in stream {
+                let observedAt = clock.now
+                let gap = lastChunkAt.duration(to: observedAt)
+                if gap > maximumCallbackGap {
+                    maximumCallbackGap = gap
+                }
+                lastChunkAt = observedAt
+                chunkCount += 1
+                if chunk.duration > .zero {
+                    audioDuration += chunk.duration
+                }
+                if chunk.inputLevel >= AudioChunk.signalThreshold {
+                    signalChunkCount += 1
+                }
+            }
+            termination = .completed
+        } catch let failure as PipelineFailure where failure == .cancelled {
+            termination = .cancelled
+        } catch {
+            termination = .failed
+        }
+        let tailGap = lastChunkAt.duration(to: clock.now)
+        if tailGap > maximumCallbackGap {
+            maximumCallbackGap = tailGap
+        }
+        return Observation(
+            chunkCount: chunkCount,
+            signalChunkCount: signalChunkCount,
+            audioDuration: audioDuration,
+            maximumCallbackGap: maximumCallbackGap,
+            termination: termination
+        )
+    }
+
+    private static func observation(
+        from task: Task<Observation, Never>,
+        timeout: Duration
+    ) async -> Observation? {
+        await withTaskGroup(of: Observation?.self) { group in
+            group.addTask { await task.value }
+            group.addTask {
+                try? await Task.sleep(for: timeout)
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            if first == nil {
+                task.cancel()
+            }
+            return first
+        }
+    }
+
+    private static func report(
+        options: Options?,
+        cyclesCompleted: Int,
+        chunksObserved: Int,
+        signalChunksObserved: Int,
+        audioMillisecondsObserved: Int,
+        maximumCallbackGapMilliseconds: Int,
+        failureCategory: SystemAudioCaptureVerificationFailureCategory,
+        startedAt: ContinuousClock.Instant
+    ) -> SystemAudioCaptureVerificationReport {
+        return SystemAudioCaptureVerificationReport(
+            cyclesRequested: options?.cycles ?? 0,
+            cyclesCompleted: cyclesCompleted,
+            captureSeconds: options?.captureSeconds ?? 0,
+            chunksObserved: chunksObserved,
+            signalChunksObserved: signalChunksObserved,
+            audioMillisecondsObserved: audioMillisecondsObserved,
+            maximumCallbackGapMilliseconds: maximumCallbackGapMilliseconds,
+            elapsedMilliseconds: max(0, milliseconds(in: startedAt.duration(to: .now))),
+            failureCategory: failureCategory
+        )
+    }
+
+    private static func milliseconds(in duration: Duration) -> Int {
+        let components = duration.components
+        let value = (components.seconds * 1_000)
+            + (components.attoseconds / 1_000_000_000_000_000)
+        return Int(value)
+    }
+}
+
 private final class CoreAudioSystemEventMonitor: @unchecked Sendable {
     private let lock = NSLock()
     private let notificationCenter = NSWorkspace.shared.notificationCenter
