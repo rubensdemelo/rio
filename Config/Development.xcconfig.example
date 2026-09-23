@@ -1,5 +1,5 @@
-// Copy this file to Config/Development.xcconfig and fill in your Apple team ID.
+// Copy this file to Config/Development.xcconfig. Rio uses X59V2Q7WB7.
 // The copied file is local-only and is ignored by git.
 CODE_SIGN_STYLE = Automatic
-DEVELOPMENT_TEAM = YOUR_TEAM_ID
+DEVELOPMENT_TEAM = X59V2Q7WB7
 CODE_SIGN_IDENTITY = Apple Development

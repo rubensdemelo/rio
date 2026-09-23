@@ -13,15 +13,14 @@ Rio uses native Swift and SwiftUI, Apple frameworks, and the standard library.
 
 ## Local signing setup
 
-Development builds use a stable Apple Development identity so macOS can keep
-System Audio Recording permission and Keychain access associated with the same
-Rio bundle across ordinary rebuilds.
+Signed development builds use a stable Apple Development identity so macOS can
+keep System Audio Recording permission and Keychain access associated with the
+same Rio bundle across ordinary rebuilds.
 
 1. Copy `Config/Development.xcconfig.example` to
    `Config/Development.xcconfig`.
-2. Set `DEVELOPMENT_TEAM` to the team shown in Xcode’s Signing & Capabilities
-   editor.
-3. Sign in to Xcode with that Apple Developer account.
+2. Sign in to Xcode with the Apple Developer account that owns team
+   `X59V2Q7WB7`.
 
 `Config/Development.xcconfig` is ignored and must never be committed. Do not
 delete or recreate the stable development identity during normal testing.
@@ -34,9 +33,13 @@ Run the complete local gate from the repository root:
 make final
 ```
 
-This runs the test suite, builds and signs the Debug app, verifies its
-entitlements and Keychain round-trip, and launches Rio. Use `make clean` when a
-fully clean rebuild is needed.
+This runs the test suite, builds and launches a locally ad-hoc-signed Debug
+app, and intentionally does not require an Apple account, provisioning profile,
+or development certificate. The ad-hoc path omits signing-only entitlements,
+so the built-app Keychain round-trip is skipped. To exercise signed local
+validation, including the Keychain round-trip, run `LOCAL_SIGNED=YES make
+final`. GitHub release builds always require the configured Developer ID
+signing material. Use `make clean` when a fully clean rebuild is needed.
 
 The full Xcode commands, when needed for focused diagnosis, are:
 
