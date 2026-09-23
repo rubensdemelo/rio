@@ -34,6 +34,9 @@ git tag v1.2.3
 git push origin v1.2.3
 ```
 
+The release workflow runs only when that semantic-version tag is newly created.
+Moving or force-updating an existing tag does not generate another DMG.
+
 The release job uses a full checkout and rejects a tag whose commit is not an
 ancestor of `origin/main`. A semantic version alone is not release provenance.
 

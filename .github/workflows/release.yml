@@ -14,6 +14,9 @@ concurrency:
 
 jobs:
   build-release:
+    # A tag push can also represent moving an existing tag. Release artifacts
+    # are created only for the initial creation of a semantic-version tag.
+    if: github.event.created == true
     runs-on: macos-26
     timeout-minutes: 20
     env:
