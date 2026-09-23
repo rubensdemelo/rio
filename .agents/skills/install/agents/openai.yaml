@@ -1,0 +1,4 @@
+interface:
+  display_name: "Install Rio"
+  short_description: "Install and launch the latest Rio app"
+  default_prompt: "Install and launch the current Rio build."
