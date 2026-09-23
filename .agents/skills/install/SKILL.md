@@ -14,10 +14,10 @@ completed change and release.
 1. Use the existing validated app when one is available at
    `.build/Iteration/Build/Products/Debug/Rio.app`. If it is missing or stale,
    run `make final` first; do not install an unbuilt source tree.
-2. Stop the currently installed Rio process before replacing the app.
-3. Replace `/Applications/Rio.app` with the selected build. The target is the
-   known Rio app bundle only; do not modify other applications.
-4. Launch `/Applications/Rio.app` and confirm that the installed bundle exists.
+2. Run `scripts/install-rio.sh <source-app>` to stop Rio, replace
+   `/Applications/Rio.app`, launch the installed copy, and confirm its
+   executable exists. The target is the known Rio app bundle only; do not
+   modify other applications.
 
 For a specific release or archive build, use its explicit `.app` path as the
 source instead of silently choosing another artifact. Preserve the release
