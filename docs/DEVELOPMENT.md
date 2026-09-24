@@ -34,13 +34,19 @@ Run the complete local gate from the repository root:
 make final
 ```
 
-This runs the test suite, builds and launches a locally ad-hoc-signed Debug
-app, and intentionally does not require an Apple account, provisioning profile,
-or development certificate. The ad-hoc path omits signing-only entitlements,
-so the built-app Keychain round-trip is skipped. To exercise signed local
-validation, including the Keychain round-trip, run `LOCAL_SIGNED=YES make
-final`. GitHub release builds always require the configured Developer ID
-signing material. Use `make clean` when a fully clean rebuild is needed.
+This runs the test suite, builds the Debug app with the stable Apple Development
+identity, verifies its signature and Keychain round-trip, then launches it. This
+keeps routine rebuilds attached to the same macOS Keychain and privacy identity
+so API keys and permissions continue to work.
+
+If no local signing identity is available, run `LOCAL_SIGNED=NO make final`.
+That uses a separate `.build/UnsignedValidation` directory for tests and an
+ad-hoc build, and does not stop, install, or launch Rio. Such a build cannot
+access the app's Keychain and must not be used interactively. The installer
+also runs the Keychain round-trip before replacing `/Applications/Rio.app` and
+preserves the existing installation if verification fails. GitHub release
+builds always require the configured Developer ID signing material. Use
+`make clean` when a fully clean rebuild is needed.
 
 The full Xcode commands, when needed for focused diagnosis, are:
 

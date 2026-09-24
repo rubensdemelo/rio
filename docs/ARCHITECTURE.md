@@ -68,7 +68,7 @@ The app requests the macOS System Audio Recording permission using
 must handle output changes, sleep and wake, permission revocation, and the
 selected meeting source disappearing.
 
-Signed development builds use a persistent Apple Development code-signing identity configured through the ignored `Config/Development.xcconfig`, so macOS privacy grants survive ordinary source rebuilds. The mandatory local gate uses an ad-hoc-signed app when that identity or its provisioning account is unavailable; the ad-hoc path omits signing-only entitlements and does not validate Keychain/privacy-grant continuity. Signed local validation and release builds still require the appropriate Apple signing material. The identity is managed by Xcode and is not stored in the repository. A changed bundle identifier, signing authority, or user privacy decision remains a legitimate reason for macOS to request access again.
+Signed development builds use a persistent Apple Development code-signing identity configured through the ignored `Config/Development.xcconfig`, so macOS privacy grants survive ordinary source rebuilds. The default local gate uses this signed app and verifies its signature, Keychain access, and entitlements before launch. When signing material is unavailable, `LOCAL_SIGNED=NO make final` provides a separate ad-hoc validation build that does not stop or launch Rio and cannot be installed by the local installer. Release builds require the appropriate Developer ID signing material. The identity is managed by Xcode and is not stored in the repository. A changed bundle identifier, signing authority, or user privacy decision remains a legitimate reason for macOS to request access again.
 
 The MVP does not save audio or create a recording output. Capture callbacks only
 make a bounded copy of the ephemeral Core Audio buffers and attempt a
@@ -269,7 +269,9 @@ The local final verification gate executes the built Rio binary in a dedicated
 diagnostic mode and performs a synthetic save-load-delete round-trip through
 that same data-protection Keychain. It runs after signature and entitlement
 inspection and before launch, never reads the user's API key, and prevents an
-unsigned or incorrectly entitled build from reaching the normal interface.
+unsigned or incorrectly entitled build from reaching the normal interface. The
+installer repeats this check on the staged app before replacing the existing
+installation.
 
 ## Concurrency
 

@@ -4,16 +4,18 @@ PROJECT = Rio.xcodeproj
 SCHEME = Rio
 CONFIGURATION = Debug
 DESTINATION = platform=macOS
-DERIVED_DATA_PATH = .build/Iteration
-XCODEBUILD_BASE_FLAGS = -project $(PROJECT) -scheme $(SCHEME) -configuration $(CONFIGURATION) -destination '$(DESTINATION)' -derivedDataPath $(DERIVED_DATA_PATH) SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
-XCODEBUILD_FLAGS = $(XCODEBUILD_BASE_FLAGS)
-
-# The mandatory local gate must not depend on an Apple account, provisioning
-# profile, or certificate being available on the machine. Use ad-hoc signing by
-# default; a developer can opt into signed local validation explicitly.
-LOCAL_SIGNED ?= NO
+LOCAL_SIGNED ?= YES
 CAPTURE_CYCLES ?= 2
 CAPTURE_SECONDS ?= 3
+
+ifeq ($(LOCAL_SIGNED),YES)
+DERIVED_DATA_PATH = .build/Iteration
+else
+DERIVED_DATA_PATH = .build/UnsignedValidation
+endif
+RIO_APP_PATH = $(DERIVED_DATA_PATH)/Build/Products/Debug/Rio.app
+XCODEBUILD_BASE_FLAGS = -project $(PROJECT) -scheme $(SCHEME) -configuration $(CONFIGURATION) -destination '$(DESTINATION)' -derivedDataPath $(DERIVED_DATA_PATH) SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
+XCODEBUILD_FLAGS = $(XCODEBUILD_BASE_FLAGS)
 
 ifneq ($(wildcard Config/Development.xcconfig),)
 XCODEBUILD_FLAGS += -xcconfig Config/Development.xcconfig
@@ -41,32 +43,37 @@ build:
 verify-signing:
 ifeq ($(LOCAL_SIGNED),YES)
 	@echo "Verifying the stable development signature..."
-	@codesign -dv --verbose=4 .build/Iteration/Build/Products/Debug/Rio.app 2>&1 | grep -Fq -e 'Authority=Apple Development:' -e 'Authority=Mac Development:'
-	@codesign -d --entitlements - .build/Iteration/Build/Products/Debug/Rio.app 2>&1 | grep -Fq '.com.rubensmelo.rio'
+	@codesign -dv --verbose=4 $(RIO_APP_PATH) 2>&1 | grep -Fq -e 'Authority=Apple Development:' -e 'Authority=Mac Development:'
+	@codesign -d --entitlements - $(RIO_APP_PATH) 2>&1 | grep -Fq '.com.rubensmelo.rio'
 else
 	@echo "Verifying the local ad-hoc signature..."
-	@codesign -dv --verbose=4 .build/Iteration/Build/Products/Debug/Rio.app 2>&1 | grep -Fq 'Signature=adhoc'
+	@codesign -dv --verbose=4 $(RIO_APP_PATH) 2>&1 | grep -Fq 'Signature=adhoc'
 endif
 
 verify-keychain-access:
 ifeq ($(LOCAL_SIGNED),YES)
 	@echo "Verifying built-app Keychain access..."
-	@scripts/verify-keychain-access.sh .build/Iteration/Build/Products/Debug/Rio.app
+	@scripts/verify-keychain-access.sh $(RIO_APP_PATH)
 else
 	@echo "Skipping built-app Keychain verification for the ad-hoc local build."
 endif
 
 verify-system-audio-capture:
 	@scripts/verify-system-audio-capture.sh \
-		.build/Iteration/Build/Products/Debug/Rio.app \
+		$(RIO_APP_PATH) \
 		$(CAPTURE_CYCLES) \
 		$(CAPTURE_SECONDS)
 
 final:
-	@pkill -x Rio 2>/dev/null || true
 	@$(MAKE) test
 	@$(MAKE) build
 	@$(MAKE) verify-signing
 	@$(MAKE) verify-keychain-access
+
+ifeq ($(LOCAL_SIGNED),YES)
+	@pkill -x Rio 2>/dev/null || true
 	@echo "Launching Rio..."
-	@open -n .build/Iteration/Build/Products/Debug/Rio.app
+	@open -n $(RIO_APP_PATH)
+else
+	@echo "Unsigned validation complete; Rio was not stopped or launched."
+endif

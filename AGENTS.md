@@ -122,8 +122,10 @@ Hardware-dependent capture and one-hour soak tests must be identified clearly wh
 - Preserve the simple product boundary when proposing abstractions or future-proofing.
 - Add comments for non-obvious constraints and decisions, not line-by-line narration.
 - Keep user-facing language concise and distinguish the live temporary speech-to-text pipeline from the completed read-only transcript history.
-- After all implementation edits and review fixes have settled, the primary agent runs `make final` before committing or reporting completion. Builders run focused checks and hand their changes back to the primary agent.
-- Serialize validation that shares build output or controls the running app. Only the primary agent runs `make final`, which stops Rio, runs the full checks, and relaunches it.
+- Use the default signed `make final` for interactive development; it runs tests, verifies the app's signature and Keychain round-trip, then launches the app. Keep `LOCAL_SIGNED=NO make final` as isolated validation only; it does not stop or launch Rio and its output is not installable.
+- After implementation edits and review fixes have settled, the primary agent runs `make final` before committing or reporting completion. Builders run focused checks and hand their changes back to the primary agent.
+- After a completed app-code change, follow the `install` skill so the validated build reaches the user's `/Applications` copy. Its installer preflights the staged app's signature and Keychain round-trip before replacing the current copy. Documentation-only and workflow-only changes do not require an app install.
+- Serialize validation that shares build output or controls the running app. Only the primary agent runs `make final`, which verifies first and launches only after all checks pass.
 - Do not report an implementation change complete if `make final` fails or has not run against the final changes.
 
 ## Git workflow

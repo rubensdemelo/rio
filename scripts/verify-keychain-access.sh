@@ -5,6 +5,9 @@ set -euo pipefail
 app_path="${1:-.build/Iteration/Build/Products/Debug/Rio.app}"
 executable_path="$app_path/Contents/MacOS/Rio"
 info_plist="$app_path/Contents/Info.plist"
+expected_team_identifier="Q857P34S8A"
+expected_bundle_identifier="com.rubensmelo.rio"
+expected_keychain_access_group="$expected_team_identifier.$expected_bundle_identifier"
 
 required_apple_tools=(/usr/bin/codesign /usr/bin/plutil)
 for tool_path in "${required_apple_tools[@]}"; do
@@ -34,8 +37,8 @@ if ! grep -Fq -e 'Authority=Apple Development:' -e 'Authority=Mac Development:' 
 fi
 
 team_identifier="$(awk -F= '$1 == "TeamIdentifier" { print $2 }' <<<"$signature_details")"
-if [[ ! "$team_identifier" =~ ^[A-Z0-9]{10}$ ]]; then
-    echo "Keychain verification failed: Rio.app does not have a valid Apple Team identifier." >&2
+if [[ "$team_identifier" != "$expected_team_identifier" ]]; then
+    echo "Keychain verification failed: expected Apple Team $expected_team_identifier, got ${team_identifier:-none}." >&2
     exit 1
 fi
 
@@ -43,8 +46,8 @@ if ! bundle_identifier="$(/usr/bin/plutil -extract CFBundleIdentifier raw -expec
     echo "Keychain verification failed: Rio.app bundle identifier could not be read." >&2
     exit 1
 fi
-if [[ "$bundle_identifier" != com.rubensmelo.rio ]]; then
-    echo "Keychain verification failed: unexpected bundle identifier $bundle_identifier." >&2
+if [[ "$bundle_identifier" != "$expected_bundle_identifier" ]]; then
+    echo "Keychain verification failed: expected bundle identifier $expected_bundle_identifier, got $bundle_identifier." >&2
     exit 1
 fi
 
@@ -58,8 +61,8 @@ fi
 if ! keychain_group_count="$(/usr/bin/plutil -extract keychain-access-groups raw -expect array -o - "$entitlements_plist" 2>/dev/null)" \
     || ! keychain_access_group="$(/usr/bin/plutil -extract keychain-access-groups.0 raw -expect string -o - "$entitlements_plist" 2>/dev/null)" \
     || [[ "$keychain_group_count" != 1 ]] \
-    || [[ "$keychain_access_group" != "$team_identifier.$bundle_identifier" ]]; then
-    echo "Keychain verification failed: Rio.app must contain exactly the Keychain access group $team_identifier.$bundle_identifier." >&2
+    || [[ "$keychain_access_group" != "$expected_keychain_access_group" ]]; then
+    echo "Keychain verification failed: Rio.app must contain exactly the Keychain access group $expected_keychain_access_group." >&2
     exit 1
 fi
 
