@@ -74,10 +74,38 @@ verifier_process_matches() {
         && [[ "$process_command" == *" --capture-run-token=$capture_run_token" ]]
 }
 
+terminate_verifier_process() {
+    local process_id="$1"
+    local deadline
+
+    verifier_process_matches "$process_id" || return 0
+    kill "$process_id" 2>/dev/null || true
+    deadline=$((SECONDS + 5))
+    while verifier_process_matches "$process_id" && (( SECONDS < deadline )); do
+        sleep 0.1
+    done
+
+    if verifier_process_matches "$process_id"; then
+        kill -KILL "$process_id" 2>/dev/null || true
+        deadline=$((SECONDS + 2))
+        while verifier_process_matches "$process_id" && (( SECONDS < deadline )); do
+            sleep 0.1
+        done
+    fi
+
+    ! verifier_process_matches "$process_id"
+}
+
 cleanup() {
-    local status=$?
+    local status="$1"
+    local verifier_cleanup_failed=0
+    local candidate_pid
     trap - EXIT INT TERM
 
+    if [[ -n "$open_pid" ]]; then
+        kill "$open_pid" 2>/dev/null || true
+        wait "$open_pid" 2>/dev/null || true
+    fi
     if [[ -n "$audio_loop_pid" ]]; then
         local audio_children
         audio_children="$(pgrep -P "$audio_loop_pid" 2>/dev/null || true)"
@@ -88,18 +116,29 @@ cleanup() {
         wait "$audio_loop_pid" 2>/dev/null || true
     fi
     if [[ -n "$rio_pid" ]]; then
-        if verifier_process_matches "$rio_pid"; then
-            kill "$rio_pid" 2>/dev/null || true
+        if ! terminate_verifier_process "$rio_pid"; then
+            verifier_cleanup_failed=1
         fi
     fi
-    if [[ -n "$open_pid" ]]; then
-        kill "$open_pid" 2>/dev/null || true
-        wait "$open_pid" 2>/dev/null || true
+    while IFS= read -r candidate_pid; do
+        [[ -n "$candidate_pid" ]] || continue
+        [[ "$candidate_pid" != "$rio_pid" ]] || continue
+        if verifier_process_matches "$candidate_pid" \
+            && ! terminate_verifier_process "$candidate_pid"; then
+            verifier_cleanup_failed=1
+        fi
+    done < <(pgrep -x Rio 2>/dev/null || true)
+    if (( verifier_cleanup_failed == 0 )); then
+        rm -rf "$work_directory"
+    else
+        echo "System-audio verification cleanup failed: Rio is still running; preserved $work_directory." >&2
+        (( status == 0 )) && status=1
     fi
-    rm -rf "$work_directory"
     exit "$status"
 }
-trap cleanup EXIT INT TERM
+trap 'cleanup $?' EXIT
+trap 'cleanup 130' INT
+trap 'cleanup 143' TERM
 
 say -o "$audio_path" "Synthetic audio for Rio capture verification."
 (

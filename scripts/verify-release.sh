@@ -36,6 +36,27 @@ if [[ ! "$expected_minimum_macos" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
     exit 1
 fi
 
+required_apple_tools=(
+    /usr/bin/codesign
+    /usr/bin/hdiutil
+    /usr/bin/lipo
+    /usr/bin/otool
+    /usr/bin/plutil
+    /usr/bin/xcrun
+    /usr/libexec/PlistBuddy
+    /usr/sbin/spctl
+)
+for tool_path in "${required_apple_tools[@]}"; do
+    if [[ ! -x "$tool_path" ]]; then
+        echo "Release verification failed: required Apple tool is unavailable at $tool_path." >&2
+        exit 1
+    fi
+done
+if ! /usr/bin/xcrun --find stapler >/dev/null 2>&1; then
+    echo "Release verification failed: the selected Apple developer tools do not provide stapler." >&2
+    exit 1
+fi
+
 work_directory="$(mktemp -d "${TMPDIR:-/tmp}/rio-release-verification.XXXXXX")"
 mount_directory="$work_directory/mounted"
 mounted=false
@@ -44,36 +65,53 @@ mkdir -p "$mount_directory"
 cleanup() {
     local status=$?
     local detach_status=0
+    local cleanup_status=0
+    local preserve_work_directory=false
     trap - EXIT
 
     if [[ "$mounted" == true ]]; then
-        if ! hdiutil detach "$mount_directory" >/dev/null 2>&1 \
-            && ! hdiutil detach -force "$mount_directory" >/dev/null 2>&1; then
+        if ! /usr/bin/hdiutil detach "$mount_directory" >/dev/null 2>&1 \
+            && ! /usr/bin/hdiutil detach -force "$mount_directory" >/dev/null 2>&1; then
             echo "Release verification failed: could not detach $mount_directory." >&2
             detach_status=1
+            preserve_work_directory=true
         fi
     fi
-    rm -rf "$work_directory"
+
+    if [[ "$preserve_work_directory" == true ]]; then
+        echo "Release verification preserved the mounted work directory for diagnosis: $work_directory" >&2
+    elif ! rm -rf "$work_directory"; then
+        echo "Release verification failed: could not remove temporary work directory $work_directory." >&2
+        cleanup_status=1
+    fi
 
     if [[ $status -eq 0 && $detach_status -ne 0 ]]; then
         status=$detach_status
+    elif [[ $status -eq 0 && $cleanup_status -ne 0 ]]; then
+        status=$cleanup_status
     fi
     exit "$status"
 }
 trap cleanup EXIT
 
-codesign --verify --strict --verbose=2 "$dmg_path"
-dmg_signature_details="$(codesign -dv --verbose=4 "$dmg_path" 2>&1 || true)"
+if ! /usr/bin/codesign --verify --strict --verbose=2 "$dmg_path"; then
+    echo "Release verification failed: the DMG has an invalid code signature." >&2
+    exit 1
+fi
+if ! dmg_signature_details="$(/usr/bin/codesign -dv --verbose=4 "$dmg_path" 2>&1)"; then
+    echo "Release verification failed: the DMG signature details could not be read." >&2
+    exit 1
+fi
 if ! grep -Fq 'Authority=Developer ID Application:' <<<"$dmg_signature_details" \
     || ! grep -Fq "TeamIdentifier=$expected_team_id" <<<"$dmg_signature_details"; then
     echo "Release verification failed: the DMG is not signed by the expected Developer ID team." >&2
     exit 1
 fi
 
-xcrun stapler validate "$dmg_path"
-spctl --assess --type open --context context:primary-signature --verbose=4 "$dmg_path"
+/usr/bin/xcrun stapler validate "$dmg_path"
+/usr/sbin/spctl --assess --type open --context context:primary-signature --verbose=4 "$dmg_path"
 
-hdiutil attach \
+/usr/bin/hdiutil attach \
     -readonly \
     -nobrowse \
     -noautoopen \
@@ -95,15 +133,27 @@ if [[ ! -L "$mount_directory/Applications" \
 fi
 
 app_path="$mount_directory/Rio.app"
-binary_path="$app_path/Contents/MacOS/Rio"
-info_plist="$app_path/Contents/Info.plist"
-if [[ ! -x "$binary_path" || ! -f "$info_plist" ]]; then
+contents_path="$app_path/Contents"
+macos_path="$contents_path/MacOS"
+binary_path="$macos_path/Rio"
+info_plist="$contents_path/Info.plist"
+if [[ ! -d "$app_path" || -L "$app_path" \
+    || ! -d "$contents_path" || -L "$contents_path" \
+    || ! -d "$macos_path" || -L "$macos_path" \
+    || ! -f "$binary_path" || ! -x "$binary_path" || -L "$binary_path" \
+    || ! -f "$info_plist" || -L "$info_plist" ]]; then
     echo "Release verification failed: the mounted DMG does not contain a valid Rio.app payload." >&2
     exit 1
 fi
 
-codesign --verify --deep --strict --verbose=2 "$app_path"
-signature_details="$(codesign -dv --verbose=4 "$app_path" 2>&1 || true)"
+if ! /usr/bin/codesign --verify --deep --strict --verbose=2 "$app_path"; then
+    echo "Release verification failed: Rio.app has an invalid code signature." >&2
+    exit 1
+fi
+if ! signature_details="$(/usr/bin/codesign -dv --verbose=4 "$app_path" 2>&1)"; then
+    echo "Release verification failed: Rio.app signature details could not be read." >&2
+    exit 1
+fi
 if ! grep -Fq 'Authority=Developer ID Application:' <<<"$signature_details" \
     || ! grep -Fq "TeamIdentifier=$expected_team_id" <<<"$signature_details"; then
     echo "Release verification failed: Rio.app is not signed by the expected Developer ID team." >&2
@@ -115,13 +165,15 @@ if ! grep -Eq 'flags=.*runtime' <<<"$signature_details"; then
 fi
 
 entitlements_plist="$work_directory/entitlements.plist"
-if ! codesign -d --entitlements - --xml "$app_path" >"$entitlements_plist"; then
+if ! /usr/bin/codesign -d --entitlements - --xml "$app_path" >"$entitlements_plist"; then
     echo "Release verification failed: Rio entitlements could not be read." >&2
     exit 1
 fi
+keychain_group_count="$(/usr/bin/plutil -extract keychain-access-groups raw -expect array -o - "$entitlements_plist" 2>/dev/null || true)"
 if [[ "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.app-sandbox' "$entitlements_plist" 2>/dev/null || true)" != true \
     || "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.device.audio-input' "$entitlements_plist" 2>/dev/null || true)" != true \
     || "$(/usr/libexec/PlistBuddy -c 'Print :com.apple.security.network.client' "$entitlements_plist" 2>/dev/null || true)" != true \
+    || "$keychain_group_count" != 1 \
     || "$(/usr/libexec/PlistBuddy -c 'Print :keychain-access-groups:0' "$entitlements_plist" 2>/dev/null || true)" != "$expected_team_id.com.rubensmelo.rio" ]]; then
     echo "Release verification failed: Rio does not contain the expected sandbox, audio, network, and Keychain entitlements." >&2
     exit 1
@@ -131,10 +183,13 @@ if /usr/libexec/PlistBuddy -c 'Print :com.apple.security.get-task-allow' "$entit
     exit 1
 fi
 
-bundle_identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$info_plist")"
-actual_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$info_plist")"
-actual_build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$info_plist")"
-plist_minimum_macos="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$info_plist")"
+if ! bundle_identifier="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$info_plist" 2>/dev/null)" \
+    || ! actual_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$info_plist" 2>/dev/null)" \
+    || ! actual_build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$info_plist" 2>/dev/null)" \
+    || ! plist_minimum_macos="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$info_plist" 2>/dev/null)"; then
+    echo "Release verification failed: Rio.app metadata could not be read from Info.plist." >&2
+    exit 1
+fi
 if [[ "$bundle_identifier" != com.rubensmelo.rio ]]; then
     echo "Release verification failed: unexpected bundle identifier $bundle_identifier." >&2
     exit 1
@@ -148,7 +203,11 @@ if [[ "$plist_minimum_macos" != "$expected_minimum_macos" ]]; then
     exit 1
 fi
 
-read -r -a architectures <<<"$(lipo -archs "$binary_path")"
+if ! architecture_list="$(/usr/bin/lipo -archs "$binary_path")"; then
+    echo "Release verification failed: Rio binary architectures could not be read." >&2
+    exit 1
+fi
+read -r -a architectures <<<"$architecture_list"
 if [[ ${#architectures[@]} -ne 2 \
     || ! " ${architectures[*]} " =~ " arm64 " \
     || ! " ${architectures[*]} " =~ " x86_64 " ]]; then
@@ -156,12 +215,12 @@ if [[ ${#architectures[@]} -ne 2 \
     exit 1
 fi
 
-binary_minimum_versions="$(otool -l "$binary_path" | awk '$1 == "minos" { print $2 }' | LC_ALL=C sort -u)"
+binary_minimum_versions="$(/usr/bin/otool -l "$binary_path" | awk '$1 == "minos" { print $2 }' | LC_ALL=C sort -u)"
 if [[ "$binary_minimum_versions" != "$expected_minimum_macos" ]]; then
     echo "Release verification failed: binary minimum macOS is '$binary_minimum_versions', expected '$expected_minimum_macos'." >&2
     exit 1
 fi
 
-spctl --assess --type execute --context context:primary-signature --verbose=4 "$app_path"
+/usr/sbin/spctl --assess --type execute --context context:primary-signature --verbose=4 "$app_path"
 
 echo "Rio $actual_version ($actual_build) Developer ID DMG verification passed."

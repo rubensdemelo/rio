@@ -1,4 +1,4 @@
-.PHONY: clean test build verify-signing verify-keychain-access final
+.PHONY: clean test build verify-signing verify-keychain-access verify-system-audio-capture final
 
 PROJECT = Rio.xcodeproj
 SCHEME = Rio
@@ -12,6 +12,8 @@ XCODEBUILD_FLAGS = $(XCODEBUILD_BASE_FLAGS)
 # profile, or certificate being available on the machine. Use ad-hoc signing by
 # default; a developer can opt into signed local validation explicitly.
 LOCAL_SIGNED ?= NO
+CAPTURE_CYCLES ?= 2
+CAPTURE_SECONDS ?= 3
 
 ifneq ($(wildcard Config/Development.xcconfig),)
 XCODEBUILD_FLAGS += -xcconfig Config/Development.xcconfig
@@ -53,6 +55,12 @@ ifeq ($(LOCAL_SIGNED),YES)
 else
 	@echo "Skipping built-app Keychain verification for the ad-hoc local build."
 endif
+
+verify-system-audio-capture:
+	@scripts/verify-system-audio-capture.sh \
+		.build/Iteration/Build/Products/Debug/Rio.app \
+		$(CAPTURE_CYCLES) \
+		$(CAPTURE_SECONDS)
 
 final:
 	@pkill -x Rio 2>/dev/null || true

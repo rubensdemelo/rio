@@ -21,9 +21,13 @@ CLI:
 scripts/setup-github-release.sh
 ```
 
-The wizard stores credentials as masked GitHub Actions secrets. Keep exported
+The wizard stores credentials as masked GitHub Actions secrets and the Team ID
+as a repository variable. It writes only non-secret file paths and identifiers
+to the ignored local `.env` file so a later run can reuse them; it never writes
+the certificate password or credential file contents there. Keep exported
 `.p12` and `.p8` files outside the repository and remove temporary local copies
-after setup.
+after setup. A run is reported complete only when every required GitHub value
+was written.
 
 ## Publish a release
 

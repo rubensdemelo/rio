@@ -59,6 +59,33 @@ xcodebuild -project Rio.xcodeproj -scheme Rio -configuration Release \
   -destination 'platform=macOS' test
 ```
 
+## Live system-audio capture check
+
+The Core Audio capture verifier exercises a signed app against synthetic audio
+on the current Mac. It needs an unlocked interactive session and System Audio
+Recording permission. Build with the stable development identity, then run the
+separate hardware check:
+
+```sh
+LOCAL_SIGNED=YES make build
+make verify-system-audio-capture
+```
+
+The default run performs two three-second capture cycles. To change the run
+length, pass `CAPTURE_CYCLES` and `CAPTURE_SECONDS`, keeping the total at or
+below one hour:
+
+```sh
+make verify-system-audio-capture CAPTURE_CYCLES=10 CAPTURE_SECONDS=30
+```
+
+The verifier generates a synthetic phrase, plays it quietly, and launches Rio
+in a dedicated capture-check mode. It reports content-free capture metrics,
+including timing and chunk counts. Temporary audio and process output are
+removed after normal completion; if Rio cannot be stopped, the script preserves
+the work directory for diagnosis. This manual check does not replace the
+one-hour soak and live interruption checks listed in the [GA release plan](GA_RELEASE_PLAN.md).
+
 ## Boundaries
 
 Keep product and architecture changes aligned with [the product definition](PRODUCT.md)

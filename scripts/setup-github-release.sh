@@ -184,11 +184,16 @@ finish() {
 # ──────────────────────────────────────────────────────────────────────────
 
 TOTAL_STAGES=5
+script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+repository_root="$(cd "$script_directory/.." && pwd -P)"
+cd "$repository_root"
+ENV_FILE="${ENV_FILE:-$repository_root/.env}"
 
 banner "Rio GitHub release setup"
 
 stage "GitHub — command-line access"
 say "The next stages write signing and notarization values to this repository's GitHub Actions secrets."
+repo_name=""
 if ! command -v gh >/dev/null 2>&1; then
   warn "GitHub CLI (gh) is not installed. Install it from https://cli.github.com/, then re-run this wizard."
 else
@@ -197,8 +202,15 @@ else
     pause "After gh auth login succeeds, press Enter"
   fi
   if gh auth status >/dev/null 2>&1; then
-    repo_name=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+    if ! repo_name=$(gh repo view --json nameWithOwner --jq .nameWithOwner 2>/dev/null); then
+      warn "Could not determine the current GitHub repository. Run this wizard from the repository root."
+      exit 1
+    fi
     note "GitHub repository: $repo_name"
+    if ! confirm "Configure release credentials for $repo_name?"; then
+      warn "Setup cancelled before writing any GitHub values."
+      exit 1
+    fi
   else
     warn "gh is still unauthenticated; secret writes will be skipped and listed at the end."
   fi
@@ -211,14 +223,22 @@ open_url "https://developer.apple.com/account/resources/certificates/list"
 step "Create a Developer ID Application certificate if you do not already have one."
 step "In Keychain Access, export that certificate together with its private key as a .p12 file."
 ask CERTIFICATE_PATH "Path to the exported .p12 file:"
-if [[ ! -f "$CERTIFICATE_PATH" ]]; then
-  warn "Certificate file not found: $CERTIFICATE_PATH"
+CERTIFICATE_PATH="${CERTIFICATE_PATH/#\~/$HOME}"
+if [[ ! -f "$CERTIFICATE_PATH" || ! -s "$CERTIFICATE_PATH" ]]; then
+  warn "Certificate file not found or empty: $CERTIFICATE_PATH"
   exit 1
 fi
+write_env CERTIFICATE_PATH "$CERTIFICATE_PATH"
 ask_secret CERTIFICATE_PASSWORD "Password used when exporting the .p12 file:"
+if [[ -z "$CERTIFICATE_PASSWORD" ]]; then
+  warn "The certificate export password cannot be empty."
+  exit 1
+fi
 if confirm "Upload this certificate and password to GitHub Actions secrets?"; then
   set_secret APPLE_DEVELOPER_ID_CERTIFICATE_BASE64 "$(base64 < "$CERTIFICATE_PATH" | tr -d '\n')"
   set_secret APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD "$CERTIFICATE_PASSWORD"
+else
+  SKIPPED+=("GitHub secrets APPLE_DEVELOPER_ID_CERTIFICATE_BASE64 and APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD (upload declined)")
 fi
 
 stage "Apple — Developer ID provisioning profile"
@@ -227,12 +247,16 @@ open_url "https://developer.apple.com/account/resources/profiles/list"
 step "Create the macOS Developer ID/distribution profile type offered for App ID com.rubensmelo.rio."
 step "Download the resulting .provisionprofile file."
 ask PROFILE_PATH "Path to the downloaded provisioning profile:"
-if [[ ! -f "$PROFILE_PATH" ]]; then
-  warn "Provisioning profile not found: $PROFILE_PATH"
+PROFILE_PATH="${PROFILE_PATH/#\~/$HOME}"
+if [[ ! -f "$PROFILE_PATH" || ! -s "$PROFILE_PATH" ]]; then
+  warn "Provisioning profile not found or empty: $PROFILE_PATH"
   exit 1
 fi
+write_env PROFILE_PATH "$PROFILE_PATH"
 if confirm "Upload this provisioning profile to GitHub Actions?"; then
   set_secret APPLE_PROVISIONING_PROFILE_BASE64 "$(base64 < "$PROFILE_PATH" | tr -d '\n')"
+else
+  SKIPPED+=("GitHub secret APPLE_PROVISIONING_PROFILE_BASE64 (upload declined)")
 fi
 
 stage "Apple — notarization API key"
@@ -241,16 +265,30 @@ open_url "https://appstoreconnect.apple.com/access/api"
 step "Create a team API key with the role Apple documents for notarization, then download the .p8 file."
 step "Copy the Key ID and Issuer ID; the .p8 file is available only at download time."
 ask APPLE_NOTARY_KEY_ID "App Store Connect API Key ID:"
-ask APPLE_NOTARY_ISSUER_ID "App Store Connect Issuer ID:"
-ask NOTARY_PRIVATE_KEY_PATH "Path to the downloaded .p8 file:"
-if [[ ! -f "$NOTARY_PRIVATE_KEY_PATH" ]]; then
-  warn "Notarization key file not found: $NOTARY_PRIVATE_KEY_PATH"
+if [[ -z "$APPLE_NOTARY_KEY_ID" ]]; then
+  warn "The App Store Connect API Key ID cannot be empty."
   exit 1
 fi
+ask APPLE_NOTARY_ISSUER_ID "App Store Connect Issuer ID:"
+if [[ -z "$APPLE_NOTARY_ISSUER_ID" ]]; then
+  warn "The App Store Connect Issuer ID cannot be empty."
+  exit 1
+fi
+write_env APPLE_NOTARY_KEY_ID "$APPLE_NOTARY_KEY_ID"
+write_env APPLE_NOTARY_ISSUER_ID "$APPLE_NOTARY_ISSUER_ID"
+ask NOTARY_PRIVATE_KEY_PATH "Path to the downloaded .p8 file:"
+NOTARY_PRIVATE_KEY_PATH="${NOTARY_PRIVATE_KEY_PATH/#\~/$HOME}"
+if [[ ! -f "$NOTARY_PRIVATE_KEY_PATH" || ! -s "$NOTARY_PRIVATE_KEY_PATH" ]]; then
+  warn "Notarization key file not found or empty: $NOTARY_PRIVATE_KEY_PATH"
+  exit 1
+fi
+write_env NOTARY_PRIVATE_KEY_PATH "$NOTARY_PRIVATE_KEY_PATH"
 if confirm "Upload the notarization credentials to GitHub Actions?"; then
   set_secret APPLE_NOTARY_KEY_ID "$APPLE_NOTARY_KEY_ID"
   set_secret APPLE_NOTARY_ISSUER_ID "$APPLE_NOTARY_ISSUER_ID"
   set_secret APPLE_NOTARY_PRIVATE_KEY_BASE64 "$(base64 < "$NOTARY_PRIVATE_KEY_PATH" | tr -d '\n')"
+else
+  SKIPPED+=("GitHub secrets APPLE_NOTARY_KEY_ID, APPLE_NOTARY_ISSUER_ID, and APPLE_NOTARY_PRIVATE_KEY_BASE64 (upload declined)")
 fi
 
 stage "GitHub — Apple team variable"
@@ -258,7 +296,28 @@ say "The Team ID is public build metadata, so Rio stores it as a GitHub Actions 
 open_url "https://developer.apple.com/account"
 step "Copy the Team ID shown in your Apple Developer account membership details."
 ask APPLE_TEAM_ID "Apple Team ID:"
-set_var APPLE_TEAM_ID "$APPLE_TEAM_ID"
+if [[ ! "$APPLE_TEAM_ID" =~ ^[A-Z0-9]{10}$ ]]; then
+  warn "The Apple Team ID must contain exactly 10 uppercase letters or digits."
+  exit 1
+fi
+write_env APPLE_TEAM_ID "$APPLE_TEAM_ID"
+if confirm "Set APPLE_TEAM_ID as a GitHub Actions repository variable?"; then
+  set_var APPLE_TEAM_ID "$APPLE_TEAM_ID"
+else
+  SKIPPED+=("GitHub variable APPLE_TEAM_ID (upload declined)")
+fi
 note "After setup, push a tag such as v1.0.0 to start the release workflow."
+
+if (( ${#SKIPPED[@]} )); then
+  printf '\n'
+  warn "Setup incomplete; these GitHub values were not written by this run. Verify they are configured before releasing:"
+  if (( ${#WRITTEN_ENV[@]} )); then
+    note "wrote ${#WRITTEN_ENV[@]} non-secret value(s) to $ENV_FILE: ${WRITTEN_ENV[*]}"
+  fi
+  for skipped in "${SKIPPED[@]}"; do
+    note "  - $skipped"
+  done
+  exit 1
+fi
 
 finish
