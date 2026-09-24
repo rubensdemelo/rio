@@ -20,7 +20,8 @@ same Rio bundle across ordinary rebuilds.
 1. Copy `Config/Development.xcconfig.example` to
    `Config/Development.xcconfig`.
 2. Sign in to Xcode with the Apple Developer account that owns team
-   `X59V2Q7WB7`.
+   `Q857P34S8A` (the `X59V2Q7WB7` suffix shown in the certificate name is not
+   the team identifier).
 
 `Config/Development.xcconfig` is ignored and must never be committed. Do not
 delete or recreate the stable development identity during normal testing.
