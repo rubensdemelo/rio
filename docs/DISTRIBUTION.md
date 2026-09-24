@@ -29,6 +29,13 @@ the certificate password or credential file contents there. Keep exported
 after setup. A run is reported complete only when every required GitHub value
 was written.
 
+## Continuous integration
+
+Pushes to `main` and pull requests targeting `main` run
+[`ci.yml`](../.github/workflows/ci.yml). It tests Rio and builds the Release
+configuration without Apple signing credentials, notarization, or DMG creation.
+The workflow has read-only repository permissions.
+
 ## Publish a release
 
 Push a semantic-version tag from `main`:
@@ -39,7 +46,9 @@ git push origin v1.2.3
 ```
 
 The release workflow runs only when that semantic-version tag is newly created.
-Moving or force-updating an existing tag does not generate another DMG.
+It first runs the same CI checks on the tagged commit, then signs, notarizes,
+and publishes the DMG. Moving or force-updating an existing tag does not
+generate another DMG.
 
 The release job uses a full checkout and rejects a tag whose commit is not an
 ancestor of `origin/main`. A semantic version alone is not release provenance.

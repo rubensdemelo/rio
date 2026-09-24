@@ -6,19 +6,29 @@ on:
       - "v*"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  ci:
+    name: Test and build the tagged commit
+    if: github.event.created == true
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
   build-release:
     # A tag push can also represent moving an existing tag. Release artifacts
     # are created only for the initial creation of a semantic-version tag.
     if: github.event.created == true
+    needs: ci
     runs-on: macos-26
     timeout-minutes: 20
+    permissions:
+      contents: write
     env:
       APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
       APPLE_DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_BASE64 }}
@@ -101,22 +111,6 @@ jobs:
 
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           cp "$RUNNER_TEMP/rio.provisionprofile" "$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.provisionprofile"
-
-      - name: Test Rio
-        shell: bash
-        run: |
-          set -euo pipefail
-          xcodebuild test \
-            -project Rio.xcodeproj \
-            -scheme Rio \
-            -configuration Debug \
-            -destination 'platform=macOS' \
-            -derivedDataPath "$RUNNER_TEMP/RioDerivedData" \
-            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
-            ONLY_ACTIVE_ARCH=YES \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
 
       - name: Archive Rio
         shell: bash
