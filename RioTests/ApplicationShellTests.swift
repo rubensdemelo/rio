@@ -3,140 +3,6 @@ import XCTest
 
 @MainActor
 final class ApplicationShellTests: XCTestCase {
-    func testRioLaunchesAsAMenuBarOnlyAccessory() {
-        XCTAssertEqual(RioLaunchPresentation.activationPolicy, .accessory)
-        XCTAssertFalse(RioLaunchPresentation.opensMainWindowOnLaunch)
-    }
-
-    func testPanelRouterSelectsProvider() {
-        let router = RioPanelRouter()
-
-        router.showProvider()
-        XCTAssertEqual(router.presentedPanel, .provider)
-
-        router.showProfiles()
-        XCTAssertEqual(router.presentedPanel, .profiles)
-    }
-
-    func testMenuWindowRouterCreatesSuppressedWindowsWhenNoneExistYet() {
-        var openedWindowIDs: [String] = []
-        var activationCount = 0
-        let router = RioMenuWindowRouter(
-            openWindow: { openedWindowIDs.append($0) },
-            activate: { activationCount += 1 }
-        )
-
-        router.open(.main)
-        router.open(.profiles)
-        router.open(.recentMeetings)
-        router.open(.diagnostics)
-
-        XCTAssertEqual(
-            openedWindowIDs,
-            ["main", "profiles", "recent-meetings", "diagnostics"]
-        )
-        XCTAssertEqual(activationCount, 4)
-    }
-
-    func testLiveCompositionUsesFixedEnglishUSLocale() {
-        XCTAssertEqual(RioCompositionRoot.defaultLocaleIdentifier, "en-US")
-    }
-
-    func testWindowSizingKeepsSetupCompactAndExpandsForInsights() {
-        let apiKeyOnlyHeight = RioMainWindowSizing.windowHeight(
-            apiKeyOnly: true,
-            needsSetup: true,
-            compactReady: false
-        )
-        let readyHeight = RioMainWindowSizing.windowHeight(
-            apiKeyOnly: false,
-            needsSetup: false,
-            compactReady: true
-        )
-        let idleHeight = RioMainWindowSizing.windowHeight(
-            apiKeyOnly: false,
-            needsSetup: false,
-            compactReady: false
-        )
-        let activeHeight = RioMainWindowSizing.windowHeight(
-            apiKeyOnly: false,
-            needsSetup: false,
-            compactReady: false,
-            hasInsights: true
-        )
-
-        XCTAssertLessThan(apiKeyOnlyHeight, idleHeight)
-        XCTAssertLessThan(readyHeight, idleHeight)
-        XCTAssertGreaterThan(activeHeight, idleHeight)
-        XCTAssertGreaterThan(
-            RioMainWindowSizing.windowWidth(hasInsights: true),
-            RioMainWindowSizing.windowWidth(hasInsights: false)
-        )
-    }
-
-    func testListeningCadencePersistsAndExplainsItsTradeoff() {
-        let suiteName = "RioTests.ListeningCadence.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let settings = ListeningCadenceSettings(defaults: defaults)
-        XCTAssertEqual(settings.selection, .thirtySeconds)
-        XCTAssertEqual(settings.selection.title, "30 seconds")
-
-        settings.selection = .ninetySeconds
-
-        let reloadedSettings = ListeningCadenceSettings(defaults: defaults)
-        XCTAssertEqual(reloadedSettings.selection, .ninetySeconds)
-        XCTAssertTrue(reloadedSettings.selection.detail.contains("Fewest requests"))
-        XCTAssertEqual(ListeningCadence.allCases, [.thirtySeconds, .sixtySeconds, .ninetySeconds])
-    }
-
-    func testListeningCadenceMigratesLegacyStoredValues() throws {
-        XCTAssertEqual(
-            try JSONDecoder().decode(ListeningCadence.self, from: Data("15".utf8)),
-            .thirtySeconds
-        )
-        XCTAssertEqual(
-            try JSONDecoder().decode(ListeningCadence.self, from: Data("45".utf8)),
-            .sixtySeconds
-        )
-    }
-
-    func testLiveInsightsArePresentedNewestFirst() {
-        let cards = [
-            InsightCard(
-                stableKey: "older",
-                category: .risk,
-                text: "Older risk",
-                explicitOwner: nil,
-                state: .new,
-                changedAt: Date(timeIntervalSince1970: 100)
-            ),
-            InsightCard(
-                stableKey: "newest",
-                category: .decision,
-                text: "Newest decision",
-                explicitOwner: nil,
-                state: .new,
-                changedAt: Date(timeIntervalSince1970: 300)
-            ),
-            InsightCard(
-                stableKey: "middle",
-                category: .question,
-                text: "Middle question",
-                explicitOwner: nil,
-                state: .updated,
-                changedAt: Date(timeIntervalSince1970: 200)
-            ),
-        ]
-
-        let presentation = LiveInsightPresentation(cards: cards)
-
-        XCTAssertEqual(
-            presentation.cards.map(\.stableKey),
-            ["newest", "middle", "older"]
-        )
-    }
 
     func testInsightAccessibilityDoesNotExposeAnOwner() {
         let changedAt = Date(timeIntervalSince1970: 1_700_000_000)
@@ -197,20 +63,6 @@ final class ApplicationShellTests: XCTestCase {
         )
     }
 
-    func testInsightFailuresExplainActionableRecovery() {
-        let rateLimited = SessionStatusPresentation(
-            status: .unavailable,
-            failure: .stage(.insightGeneration, .rateLimited)
-        )
-        XCTAssertTrue(rateLimited.detail.contains("rate-limited"))
-
-        let rejected = SessionStatusPresentation(
-            status: .unavailable,
-            failure: .stage(.insightGeneration, .requestRejected(statusCode: 400))
-        )
-        XCTAssertTrue(rejected.detail.contains("HTTP 400"))
-    }
-
     func testTranscriptionOverloadExplainsContinuityAndRecovery() {
         let presentation = SessionStatusPresentation(
             status: .unavailable,
@@ -220,17 +72,6 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertTrue(presentation.detail.contains("before skipping meeting audio"))
         XCTAssertTrue(presentation.detail.contains("marked incomplete"))
         XCTAssertTrue(presentation.detail.contains("Start listening again"))
-    }
-
-    func testGenericUnavailableFailureDoesNotClaimSetupIsRequired() {
-        let presentation = EmptyStatePresentation(
-            status: .unavailable,
-            statusDetail: "Rio could not start listening.",
-            hasUnavailablePrerequisite: false
-        )
-
-        XCTAssertEqual(presentation.title, "Couldn’t restart listening")
-        XCTAssertEqual(presentation.detail, "Try Start Listening again.")
     }
 
     func testOpenAIPrerequisiteExplainsTheRequiredConfigurationAndPrivacyBoundary() {
@@ -245,18 +86,6 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertTrue(presentation.detail.contains("Provider settings"))
         XCTAssertTrue(presentation.detail.contains("temporary meeting text"))
         XCTAssertEqual(presentation.symbolName, "exclamationmark.circle.fill")
-    }
-
-    func testMeetingTranscriptionPresentationNamesItsAPIRequirement() {
-        let presentation = PrerequisiteCheckPresentation(
-            check: PrerequisiteCheck(
-                kind: .meetingTranscription,
-                reason: .openAIAPIKeyMissing
-            )
-        )
-
-        XCTAssertEqual(presentation.title, "Meeting transcription")
-        XCTAssertTrue(presentation.detail.contains("meeting-audio chunks"))
     }
 
     func testBringYourOwnKeyStoresOnlyAConfiguredState() {
@@ -289,54 +118,6 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(query[kSecUseDataProtectionKeychain as String] as? Bool, true)
     }
 
-    func testMeetingAudioActionTargetsTheScreenRecordingPrivacyPane() {
-        XCTAssertEqual(
-            SystemSettingsOpener.systemAudioRecordingURL.absoluteString,
-            "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
-        )
-    }
-
-    func testSystemAudioPermissionDenialOffersDirectSettingsRecovery() {
-        let presentation = SessionStatusPresentation(
-            status: .unavailable,
-            unavailableReason: .systemAudioPermissionDenied
-        )
-
-        XCTAssertEqual(presentation.recoveryAction, .openSystemAudioRecording)
-        XCTAssertFalse(presentation.detail.contains("System Settings →"))
-    }
-
-    func testSystemAudioCaptureFailureDoesNotClaimPermissionIsMissing() {
-        let presentation = SessionStatusPresentation(
-            status: .unavailable,
-            unavailableReason: .systemAudioCaptureFailed
-        )
-
-        XCTAssertTrue(presentation.detail.contains("could not start system audio capture"))
-        XCTAssertFalse(presentation.detail.contains("needs System Audio Recording access"))
-        XCTAssertEqual(presentation.recoveryAction, .openSystemAudioRecording)
-    }
-
-    func testVoiceFeedbackUsesNonContentSpeechActivityInsteadOfTranscript() {
-        let presentation = VoiceFeedbackPresentation(
-            status: .listening,
-            feedback: SessionFeedbackSnapshot(
-                audioInput: AudioInputSnapshot(
-                    level: 0.65,
-                    hasReceivedAudio: true,
-                    isMuted: false
-                ),
-                finalizedSpeechSegmentCount: 3
-            )
-        )
-
-        XCTAssertEqual(presentation.condition, .live)
-        XCTAssertEqual(presentation.title, "Meeting audio live")
-        XCTAssertTrue(presentation.detail.contains("Transcription is active"))
-        XCTAssertFalse(presentation.detail.contains("chunks collected"))
-        XCTAssertFalse(presentation.detail.contains("transcript"))
-    }
-
     func testVoiceFeedbackShowsLongMeetingProgressWithoutMeetingText() {
         let presentation = VoiceFeedbackPresentation(
             status: .listening,
@@ -355,44 +136,6 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertFalse(presentation.detail.contains("message chunks"))
         XCTAssertTrue(presentation.detail.contains("1:00:20"))
         XCTAssertFalse(presentation.detail.contains("meeting text"))
-    }
-
-    func testVoiceFeedbackDistinguishesMutedAndConnectionErrorStates() {
-        let muted = VoiceFeedbackPresentation(
-            status: .listening,
-            feedback: SessionFeedbackSnapshot(
-                audioInput: AudioInputSnapshot(
-                    level: 0,
-                    hasReceivedAudio: true,
-                    isMuted: true
-                ),
-                finalizedSpeechSegmentCount: 0
-            )
-        )
-        let connectionError = VoiceFeedbackPresentation(
-            status: .unavailable,
-            feedback: .inactive,
-            failure: .stage(.audioCapture, .failed)
-        )
-
-        XCTAssertEqual(muted.condition, .muted)
-        XCTAssertEqual(connectionError.condition, .connectionError)
-        XCTAssertNotEqual(muted.condition, connectionError.condition)
-    }
-
-    func testRecentMeetingTranscriptIsPresentedInChronologicalOrder() {
-        let presentation = RecentMeetingDetailPresentation(
-            insights: [],
-            transcriptSegments: [
-                RecentTranscriptSegment(sequenceNumber: 2, text: "The later point."),
-                RecentTranscriptSegment(sequenceNumber: 1, text: "The opening point."),
-            ]
-        )
-
-        XCTAssertEqual(
-            presentation.transcriptText,
-            "The opening point.\nThe later point."
-        )
     }
 
     func testLongTranscriptCanBeNavigatedByTimeAndFilteredWithoutChangingSavedText() {

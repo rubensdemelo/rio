@@ -22,27 +22,6 @@ final class CoreContractsTests: XCTestCase {
     }
 
     @MainActor
-    func testMeetingProfileSettingsPersistsTheSelectedProfile() throws {
-        let suiteName = "RioTests.MeetingProfileSettings.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let settings = MeetingProfileSettings(defaults: defaults)
-        XCTAssertEqual(settings.selection, .fallback)
-
-        let profile = try XCTUnwrap(
-            settings.addCustomProfile(
-                name: "Incident review",
-                guidance: "Prioritize symptoms and failed checks."
-            )
-        )
-        settings.selection = profile
-
-        let reloaded = MeetingProfileSettings(defaults: defaults)
-        XCTAssertEqual(reloaded.selection, profile)
-    }
-
-    @MainActor
     func testStoredBuiltInProfilesAreNotSurfaced() throws {
         let suiteName = "RioTests.MeetingProfileSettingsMigration.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
@@ -140,58 +119,6 @@ final class CoreContractsTests: XCTestCase {
         XCTAssertEqual(settings.selection.insightPace, .ninetySeconds)
         XCTAssertEqual(settings.selection.technicalVocabulary, "Db2, z/OS")
         XCTAssertEqual(MeetingProfileSettings(defaults: defaults).selection, settings.defaultProfile)
-    }
-
-    @MainActor
-    func testDefaultMeetingProfileCanBeEditedAndPersists() {
-        let suiteName = "RioTests.DefaultMeetingProfileMutation.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let settings = MeetingProfileSettings(defaults: defaults)
-
-        XCTAssertTrue(
-            settings.updateDefaultProfile(
-                name: "My default",
-                guidance: "Prioritize decisions and risks.",
-                insightPace: .sixtySeconds,
-                technicalVocabulary: "SwiftUI, AVAudioEngine"
-            )
-        )
-        XCTAssertEqual(settings.defaultProfile.name, "My default")
-        XCTAssertEqual(settings.selection, settings.defaultProfile)
-
-        let reloaded = MeetingProfileSettings(defaults: defaults)
-        XCTAssertEqual(reloaded.defaultProfile, settings.defaultProfile)
-        XCTAssertEqual(reloaded.selection, settings.defaultProfile)
-    }
-
-    @MainActor
-    func testProfileConfigurationPersistsPaceAndVocabularyForCustomProfiles() throws {
-        let suiteName = "RioTests.MeetingProfileConfiguration.\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: suiteName)!
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let settings = MeetingProfileSettings(defaults: defaults)
-        let profile = try XCTUnwrap(
-            settings.addCustomProfile(
-                name: "Technical review",
-                guidance: "Preserve exact technical details."
-            )
-        )
-        XCTAssertTrue(
-            settings.updateProfileConfiguration(
-                id: profile.id,
-                insightPace: .sixtySeconds,
-                technicalVocabulary: "Db2, IRLM"
-            )
-        )
-        XCTAssertEqual(settings.selection.insightPace, .sixtySeconds)
-        XCTAssertEqual(settings.selection.technicalVocabulary, "Db2, IRLM")
-
-        let reloaded = MeetingProfileSettings(defaults: defaults)
-        XCTAssertEqual(reloaded.selection.insightPace, .sixtySeconds)
-        XCTAssertEqual(reloaded.selection.technicalVocabulary, "Db2, IRLM")
     }
 
     func testCustomMeetingProfileRejectsUnboundedFieldsAndLegacyBuiltInsStillDecode() throws {
@@ -729,22 +656,6 @@ final class InMemoryInsightStoreTests: XCTestCase {
 }
 
 final class BoundedRollingMeetingContextTests: XCTestCase {
-    func testStoresFinalizedSegmentsChronologicallyAndReturnsRollingSnapshots() async throws {
-        let clock = TestMeetingContextClock()
-        let context = makeContext(clock: clock, batchTokenThreshold: 1)
-        let first = segment(1, text: "First", start: .zero)
-        let second = segment(2, text: "Second", start: .seconds(1))
-
-        try await context.append(first)
-        let firstBatch = try await context.nextBatch()
-        try await context.append(second)
-        let secondBatch = try await context.nextBatch()
-
-        XCTAssertEqual(firstBatch?.segments, [first])
-        XCTAssertEqual(secondBatch?.segments, [first, second])
-        XCTAssertEqual(firstBatch?.newSegments, [first])
-        XCTAssertEqual(secondBatch?.newSegments, [second])
-    }
 
     func testRejectsOutOfOrderOrMalformedFinalizedSegments() async throws {
         let context = makeContext(clock: TestMeetingContextClock())

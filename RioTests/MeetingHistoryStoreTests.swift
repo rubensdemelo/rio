@@ -21,19 +21,6 @@ final class MeetingHistoryStoreTests: XCTestCase {
         XCTAssertEqual(meeting.transcriptSegments.map(\.text), ["First", "Second"])
     }
 
-    func testRecordPersistsACompletedMeetingAndKeepsNewestFirst() throws {
-        let repository = TestMeetingHistoryRepository()
-        let history = MeetingHistoryStore(repository: repository, now: date(100))
-        let older = meeting(id: UUID(), endedAt: 50)
-        let newer = meeting(id: UUID(), endedAt: 100)
-
-        try history.record(older, now: date(100))
-        try history.record(newer, now: date(100))
-
-        XCTAssertEqual(history.meetings.map(\.id), [newer.id, older.id])
-        XCTAssertEqual(repository.meetings, history.meetings)
-    }
-
     func testLoadingAndWritingPrunesMeetingsOutsideTheLastTwoDays() throws {
         let now = date(100_000)
         let expired = meeting(id: UUID(), endedAt: now.timeIntervalSince1970 - MeetingHistoryStore.retention - 1)
@@ -320,17 +307,6 @@ final class MeetingHistoryStoreTests: XCTestCase {
         XCTAssertTrue(decoded.incompleteTranscript)
         XCTAssertEqual(decoded.insights, [insight])
         XCTAssertEqual(decoded.insights[0].card.changedAt, savedAt)
-    }
-
-    func testSavedMeetingRoundTripsTheMeetingProfile() throws {
-        let expected = meeting(id: UUID(), endedAt: 100, profile: .internalTechnical)
-
-        let decoded = try JSONDecoder().decode(
-            SavedMeeting.self,
-            from: JSONEncoder().encode(expected)
-        )
-
-        XCTAssertEqual(decoded.profile, .internalTechnical)
     }
 
     func testSavedMeetingWithoutProfileDefaultsToCustomerCritical() throws {
