@@ -1,136 +1,15 @@
-# AGENTS.md
+# Engineering agents
 
-## Project goal
+Use agents when a bounded task benefits from independent discovery, implementation, or review. The primary agent owns decisions and the final answer. Keep ownership aligned with Rio's native macOS architecture and existing file boundaries.
 
-Rio is a deliberately simple macOS app that listens to meetings and shows useful live insights. The insight stream is the product.
+## Roles and ownership
 
-Audio capture and rolling speech-to-text are implementation stages for the live insight stream. Rio is not a note-taking app or meeting recorder; it does retain a read-only finalized transcript with each meeting for two days.
+- `scout`: trace a requested behavior through audio capture, transcription, context management, insight generation, persistence, and SwiftUI presentation; return evidence and the narrowest useful file scope without editing.
+- `builder`: own one bounded layer or feature. Coordinate interface changes across capture, speech recognition, model requests, session state, persistence, and UI instead of duplicating responsibility across layers.
+- `reviewer`: independently review the diff for cancellation and cleanup, bounded in-memory processing, persisted-data lifecycle, privacy of meeting content, API-key handling, permission/unavailable states, and action-item owner attribution. Use synthetic meeting content in checks and examples.
 
-Read these documents before changing product behavior or architecture:
+## Delegation and coordination
 
-- `IDEA.md`
-- `docs/PRODUCT.md`
-- `docs/ARCHITECTURE.md`
-- `docs/ROADMAP.md`
+Assign exclusive file ownership, including generated files. Coordinate work sharing build output or the running app; only the primary agent should own final app validation. Preserve unrelated changes and follow the repository's project and verification guidance. Builders return uncommitted work; the primary agent handles authorized staging, commits, and pushes.
 
-When documents conflict, `docs/PRODUCT.md` defines product behavior and `docs/ARCHITECTURE.md` defines the current technical direction. Update the relevant documents in the same change whenever a product or architecture decision changes.
-
-## MVP boundaries
-
-The first MVP:
-
-- Targets macOS 26+.
-- Uses native Swift and SwiftUI.
-- Uses native Core Audio for system/meeting audio capture.
-- Sends bounded in-memory meeting-audio chunks to OpenAI's transcription API.
-- Uses OpenAI's Responses API for meeting understanding from bounded temporary text.
-- Shows concise live insight cards.
-- Keeps audio, rolling temporary text, and model sessions in memory only for the active session; retains finalized transcript segments and generated insight cards locally for no more than two days.
-
-Do not add the following without an explicit product decision and matching documentation update:
-
-- A live transcript, transcript editor, transcript export, or speaker labels.
-- Note-taking features.
-- Audio recording, playback, or persistent audio storage.
-- Transcript export, insight history older than two days, or a database.
-- Apple Intelligence or another on-device language-model dependency.
-- Accounts, calendars, CRM integrations, team workspaces, or cloud synchronization.
-- Speaker identification or diarization.
-- A Rust core, C ABI, or cross-platform abstraction.
-- Windows or Linux support.
-
-## Product behavior
-
-Keep the interaction small and obvious:
-
-- One primary start/stop listening action.
-- A clear listening, processing, interrupted, unavailable, or stopped status.
-- Insight cards for important points, decisions, actions, questions, and risks.
-- Existing cards update or resolve instead of accumulating duplicates.
-- Retain action-item owner metadata only when the temporary meeting text explicitly assigns that person to the same action. Never infer an owner from a name mention alone. Keep compact MVP card text free of person attribution, even when grounded owner metadata exists.
-- Do not expose live temporary transcript text in the interface; expose saved transcript text only through the read-only Recent Meetings view.
-
-Prefer removing complexity over adding configuration. New controls and settings need a concrete MVP requirement.
-
-## Architecture rules
-
-- Keep the MVP as a native Swift application unless a documented requirement proves that insufficient.
-- Keep capture, speech recognition, context management, insight generation, and UI state behind separate interfaces.
-- Keep audio callbacks minimal. Do not perform file I/O, model requests, UI work, allocation-heavy processing, or blocking synchronization in a capture callback.
-- Use structured concurrency and propagate session cancellation through the entire pipeline.
-- Serialize context batching and insight generation so model requests cannot race.
-- Apply SwiftUI state changes on the main actor.
-- Use OpenAI Responses API strict JSON Schema output for insight generation.
-- Put developer-authored rules in model instructions and untrusted meeting text in prompts.
-- Validate generated output before applying it to UI state.
-- Check OpenAI API-key, network, hardware, and permission availability explicitly.
-- Represent expected unavailable states in the UI instead of treating them as generic errors.
-
-## Data lifecycle and privacy
-
-Meeting data is ephemeral except for the bounded two-day local meeting history:
-
-- Never intentionally write audio to disk.
-- Keep audio queues bounded by duration or frame count.
-- Feed only finalized cloud-transcription results into the insight context.
-- Keep temporary text bounded by age and model token budget.
-- Bound the number of active insight cards.
-- Clear capture buffers, temporary text, in-flight API requests, and insight state when listening stops.
-- Perform the same cleanup after errors and cancellation.
-- Persist only finalized transcript segments and generated insight cards (category, state, text, and save time) in a bounded local history that expires after two days; never persist audio, rolling temporary text, or guessed owner metadata.
-- Store a user-provided API key only in the macOS Keychain; never use app preferences, source, an app bundle, logs, or an environment-variable runtime dependency for credentials.
-- Keep real meeting audio, transcript text, prompts containing real meeting content, and insight text out of logs, analytics, crash annotations, fixtures, and snapshots. Persist real meeting content only in the approved two-day local history, and never persist audio. Synthetic meeting text and generated audio are permitted in test fixtures. Never include secrets in any of these outputs.
-
-Diagnostics may contain non-content metadata such as timing, queue depth, availability state, and error codes.
-
-## Dependencies
-
-Prefer Apple SDK frameworks and the standard library. Add a third-party dependency only when it materially reduces risk or complexity and the same result is not reasonably available from the platform.
-
-Document why each dependency is needed. Avoid dependencies for basic state management, networking, logging, or UI utilities.
-
-## Testing and verification
-
-Every implementation change should be verified in proportion to its risk.
-
-Prioritize tests for:
-
-- Rolling-context age, size, and token limits.
-- Insight parsing, validation, deduplication, updates, and resolution.
-- The rule against guessed action-item owners.
-- Session cancellation and cleanup from every state.
-- Permission denial and unavailable transcription or OpenAI API configuration.
-- Bounded queues and overload behavior.
-- Recovery from capture interruption and device changes.
-
-Use synthetic meeting text and generated audio fixtures. Do not add real meeting content to the repository.
-
-Before considering a milestone complete:
-
-- Run relevant unit and integration tests.
-- Build the macOS target with warnings treated seriously.
-- Exercise start, stop, restart, denial, interruption, and model-unavailable paths.
-- Confirm that no audio or rolling temporary transcript content was persisted or logged, and that the only persisted meeting-derived content is the bounded two-day meeting history.
-- Update `docs/ROADMAP.md` to reflect verified work only.
-
-Hardware-dependent capture and one-hour soak tests must be identified clearly when they cannot run in automated environments.
-
-## Change discipline
-
-- Keep changes focused on the current roadmap milestone.
-- Do not claim unimplemented or unverified work as complete.
-- Preserve the simple product boundary when proposing abstractions or future-proofing.
-- Add comments for non-obvious constraints and decisions, not line-by-line narration.
-- Keep user-facing language concise and distinguish the live temporary speech-to-text pipeline from the completed read-only transcript history.
-- Use the default signed `make final` for interactive development; it runs tests, verifies the app's signature and Keychain round-trip, then launches the app. Keep `LOCAL_SIGNED=NO make final` as isolated validation only; it does not stop or launch Rio and its output is not installable.
-- After implementation edits and review fixes have settled, the primary agent runs `make final` before committing or reporting completion. Builders run focused checks and hand their changes back to the primary agent.
-- After a completed app-code change, follow the `install` skill so the validated build reaches the user's `/Applications` copy. Its installer preflights the staged app's signature and Keychain round-trip before replacing the current copy. Documentation-only and workflow-only changes do not require an app install.
-- Serialize validation that shares build output or controls the running app. Only the primary agent runs `make final`, which verifies first and launches only after all checks pass.
-- Do not report an implementation change complete if `make final` fails or has not run against the final changes.
-
-## Git workflow
-
-- Work directly on `main` by default.
-- Create a separate branch only when the user explicitly requests one.
-- The primary agent owns staging, committing, and pushing. After required review and validation are complete, commit the focused changes and push them to the current branch without asking for separate confirmation for each step. Builders return uncommitted changes for integration and review.
-- Keep branch creation, pull requests, and merging opt-in; perform them only when the user explicitly requests them.
+Agents report concrete findings, exact focused checks they ran, and checks blocked or deferred. The primary agent runs task-relevant final verification only when requested or explicitly required by the task; it is not a default for every prompt.
