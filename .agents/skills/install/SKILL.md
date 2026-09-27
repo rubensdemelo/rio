@@ -11,23 +11,18 @@ completed change and release.
 
 ## Workflow
 
-1. Use the existing validated app when one is available at
-   `.build/Iteration/Build/Products/Debug/Rio.app`. If it is missing or stale,
-   run `make final` first; the default gate signs it, verifies Keychain access,
-   and launches it. Do not install an unbuilt source tree or an unsigned
-   validation build.
-2. Run `scripts/install-rio.sh <source-app>` to stage the app, verify its code
-   signature, and perform the synthetic Keychain round-trip before stopping Rio
-   or replacing `/Applications/Rio.app`. If either check fails, leave the
-   existing installation running and intact. On success, launch the installed
-   copy and confirm its executable exists. The target is the known Rio app
-   bundle only; do not modify other applications.
-
-For a specific release or archive build, use its explicit `.app` path as the
-source instead of silently choosing another artifact. Preserve the release
-artifact's signing; do not re-sign or alter the bundle during installation.
+1. For the latest source, run `make install` to build the signed arm64 Debug
+   app, verify its signature and synthetic Keychain round-trip, and
+   transactionally replace and launch `/Applications/Rio.app`. Use `make final`
+   to run the test suite before that same install flow.
+2. For a specific archive or release app, run
+   `scripts/install-rio.sh <source-app>`. It stages and verifies the app before
+   stopping Rio or replacing the installed copy. If verification fails, the
+   existing installation remains intact. Preserve the artifact's signing; do
+   not re-sign or alter the bundle during installation.
 
 The opt-in `LOCAL_SIGNED=NO make final` mode uses a separate build directory,
-does not stop or launch Rio, and skips Keychain verification. It is only for
-validation on machines without a development signing identity; never install
-or interactively launch that ad-hoc artifact.
+runs tests and builds an ad-hoc app without stopping, installing, or launching
+Rio. It is only for validation on machines without a development signing
+identity; never install or interactively launch that artifact. `make install`
+requires the signed Debug build.

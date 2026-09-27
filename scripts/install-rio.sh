@@ -6,7 +6,7 @@ source_app="${1:-.build/Iteration/Build/Products/Debug/Rio.app}"
 installed_app="/Applications/Rio.app"
 script_directory="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
-for required_command in codesign ditto mktemp mv open pkill rm; do
+for required_command in ditto mktemp mv open pkill rm; do
     if ! command -v "$required_command" >/dev/null 2>&1; then
         echo "Rio installation failed: required command '$required_command' is unavailable." >&2
         exit 1
@@ -68,10 +68,6 @@ fi
 
 if [[ ! -d "$staged_app" || ! -x "$staged_app/Contents/MacOS/Rio" ]]; then
     echo "Rio installation failed: staged executable is missing; the existing installation was preserved." >&2
-    exit 1
-fi
-if ! codesign --verify --deep --strict "$staged_app"; then
-    echo "Rio installation failed: staged code signature is invalid; the existing installation was preserved." >&2
     exit 1
 fi
 if ! "$script_directory/verify-keychain-access.sh" "$staged_app"; then

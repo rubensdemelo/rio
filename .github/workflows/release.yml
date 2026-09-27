@@ -4,27 +4,65 @@ on:
   push:
     tags:
       - "v*"
+  release:
+    types:
+      - published
 
 permissions:
   contents: read
 
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
+  check-release:
+    name: Check for an existing DMG
+    if: github.event_name != 'push' || github.event.created == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    outputs:
+      asset_exists: ${{ steps.asset.outputs.exists }}
+    steps:
+      - name: Skip if this release already has its DMG
+        id: asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tags must look like v1.2.3; received $GITHUB_REF_NAME." >&2
+            exit 1
+          fi
+          version="${GITHUB_REF_NAME#v}"
+
+          asset_name="Rio-$version.dmg"
+          if gh release view "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json assets \
+            --jq '.assets[].name' 2>/dev/null | grep -Fxq "$asset_name"; then
+            echo "Release $GITHUB_REF_NAME already has $asset_name; skipping rebuild."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No published $asset_name found; release build will run."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
   ci:
     name: Test and build the tagged commit
-    if: github.event.created == true
+    needs: check-release
+    if: needs.check-release.outputs.asset_exists != 'true'
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
 
   build-release:
-    # A tag push can also represent moving an existing tag. Release artifacts
-    # are created only for the initial creation of a semantic-version tag.
-    if: github.event.created == true
-    needs: ci
+    if: needs.check-release.outputs.asset_exists != 'true'
+    needs: [check-release, ci]
     runs-on: macos-26
     timeout-minutes: 20
     permissions:
@@ -130,7 +168,7 @@ jobs:
             ENABLE_HARDENED_RUNTIME=YES \
             MARKETING_VERSION="$RELEASE_VERSION" \
             CURRENT_PROJECT_VERSION="$RELEASE_BUILD" \
-            ARCHS='arm64 x86_64' \
+            ARCHS=arm64 \
             ONLY_ACTIVE_ARCH=NO \
             SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
             COMPILER_INDEX_STORE_ENABLE=NO
@@ -164,7 +202,14 @@ jobs:
         run: |
           set -euo pipefail
           test -f "$DMG_PATH"
-          gh release create "$GITHUB_REF_NAME" "$DMG_PATH" --title "Rio $RELEASE_VERSION" --generate-notes
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$DMG_PATH" --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$GITHUB_REF_NAME" "$DMG_PATH" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Rio $RELEASE_VERSION" \
+              --generate-notes
+          fi
 
       - name: Remove signing material
         if: always()

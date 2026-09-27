@@ -191,8 +191,9 @@ violation, not a reproduced hardware dropout.
   change, as required by `AGENTS.md`. The remediation passes 174 tests, the
   warnings-as-errors build, development-signature verification, the built-app
   Keychain round trip, and the launch smoke check.
-- [ ] Build the universal Release target with compiler warnings treated as errors;
-  verify both architectures and the actual signed candidate's Keychain path.
+- [ ] Build the arm64-only Release target with compiler warnings treated as
+  errors; verify its architecture and the actual signed candidate's Keychain
+  path.
 - [ ] Exercise live system-audio grant/denial/revocation, actual capture through
   transcription/cards, stop/restart, device changes, sleep/wake, offline service,
   invalid keys, overload, and stop during each pipeline stage using synthetic audio.

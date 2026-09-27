@@ -35,8 +35,9 @@ Verified on macOS 26.6.2:
 - The development-signed application passes entitlement verification. A clean launch leaves Rio running as a menu-bar-only accessory without opening or restoring a window, activating over Finder, or appearing in the Dock/app switcher.
 - The built application launches and exits cleanly without creating audio or transcript files; its inspected container contains only app preferences and the bounded local insight-history file after cards are generated.
 - The repository includes a repeatable Release workflow that accepts only a tag
-  from `origin/main`, builds a universal Developer ID app, signs and notarizes
-  the drag-installable DMG, and verifies the mounted payload before publishing.
+  from `origin/main`, builds an arm64-only Developer ID app for Apple Silicon,
+  signs and notarizes the drag-installable DMG, and verifies the mounted payload
+  before publishing.
 
 Not yet verified:
 
@@ -145,8 +146,8 @@ frame-less starts exhaust the same bound. The one-hour hardware soak and live
 interruption checks remain outstanding.
 
 Release packaging automation is checked in at `.github/workflows/release.yml`
-with `scripts/package-dmg.sh`, `scripts/verify-release.sh`, and the one-time
-credential setup wizard `scripts/setup-github-release.sh`. Historical v1.0.1
+with `scripts/package-dmg.sh` and `scripts/verify-release.sh`; GitHub Actions
+credentials are configured once with the GitHub CLI. Historical v1.0.1
 and v1.0.2 releases confirm that notarization credentials were configured, but
 the audited v1.0.2 outer DMG was unsigned. The hardened workflow now signs and
 assesses the outer image and verifies its read-only mounted payload. A signed,

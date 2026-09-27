@@ -208,10 +208,8 @@ if ! architecture_list="$(/usr/bin/lipo -archs "$binary_path")"; then
     exit 1
 fi
 read -r -a architectures <<<"$architecture_list"
-if [[ ${#architectures[@]} -ne 2 \
-    || ! " ${architectures[*]} " =~ " arm64 " \
-    || ! " ${architectures[*]} " =~ " x86_64 " ]]; then
-    echo "Release verification failed: Rio must contain exactly the arm64 and x86_64 architectures." >&2
+if [[ ${#architectures[@]} -ne 1 || "${architectures[0]}" != arm64 ]]; then
+    echo "Release verification failed: Rio must contain only the arm64 architecture." >&2
     exit 1
 fi
 

@@ -14,20 +14,23 @@ The repository needs these GitHub Actions credentials:
 - App Store Connect notarization API key, key ID, and issuer ID
 - Apple Team ID repository variable
 
-Run the interactive setup wizard after installing and authenticating the GitHub
-CLI:
+After installing and authenticating the GitHub CLI, run these commands from the
+repository root. The three credential files are base64-encoded while piping directly
+to `gh`, so their contents are not written into the repository or shell history:
 
 ```sh
-scripts/setup-github-release.sh
+base64 < /path/to/developer-id.p12 | tr -d '\n' | gh secret set APPLE_DEVELOPER_ID_CERTIFICATE_BASE64
+gh secret set APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD
+base64 < /path/to/rio.provisionprofile | tr -d '\n' | gh secret set APPLE_PROVISIONING_PROFILE_BASE64
+gh secret set APPLE_NOTARY_KEY_ID
+gh secret set APPLE_NOTARY_ISSUER_ID
+base64 < /path/to/AuthKey_XXXXXXXXXX.p8 | tr -d '\n' | gh secret set APPLE_NOTARY_PRIVATE_KEY_BASE64
+gh variable set APPLE_TEAM_ID
 ```
 
-The wizard stores credentials as masked GitHub Actions secrets and the Team ID
-as a repository variable. It writes only non-secret file paths and identifiers
-to the ignored local `.env` file so a later run can reuse them; it never writes
-the certificate password or credential file contents there. Keep exported
-`.p12` and `.p8` files outside the repository and remove temporary local copies
-after setup. A run is reported complete only when every required GitHub value
-was written.
+`gh secret set` and `gh variable set` prompt for each value. Keep the `.p12`,
+provisioning profile, and `.p8` files outside the repository; remove temporary
+local copies after setup.
 
 ## Continuous integration
 
@@ -38,17 +41,19 @@ The workflow has read-only repository permissions.
 
 ## Publish a release
 
-Push a semantic-version tag from `main`:
+Push a semantic-version tag from `main` or publish a GitHub Release for that
+tag. Either action runs the release workflow:
 
 ```sh
 git tag v1.2.3
 git push origin v1.2.3
 ```
 
-The release workflow runs only when that semantic-version tag is newly created.
-It first runs the same CI checks on the tagged commit, then signs, notarizes,
-and publishes the DMG. Moving or force-updating an existing tag does not
-generate another DMG.
+For a new tag, Actions runs the same CI checks on the tagged commit, then signs,
+notarizes, and creates a GitHub Release with the DMG. Publishing a release for an
+existing tag also runs the workflow and attaches a DMG to that release. If the
+release already has its versioned DMG, the workflow skips CI and the build. Tag
+updates are ignored.
 
 The release job uses a full checkout and rejects a tag whose commit is not an
 ancestor of `origin/main`. A semantic version alone is not release provenance.
@@ -56,7 +61,7 @@ ancestor of `origin/main`. A semantic version alone is not release provenance.
 The workflow in [`.github/workflows/release.yml`](../.github/workflows/release.yml)
 then:
 
-1. Builds the universal Release app.
+1. Builds the arm64-only Release app for Apple Silicon.
 2. Signs it with Developer ID Application and Hardened Runtime.
 3. Packages and Developer ID-signs a drag-installable DMG.
 4. Submits the DMG to Apple for notarization.
@@ -80,7 +85,7 @@ The packaging and verification helpers are:
 stapled ticket, and Gatekeeper disk-image assessment. It then mounts the image
 read-only, always detaches it on exit, and requires exactly `Rio.app` plus an
 `Applications` symlink. The mounted app must have the expected Developer ID
-team, Hardened Runtime, production entitlements, `arm64` and `x86_64` slices,
+team, Hardened Runtime, production entitlements, the `arm64` architecture,
 release version/build, macOS 26.0 minimum, and a successful Gatekeeper
 assessment.
 

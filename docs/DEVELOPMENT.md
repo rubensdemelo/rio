@@ -26,27 +26,37 @@ same Rio bundle across ordinary rebuilds.
 `Config/Development.xcconfig` is ignored and must never be committed. Do not
 delete or recreate the stable development identity during normal testing.
 
-## Verify a local change
+## Build, install, and verify a local change
 
-Run the complete local gate from the repository root:
+Build and install the signed Debug app from the repository root:
+
+```sh
+make install
+```
+
+This builds for Apple Silicon, stages the app, verifies its signature and
+Keychain round-trip, then replaces and launches `/Applications/Rio.app`. The
+installer preserves the current app if staging or verification fails. Use this
+when you want the latest build without running the full test suite.
+
+Run the tests before installing the latest build:
 
 ```sh
 make final
 ```
 
-This runs the test suite, builds the Debug app with the stable Apple Development
-identity, verifies its signature and Keychain round-trip, then launches it. This
-keeps routine rebuilds attached to the same macOS Keychain and privacy identity
-so API keys and permissions continue to work.
+This runs the complete test suite, then follows the same signed build and
+installation path as `make install`. Keep the stable Apple Development identity
+so macOS continues to associate Keychain access and System Audio Recording
+permission with the same app.
 
 If no local signing identity is available, run `LOCAL_SIGNED=NO make final`.
 That uses a separate `.build/UnsignedValidation` directory for tests and an
-ad-hoc build, and does not stop, install, or launch Rio. Such a build cannot
-access the app's Keychain and must not be used interactively. The installer
-also runs the Keychain round-trip before replacing `/Applications/Rio.app` and
-preserves the existing installation if verification fails. GitHub release
-builds always require the configured Developer ID signing material. Use
-`make clean` when a fully clean rebuild is needed.
+ad-hoc build; it does not stop, install, or launch Rio. Such a build cannot
+access the app's Keychain and must not be used interactively. `make install`
+requires the signed Debug build. GitHub release builds always require the
+configured Developer ID signing material. Use `make clean` when a fully clean
+rebuild is needed.
 
 The full Xcode commands, when needed for focused diagnosis, are:
 

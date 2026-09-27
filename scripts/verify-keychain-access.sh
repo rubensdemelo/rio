@@ -66,7 +66,7 @@ if ! keychain_group_count="$(/usr/bin/plutil -extract keychain-access-groups raw
     exit 1
 fi
 
-output="$($executable_path --verify-keychain-access 2>&1)" || {
+output="$("$executable_path" --verify-keychain-access 2>&1)" || {
     echo "Keychain verification failed: the built Rio app could not complete a Keychain round-trip." >&2
     exit 1
 }
