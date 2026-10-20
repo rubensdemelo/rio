@@ -59,7 +59,7 @@ check covered code it did not see.
 
 User-facing text: English. Rio is for the owner's personal use.
 
-Project-owned: .agents/skills/claude-handoff .agents/skills/codebase-design .agents/skills/diagnosing-bugs .agents/skills/domain-modeling .agents/skills/git-guardrails-claude-code .agents/skills/grill-me .agents/skills/grill-with-docs .agents/skills/grilling .agents/skills/handoff .agents/skills/improve-codebase-architecture .agents/skills/install .agents/skills/loop-me .agents/skills/migrate-to-shoehorn .agents/skills/prototype .agents/skills/resolving-merge-conflicts .agents/skills/scaffold-exercises .agents/skills/setup-pre-commit .agents/skills/setup-ts-deep-modules .agents/skills/tdd .agents/skills/teach .agents/skills/to-questionnaire .agents/skills/wait-what .agents/skills/wizard .agents/skills/writing-beats .agents/skills/writing-for-agents .agents/skills/writing-fragments .agents/skills/writing-shape .github/workflows/ci.yml .github/workflows/release.yml
+Project-owned: none
 
 ## Rio project rules
 
