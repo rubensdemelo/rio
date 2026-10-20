@@ -34,10 +34,10 @@ one project at a time.
    finds why each item exists and classifies it (project-specific, promote,
    retire) and returns the report and proposal texts, which you write to
    `docs/research/compliance-<date>.md` and `~/git/factory/proposals/`.
-   Then ask the owner per item: keep (add the path to the `Project-owned:`
-   line below the factory block in `AGENTS.md`), retire (delete it; history
-   keeps it) or stop the adoption. A promote item is kept as project-owned
-   until its proposal lands. Contract text cannot
+   Then ask the owner per item: keep (the owner allows it on the factory
+   dashboard, or adds its line to `allowed/<name>.txt` in the factory; you
+   never edit `allowed/`), retire (delete it; history keeps it) or stop the
+   adoption. A promote item is kept (allowed) until its proposal lands. Contract text cannot
    be kept: it is removed or the adoption stops. Report gaps as a checklist
    with a fix per item.
 3. **Migrate.** Run `~/git/factory/scripts/adopt.sh` for the mechanical part.
@@ -59,12 +59,14 @@ one project at a time.
    risk) unless the compliance report already filed one for the same need,
    and keep the item in the project meanwhile; the adoption continues and
    the factory changes on its own schedule. If no, keep it in the project
-   and record it in `AGENTS.md` below the block (a path goes on the
-   `Project-owned:` line; a rule or convention in the project text). Never edit factory files
-   directly.
+   and record it: a path is kept by the owner allowing it on the factory
+   dashboard (or adding its line to `allowed/<name>.txt` in the factory); a
+   rule or convention goes in `AGENTS.md` below the block. Never edit
+   factory files directly, `allowed/` included.
 5. **Re-audit.** Run `~/git/factory/scripts/doctor.sh` for this project
    (`bash ~/git/factory/scripts/doctor.sh <path>` when the adoption ran in a
-   clone, and name that path in the record); it must show no `ADDED` line.
+   clone, and name that path in the record; the clone keeps the project's
+   directory name, since `allowed/` is keyed by it); it must show no `ADDED` line.
    Walk the lifecycle once (`/spec` to `/ship`) on a small real change
    before declaring the project adopted.
 

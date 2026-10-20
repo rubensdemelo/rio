@@ -15,9 +15,10 @@ Adopt this project: $ARGUMENTS
    `bash ~/git/factory/scripts/adopt.sh <project>`; it never edits factory
    files, it writes `~/git/factory/proposals/<slug>.md` instead. When the
    adoption ran in a clone, the re-audit is
-   `bash ~/git/factory/scripts/doctor.sh <path>` on that clone.
+   `bash ~/git/factory/scripts/doctor.sh <path>` on that clone, which must
+   keep the project's directory name (`allowed/` is keyed by it).
 3. Report the audit checklist with each item done, deferred or proposed, the
-   additions (each doctor `ADDED` line and whether the owner kept it on the
-   `Project-owned:` line, retired it, or removed it when it was contract
+   additions (each doctor `ADDED` line and whether the owner allowed it on
+   the factory dashboard, retired it, or removed it when it was contract
    text), the proposals written, and whether the lifecycle walk-through
    (`/spec` to `/ship` on a small change) is done or pending. Commits only via `/review`.

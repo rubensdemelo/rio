@@ -46,7 +46,8 @@ is to tell which.
       would change the call.
    4. It is tied to this product alone (a platform, a data source, a store,
       a regulator, a language toolchain no other product has): **project-
-      specific**. Give the exact `Project-owned:` entry and a one-line reason.
+      specific**. Give the exact `allowed/` line the owner would add
+      (`<path> <YYYY-MM-DD> <one-line reason>`); never write it yourself.
    5. Otherwise it is a need every product has or will have (CI for a
       language, a review aid, a skill that encodes good practice):
       **promote**. Draft a factory proposal (problem, proposal, which
@@ -56,7 +57,8 @@ is to tell which.
       lands, the item stays in the project as project-specific.
 4. **Return** two things. First, the report body for
    `docs/research/compliance-<date>.md`: one table (item, kind, why it
-   exists with evidence, classification, recommended action), then the
+   exists with evidence, classification, recommended action; the item cell
+   is the doctor's path in backticks, the dashboard reads it), then the
    proposals drafted, then what you could not determine. Second, each
    proposal body with its slug. The caller writes both; the owner decides;
    nothing happens until they act.

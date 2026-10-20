@@ -14,8 +14,10 @@ Compliance: $ARGUMENTS (default: this project)
    `~/git/factory/proposals/<slug>.md`, unless a proposal with that slug or
    the same problem already exists; then say so instead.
 3. Report the table: item, why it exists, classification (project-specific,
-   promote, retire) and the recommended action, with the `Project-owned:`
-   entries to add and the proposals written. Only those two kinds of file
-   are created here; nothing is deleted, acknowledged or committed. The
-   owner applies the decisions: `Project-owned:` edits and removals go
-   through `/review`; proposals wait for the factory.
+   promote, retire) and the recommended action, with the `allowed/` line
+   (`<path> <date> <reason>`) the owner would add for each item kept, and
+   the proposals written. Only those two kinds of file are created here;
+   nothing is deleted, allowed or committed, and the factory's `allowed/`
+   files are never edited. The owner applies the decisions: allows on the
+   factory dashboard, removals go through `/review`, proposals wait for the
+   factory.

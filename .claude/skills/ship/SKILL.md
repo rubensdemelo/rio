@@ -30,7 +30,8 @@ unasked. If a command is refused by permissions, stop and name the step.
    out; split the push" (or its file-cap message) and its list of largest
    blobs; the owner decides how to split. Any other exit: stop with its
    output.
-2. **Gate.** `bash scripts/factory/gate.sh`. Exit 0 or stop.
+2. **Gate.** Run `bash scripts/factory/gate.sh` as is (no redirect; the
+   report quotes its last lines). Exit 0 or stop.
 3. **Review.** Unless the `reviewer` approved this exact range this session,
    run it on `origin/main..HEAD` with the file list. BLOCKED: stop.
 4. **Push.** `git push origin main` (cloud: `git push origin HEAD:main`).
@@ -48,7 +49,8 @@ unasked. If a command is refused by permissions, stop and name the step.
    job ended with the "Superseded" notice: `main` moved while it queued and
    the run for the newer commit deploys; say so and follow that run instead.
    No `deploy.yml`: say the push is done and nothing deploys.
-6. **Smoke.** `bash scripts/factory/smoke.sh` unless `--no-smoke`.
+6. **Smoke.** Run `bash scripts/factory/smoke.sh` as is (no redirect; the
+   report quotes its last lines) unless `--no-smoke`.
 7. **Release.** Only with `--release`; never otherwise. In a cloud session
    stop here and name the command to run on the Mac
    (`/ship --release <version>`). One release, one verified commit: the SHA

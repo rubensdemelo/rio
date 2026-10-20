@@ -34,11 +34,22 @@ summarized here.
   architecture, types, a check whose error names the fix, a test, then a rule.
   Record it in the project's "Rule / Enforced by" table.
 
+## Additions
+
+Anything you add beyond the factory (skills, agents, scripts, workflows,
+hooks) shows on the factory dashboard as an addition. Say in your report and
+commit message what you added and why. The owner allows, promotes or retires
+it there. Never edit the factory's `allowed/` files or the project's
+`AGENTS.md` to acknowledge it.
+
 ## The six scripts
 
 Every project has `scripts/factory/{bootstrap,format,test,gate,smoke,rollback}.sh`.
 Use them instead of remembering commands. `gate.sh` exit 0 means shippable.
-`rollback.sh` runs only from `/rollback`, never unasked.
+`rollback.sh` runs only from `/rollback`, never unasked. Run contract scripts
+exactly as the skill writes them (`bash scripts/factory/gate.sh`), never
+wrapped in a shell, with a redirect, a pipe or an env prefix: the harness's
+persisted permissions match only that exact form.
 
 ## User-facing text
 
