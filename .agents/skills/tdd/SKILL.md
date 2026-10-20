@@ -7,7 +7,7 @@ description: Test-driven development. Use when the user wants to build features 
 
 TDD is the red → green loop. This skill is the reference that makes that loop produce tests worth keeping: what a good test is, where tests go, the anti-patterns, and the rules of the loop. Every section applies on every cycle — consult them before and during the loop, not after.
 
-When exploring the codebase, read `CONTEXT.md` (if it exists) so test names and interface vocabulary match the project's domain language, and respect ADRs in the area you're touching.
+For Rio, read `docs/PRODUCT.md`, `docs/ARCHITECTURE.md`, relevant ADRs, and `docs/DEVELOPMENT.md`; consult `CONTEXT.md` only if present. Use synthetic meeting content and the relevant `scripts/factory/test.sh` suite. This reference supports the agreed `/spec` → `/plan` → `/build` work; `/review` owns the commit decision.
 
 ## What a good test is
 
@@ -19,7 +19,7 @@ See [tests.md](tests.md) for examples and [mocking.md](mocking.md) for mocking g
 
 A **seam** is the public boundary you test at: the interface where you observe behavior without reaching inside. Tests live at seams, never against internals.
 
-**Test only at pre-agreed seams.** Before writing any test, write down the seams under test and confirm them with the user. No test is written at an unconfirmed seam. You can't test everything — agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
+**Test only at pre-agreed seams.** Use the seams already agreed in the spec or plan. When a new seam requires a design decision, write it down and resolve that decision before adding its test. You can't test everything — agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
 
 Ask: "What's the public interface, and which seams should we test?"
 
@@ -35,4 +35,4 @@ When the shape of that interface is itself in question — how deep the module i
 
 - **Red before green.** Write the failing test first, then only enough code to pass it. Don't anticipate future tests or add speculative features.
 - **One slice at a time.** One seam, one test, one minimal implementation per cycle.
-- **Refactoring is not part of the loop.** It belongs to the review stage (see the `code-review` skill), not the red → green implementation cycle.
+- **Keep refactoring bounded.** Preserve passing behavior tests during any planned refactor. Use `/review` for independent review before a commit; reviewers report findings, and the builder applies fixes before re-review.

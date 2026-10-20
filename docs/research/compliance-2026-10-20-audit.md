@@ -1,5 +1,11 @@
 # Rio additions audit (2026-10-20)
 
+Historical audit and proposals, captured before commit `d51d42c`. Its working-tree,
+ownership and completion descriptions below are not current status. The
+recommendations were assessed individually in
+[the adoption reconciliation](adoption-reconciliation-2026-10-20.md); they are
+not instructions to delete retained skills or weaken the native CI/release path.
+
 Scope: `/Users/rubens/git/rio`, read only. Command: `bash ~/git/factory/scripts/doctor.sh /Users/rubens/git/rio`. Written as `-audit` because `compliance-2026-10-20.md` is another session's uncommitted draft with different conclusions (it keeps 27 skills).
 
 **The doctor shows no `ADDED` lines, but that is not a clean result.** The uncommitted `AGENTS.md:62` lists all 29 additions on its `Project-owned:` line. The adoption session wrote that line, not the owner. This audit judges those 29 plus three things the doctor does not scan: the 8 skills deleted in the working tree (still in `HEAD`), `skills-lock.json`, and the replaced `research` skill. No contract text was found.

@@ -5,7 +5,7 @@ description: Create exercise directory structures with sections, problems, solut
 
 # Scaffold Exercises
 
-Create exercise directory structures that pass `pnpm ai-hero-cli internal lint`, then commit with `git commit`.
+Use this utility only in an explicitly selected course workspace that already provides `pnpm ai-hero-cli internal lint`. Rio is a native Swift project: do not add course tooling or Node dependencies to make this utility applicable. Create the requested exercise structure and run the workspace's checks. Return uncommitted work; any repository commit requires `/review` and only the reviewed task files.
 
 ## Directory naming
 

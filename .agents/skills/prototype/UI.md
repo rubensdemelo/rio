@@ -11,9 +11,13 @@ If the question is about logic/state rather than what something looks like — w
 - "Try a different layout for the settings screen."
 - Any time the user would otherwise spend a day picking between three vague mockups in their head.
 
+## Target applicability
+
+The route and URL-switcher instructions below apply to an explicitly selected web workspace. For Rio's SwiftUI screens, use an isolated local HTML mockup with synthetic content to compare layouts, or a planned native experiment outside the production target. Do not add a web runtime to Rio or use real meeting data. Browser output does not validate native behavior.
+
 ## Two sub-shapes — strongly prefer sub-shape A
 
-A UI prototype is much easier to judge when it's **butting up against the rest of the app** — real header, real sidebar, real data, real density. A throwaway route on its own is a vacuum: every variant looks fine in isolation. Default to sub-shape A whenever there's a plausible existing page to host the variants. Only reach for sub-shape B if the prototype genuinely has no nearby home.
+A UI prototype is much easier to judge when it's **butting up against the rest of the app** — representative header, sidebar, synthetic data, and realistic density. A throwaway route on its own is a vacuum: every variant looks fine in isolation. Default to sub-shape A whenever there's a plausible existing page to host the variants. Only reach for sub-shape B if the prototype genuinely has no nearby home.
 
 ### Sub-shape A — adjustment to an existing page (preferred)
 
@@ -97,12 +101,7 @@ Surface the URL (and the `?variant=` keys). The user will flip through whenever 
 
 ### 6. Capture the answer and clean up
 
-Once a variant has won, capture the answer — which variant and why — then capture the prototype the way the [SKILL](SKILL.md) describes. Fold the winner into the real code and move the rest onto the throwaway branch, not into main:
-
-- **Sub-shape A** — fold the winner into the existing page; drop the losing variants and the switcher from main.
-- **Sub-shape B** — promote the winning variant to a real route; drop the throwaway route and the switcher from main.
-
-The full set of variants is the primary source, so it lands on the throwaway branch, not the bin — variant components and the switcher left in the main branch rot fast and confuse the next reader.
+Record which variant won and why in `docs/research` or the relevant spec, with the local artifact path, as the [SKILL](SKILL.md) describes. Keep losing variants and the switcher in the isolated artifact. Implement the chosen design through the agreed factory plan with tests and independent `/review`; do not promote the experiment directly into production.
 
 ## Anti-patterns
 

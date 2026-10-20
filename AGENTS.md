@@ -75,6 +75,21 @@ runs unsigned Debug tests and a Release build without installing the app.
 `make install` and `make final` retain the signed interactive installation flow.
 Only the primary agent owns final app/hardware validation when required.
 
+For instruction/tooling-only changes, run
+`python3 -m unittest discover -s scripts/tests -p 'test_*.py'` and the affected
+static checks. `test.sh` takes an XCTest selector, never a filename. Native
+behavior changes also need the relevant XCTest suite; shipping always needs
+the full gate. If sandbox restrictions prevent native validation, report it
+as blocked rather than substituting the tooling checks for a passing gate.
+
+Retained project skills are vendored here and adapted to this workflow.
+Update them through reviewed local changes, not the retired bulk skill
+installer. Their applicability rules preserve the native app: Node/course
+utilities require an explicitly selected compatible workspace, prototypes are
+disposable research artifacts, and installation requires an owner request.
+Current adoption decisions and the disposition of earlier audit proposals are
+in `docs/research/adoption-reconciliation-2026-10-20.md`.
+
 Native app builds require macOS 26 and Xcode. Linux/cloud tooling checks do not
 validate the app. Main pushes verify code; explicit releases still publish
 notarized Apple Silicon DMGs. Smoke checks the local installed signed app,
@@ -101,6 +116,7 @@ code/API research still cites primary sources and records findings in
 | Preserve existing behavior during features and fixes | Focused regression tests, full shipping gate, independent review |
 | No shipping without passing checks | `scripts/factory/gate.sh` and `/ship` |
 | Factory-only pushes skip macOS builds | `scripts/ci-plan.py` and its range-classification tests |
+| Retained skill dependencies resolve before shipping | `scripts/check-agent-instructions.py`, tooling tests, and the CI plan job |
 | Review privacy, cleanup, bounds and owner attribution | `REVIEW.local.md` and existing RioTests suites |
 | Signed app required for interactive installation | `scripts/install-rio.sh` and `scripts/verify-keychain-access.sh` |
 

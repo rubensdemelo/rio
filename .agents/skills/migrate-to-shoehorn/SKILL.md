@@ -17,10 +17,14 @@ Problems with `as` in tests:
 - Must manually specify target type
 - Double-as (`as unknown as Type`) for intentionally wrong data
 
+## Applicability
+
+Use only for explicitly selected TypeScript tests in an existing Node workspace. Rio's Swift tests are not applicable; do not add Node tooling or dependencies to Rio. Use the target workspace's package manager, install this test-only helper as a development dependency, and run its relevant type checks and tests. Return uncommitted changes for `/review`.
+
 ## Install
 
 ```bash
-npm i @total-typescript/shoehorn
+npm install --save-dev @total-typescript/shoehorn
 ```
 
 ## Migration patterns
@@ -110,7 +114,7 @@ getUser(fromAny({ body: { id: 123 } }));
    - Do they need to pass intentionally wrong data for error testing?
 
 2. **Install and migrate**:
-   - [ ] Install: `npm i @total-typescript/shoehorn`
+   - [ ] Install: `npm install --save-dev @total-typescript/shoehorn`
    - [ ] Find test files with `as` assertions: `grep -r " as [A-Z]" --include="*.test.ts" --include="*.spec.ts"`
    - [ ] Replace `as Type` with `fromPartial()`
    - [ ] Replace `as unknown as Type` with `fromAny()`

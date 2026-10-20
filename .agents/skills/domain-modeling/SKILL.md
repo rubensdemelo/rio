@@ -7,6 +7,8 @@ description: Build and sharpen a project's domain model. Use when the user wants
 
 Actively build and sharpen the project's domain model as you design. This is the *active* discipline — challenging terms, inventing edge-case scenarios, and writing the glossary and decisions down the moment they crystallise. (Merely *reading* `CONTEXT.md` for vocabulary is not this skill — that's a one-line habit any skill can do. This skill is for when you're changing the model, not just consuming it.)
 
+In Rio, read `docs/PRODUCT.md`, `docs/ARCHITECTURE.md`, and the relevant ADRs first. Keep each definition in its existing owning document. Create a separate glossary only for agreed terminology not already owned there, and add pointers rather than duplicate definitions. Read `docs/PRIVACY.md` before meeting-data changes and use synthetic examples.
+
 ## File structure
 
 Most repos have a single context:
@@ -16,8 +18,8 @@ Most repos have a single context:
 ├── CONTEXT.md
 ├── docs/
 │   └── adr/
-│       ├── 0001-event-sourced-orders.md
-│       └── 0002-postgres-for-write-model.md
+│       ├── 001-event-sourced-orders.md
+│       └── 002-postgres-for-write-model.md
 └── src/
 ```
 
@@ -37,7 +39,7 @@ If a `CONTEXT-MAP.md` exists at the root, the repo has multiple contexts. The ma
 │       └── docs/adr/
 ```
 
-Create files lazily — only when you have something to write. If no `CONTEXT.md` exists, create one when the first term is resolved. If no `docs/adr/` exists, create it when the first ADR is needed.
+Create files lazily — only when you have something to write. If no `CONTEXT.md` exists, first check the existing project documents as described above. If no `docs/adr/` exists, create it when the first ADR is needed.
 
 ## During the session
 
@@ -59,7 +61,7 @@ When the user states how something works, check whether the code agrees. If you 
 
 ### Update CONTEXT.md inline
 
-When a term is resolved, update `CONTEXT.md` right there. Don't batch these up — capture them as they happen. Use the format in [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md).
+When a term is resolved, update its owning document right there. Use `CONTEXT.md` only when it is the agreed glossary location. Don't batch these up — capture them as they happen. Use the format in [CONTEXT-FORMAT.md](./CONTEXT-FORMAT.md).
 
 `CONTEXT.md` should be totally devoid of implementation details. Do not treat `CONTEXT.md` as a spec, a scratch pad, or a repository for implementation decisions. It is a glossary and nothing else.
 
@@ -71,4 +73,4 @@ Only offer to create an ADR when all three are true:
 2. **Surprising without context** — a future reader will wonder "why did they do it this way?"
 3. **The result of a real trade-off** — there were genuine alternatives and you picked one for specific reasons
 
-If any of the three is missing, skip the ADR. Use the format in [ADR-FORMAT.md](./ADR-FORMAT.md).
+If any of the three is missing, skip the ADR. Use [ADR-FORMAT.md](./ADR-FORMAT.md), which defers to Rio's `docs/adr/TEMPLATE.md`.

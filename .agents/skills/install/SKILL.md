@@ -1,13 +1,14 @@
 ---
 name: install
-description: Install and launch the current Rio macOS app after a development change or release build.
+description: Install and launch the current signed Rio macOS app when the owner requests installation, refresh, or launch.
 ---
 
 # Install Rio
 
 Use this skill when the user asks to install, refresh, or launch the current Rio
-build. Rio is still under development, so installation is expected after every
-completed change and release.
+build. A completed change or release alone does not request installation. The
+primary agent owns interactive app and hardware validation. Read
+`docs/DEVELOPMENT.md` and `docs/DISTRIBUTION.md` before running this flow.
 
 ## Workflow
 

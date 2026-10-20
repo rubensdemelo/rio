@@ -11,4 +11,8 @@ Native tests fail clearly outside macOS rather than report a partial gate as
 passed. Run only the tooling tests on Linux with
 `python3 -m unittest discover -s scripts/tests -p 'test_*.py'`.
 Signing and interactive installation remain in the existing Makefile.
+Instruction/tooling-only changes use that Python suite on any supported host;
+`test.sh` accepts XCTest selectors rather than affected file paths. The suite
+also checks retained instruction dependencies. To run just that check, use
+`python3 scripts/check-agent-instructions.py`.
 See `docs/DEVELOPMENT.md` and `docs/DISTRIBUTION.md` for acceptance boundaries.

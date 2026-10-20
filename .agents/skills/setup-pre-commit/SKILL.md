@@ -5,6 +5,10 @@ description: Set up Husky pre-commit hooks with lint-staged (Prettier), type che
 
 # Setup Pre-Commit Hooks
 
+## Applicability
+
+Use this utility only for an explicitly selected Node workspace with an existing `package.json`. Rio uses native factory scripts: preserve those checks and do not initialize a Node project or replace the factory hooks. Changes to a compatible workspace follow its agreed plan and review process.
+
 ## What This Sets Up
 
 - **Husky** pre-commit hook
@@ -16,7 +20,7 @@ description: Set up Husky pre-commit hooks with lint-staged (Prettier), type che
 
 ### 1. Detect package manager
 
-Check for `package-lock.json` (npm), `pnpm-lock.yaml` (pnpm), `yarn.lock` (yarn), `bun.lockb` (bun). Use whichever is present. Default to npm if unclear.
+Check for `package-lock.json` (npm), `pnpm-lock.yaml` (pnpm), `yarn.lock` (yarn), `bun.lockb` (bun). Use whichever is present. If the package manager is unclear, inspect the existing workspace configuration before installing anything.
 
 ### 2. Install dependencies
 
@@ -78,11 +82,9 @@ Only create if no Prettier config exists. Use these defaults:
 - [ ] `prettier` config exists
 - [ ] Run `npx lint-staged` to verify it works
 
-### 8. Commit
+### 8. Review
 
-Stage all changed/created files and commit with message: `Add pre-commit hooks (husky + lint-staged + prettier)`
-
-This will run through the new pre-commit hooks — a good smoke test that everything works.
+Return the verified changes uncommitted. Use `/review` before any commit, stage only the reviewed task files, and preserve existing hooks and unrelated changes. Do not create a commit merely to smoke-test hooks.
 
 ## Notes
 

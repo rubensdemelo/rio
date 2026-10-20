@@ -38,6 +38,19 @@ UI acceptance and provider quality still require the applicable manual checks.
 Use synthetic content and add a regression test for changed behavior. Rio has
 no configured formatter; `format.sh` intentionally preserves existing style.
 
+For changes confined to instructions or tooling, run:
+
+```sh
+python3 -m unittest discover -s scripts/tests -p 'test_*.py'
+python3 scripts/check-agent-instructions.py
+```
+
+The instruction check catches explicit missing skill/resource dependencies and
+obsolete skill-installer ownership; it does not assess every natural-language
+instruction. Independent review still checks conflicts with the factory and
+Rio's native boundaries. The CI plan job runs this check even when a
+factory-only push skips macOS. Tooling results do not replace the native gate.
+
 New features follow `/spec`, `/plan`, `/build`, `/review`, `/ship`; one-sentence
 fixes can skip the spec/plan ceremony. Keep focused tests quick during iteration
 and retain the full gate before shipping. `/ship --release` remains separate.

@@ -5,7 +5,7 @@ description: Set up Claude Code hooks to block dangerous git commands (push, res
 
 # Setup Git Guardrails
 
-Sets up a PreToolUse hook that intercepts and blocks dangerous git commands before Claude executes them.
+Sets up an opt-in PreToolUse hook that intercepts and blocks selected git commands before Claude executes them. It is an additional local restriction, not Rio's shipping workflow. The all-push policy also blocks `/ship` pushes; explain that effect when the owner selects this policy. Retaining the skill does not activate the hook.
 
 ## What Gets Blocked
 
@@ -82,7 +82,7 @@ If the settings file already exists, merge the hook into existing `hooks.PreTool
 
 ### 4. Ask about customization
 
-Ask if user wants to add or remove any patterns from the blocked list. Edit the copied script accordingly.
+Ask which optional restrictions the user wants. Keep the project's mandatory protections, including the force-push prohibition. Preserve an explicitly chosen all-push block; a later shipping request is not permission to silently disable it. Edit only the installed copy, not this skill during its execution.
 
 ### 5. Verify
 
@@ -92,4 +92,4 @@ Run a quick test:
 echo '{"tool_input":{"command":"git push origin main"}}' | <path-to-script>
 ```
 
-Should exit with code 2 and print a BLOCKED message to stderr.
+Should exit with code 2 and print a BLOCKED message naming the rule only, without echoing the command or its arguments. Verify allowed read-only commands still pass. Return installation changes uncommitted for `/review`.

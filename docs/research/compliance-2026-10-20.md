@@ -1,5 +1,10 @@
 # Rio adoption additions audit — 2026-10-20
 
+Historical retention decision, captured before commit `d51d42c`. It did not
+resolve all dependencies or conflicting retained instructions. See
+[the adoption reconciliation](adoption-reconciliation-2026-10-20.md) for current
+decisions and `docs/ops/factory-adoption.md` for verification status.
+
 Scope: `/Users/rubens/git/rio`. Independent read-only audit by the
 `adoption_additions` agent; decisions and writes by the primary agent under the
 owner's adoption-resumption instruction. No application behavior changed.
@@ -66,8 +71,8 @@ visible to doctor.
 - `.github/workflows/ci.yml`: shared macOS gate called by `deploy.yml` and
   `release.yml`; retains pull-request checks.
 - `.github/workflows/release.yml`: tag/release-triggered provenance checks,
-  signing, notarization and Apple Silicon DMG publication. The owner explicitly
-  retained this release behavior during adoption.
+  signing, notarization and Apple Silicon DMG publication, retained under the
+  behavior-preserving adoption decision and reaffirmed by the repair request.
 
 Some retained opt-in utilities (`prototype`, `resolving-merge-conflicts`,
 `scaffold-exercises`, `setup-pre-commit`) describe branch/commit operations.

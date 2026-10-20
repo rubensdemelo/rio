@@ -34,6 +34,10 @@ Four rules, all `error`:
 
 Layering (which packages may depend on which) is a *different* concern and is left as a commented stub in the config for this repo to fill in.
 
+## Applicability
+
+Use only for an explicitly selected TypeScript workspace with an existing `package.json` and TypeScript configuration. Rio's native app is not such a workspace; do not introduce Node or TypeScript tooling into it. Preserve existing factory checks and use `/review` for any commit.
+
 ## Steps
 
 ### 1. Detect the environment
@@ -66,7 +70,7 @@ Copy [`dependency-cruiser.config.cjs`](./dependency-cruiser.config.cjs) to the r
 
 ### 5. Scaffold the example package
 
-Create a committed `<packages-root>/example/` as a copy-me template:
+Create an uncommitted `<packages-root>/example/` as a copy-me template within the agreed scope:
 
 - `index.ts` — an entry point. Export one function that delegates to an internal file (so the package is visibly *deep*, not a pass-through).
 - `lib/impl.ts` — an internal file in a **subfolder**, imported by `index.ts`, not reachable from outside.
@@ -90,7 +94,7 @@ This is the completion criterion for the whole skill — a config that doesn't f
 
 Write a `README.md` **in the packages folder** (`<packages-root>/README.md`) — next to the packages it governs — covering: the `src/packages/<name>/` layout (entry points at the root, `lib/` for implementation, `tests/` for tests), "import only through a package's entry points (its root files)", and how to run `lint:boundaries`. **Discourage barrel files** explicitly — expose several small entry points instead of re-exporting a whole subtree through one index. Keep it to the copy-me snippet plus the four rules in one paragraph each.
 
-Then add a **context pointer** to it from the repo's agent-instructions file — `CLAUDE.md` if present, else `AGENTS.md` (create `AGENTS.md` if neither exists). One line is enough, e.g. `Packages are deep modules — see [src/packages/README.md](./src/packages/README.md) before adding or importing one.` This is what makes an agent discover the boundary rule instead of tripping over it.
+Then add a **context pointer** to it from the repo's agent-instructions file — `CLAUDE.md` if present, else `AGENTS.md` (create `AGENTS.md` if neither exists). Keep the pointer outside any factory-managed block. One line is enough, e.g. `Packages are deep modules — see [src/packages/README.md](./src/packages/README.md) before adding or importing one.` This is what makes an agent discover the boundary rule instead of tripping over it.
 
 **Done when:** `<packages-root>/README.md` exists and discourages barrels, and the repo's `CLAUDE.md`/`AGENTS.md` links to it.
 

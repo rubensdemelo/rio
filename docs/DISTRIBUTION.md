@@ -36,7 +36,8 @@ local copies after setup.
 
 Pushes to `main` run [`deploy.yml`](../.github/workflows/deploy.yml). Its plan
 checks every commit in the push. Factory-only or `docs/`-only changes run just
-the plan; code changes call [`ci.yml`](../.github/workflows/ci.yml), which runs
+the plan, including agent-instruction dependency validation; code changes call
+[`ci.yml`](../.github/workflows/ci.yml), which runs
 `scripts/factory/gate.sh`: tooling tests, all Debug app tests and an unsigned
 Release build. Pull requests still call the same CI, as do release candidates.
 These workflows have read-only repository permissions and publish no artifact.
