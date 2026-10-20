@@ -2,9 +2,12 @@
 
 Status: initial adoption committed locally as `d51d42c`, not pushed. Shipping
 review found an unresolved retained-skill dependency after doctor had passed.
-The repair is applied and all 18 tooling tests pass; final review governs the
-local repair commit. No native gate result is claimed for the repaired tree.
-The full real-change lifecycle walkthrough remains pending.
+The repair is committed as `6f11129`; its recorded 18-tooling-test result
+does not establish a native gate pass. The owner has now requested a bounded
+real-change walkthrough through a reviewed local commit under spec 002;
+the required gate passed and independent review approved the change.
+Shipping remains outside the current authorization. Earlier sections retain
+their historical verification scope; current results appear at the end.
 
 Current decisions: `docs/research/adoption-reconciliation-2026-10-20.md`.
 The two earlier compliance audits are historical evidence and proposals, not
@@ -41,8 +44,9 @@ a complete shipping gate and independent review; these cannot guarantee no bugs.
 | Docs layout and authority | Done | specs/ADR/research templates, spec 001 and ADR 001; personal English product docs |
 | Factory improvement | Proposed and filed | ~/git/factory/proposals/adoption-preflight-writable-targets.md (open) |
 | Re-audit | Passed for repair | Doctor exit 0 plus explicit dependency checker, 18 tooling tests and static checks; semantic review remains separate |
-| Native shipping gate | Passed for d51d42c only | Owner reports 146 Debug tests and unsigned Release build passed outside the sandbox; not evidence for the repair |
-| Lifecycle /spec through /ship | Pending | Initial reviewed commit exists; shipping stopped at a subsequent review; no push authorized by this repair |
+| Native gate | Passed for spec 002 working tree | 18 tooling tests, 149 Debug XCTest cases and unsigned Release build passed; log and limitations below |
+| Lifecycle /spec through /review | Validated locally | Spec 002, owner-approved plan, delegated build, observed red/green regression, full gate, independent approval; local delivery commit adds spec 002 |
+| Lifecycle /ship | Pending, not authorized | No push, deployment, release, or installation requested |
 | Factory adoption record | Historical snapshot filed | ~/git/factory/adoptions/rio.md records the earlier continuation; this project record contains subsequent findings |
 
 ## Checks and review
@@ -167,9 +171,63 @@ Actual-tree checks after application:
   Native tests and Release build were not rerun for these instruction/tooling
   changes. The prior 146-test/native gate result remains scoped to `d51d42c`.
 
-Final independent review of the applied changes and updated records is required
-before the local repair commit; candidate-patch approval alone is insufficient.
+At the repair handoff, final independent review of the applied changes and
+updated records was required before the local repair commit; candidate-patch
+approval alone was insufficient. Git now records that repair as `6f11129`.
+That commit's existence alone is not evidence of additional native checks.
 
 No push, deploy, release, app installation, smoke or rollback is authorized in
 this repair. Remote workflow execution, hardware behavior and the full
 real-change lifecycle remain unverified.
+
+## Real-change walkthrough (2026-10-20)
+
+Starting point: clean `main` at `6f11129`. Spec 002 records the bounded legacy
+profile-migration defect, acceptance criteria, regression plan, and the owner's
+explicit plan approval. The builder owns only the domain source and its
+existing XCTest file; the primary owns these records and final validation.
+Independent review approved local delivery, recorded by the commit adding
+spec 002; its subject is `Preserve custom profiles when legacy migration fails`.
+
+The fix preserves valid custom profiles when applying an oversized legacy
+vocabulary fails validation. Current input controls cap vocabulary length, so
+the trigger requires invalid preferences already on disk. Profiles previously
+deleted by an earlier migration cannot be recovered by this change.
+
+Verification so far:
+
+- Initial sandboxed focused test exited 133 before XCTest, with Swift macro
+  sandbox errors and a denied Xcode test-progress notification. It is an
+  environment failure, not a red test.
+  Evidence: `/private/tmp/rio-profile-migration-sandbox.log`.
+- Approved outside-sandbox red run: 18 tooling tests passed; 11 focused
+  XCTest tests ran, with five failed assertions in the profile-loss regression
+  on unchanged production code (exit 65). Valid and completed migration
+  controls passed. Evidence: `/private/tmp/rio-profile-migration-red.log`.
+- After the fix, the same focused command passed all 11 XCTest tests and 18
+  tooling tests (exit 0). Evidence: `/private/tmp/rio-profile-migration-green.log`.
+- Instruction checker passed. Targeted doctor exited 0 with `all good`;
+  evidence: `/private/tmp/rio-profile-migration-doctor.log`.
+- Primary ran `bash scripts/factory/gate.sh` outside the sandbox: all 18
+  tooling tests and 149 Debug XCTest cases passed, followed by a successful
+  unsigned Release build (exit 0). Evidence:
+  `/private/tmp/rio-profile-migration-gate.log`. This covers the spec 002 native
+  source/test changes on top of `6f11129`, not a retroactive native result for
+  the historical repair handoff.
+- Xcode emitted an App Intents metadata-extraction warning because the project
+  has no AppIntents framework dependency. No checks were weakened or skipped.
+- Formatter (intentional no-op) and `git diff --check` passed for the task's
+  files. Instruction checker passed after the documentation updates.
+
+Independent review: `/root/independent_review` returned APPROVED with no Must fix
+or Should fix findings on the six-file change against `6f11129`. It inspected
+the diff, callers, project contracts and all five evidence logs, and ran
+`git diff --check` successfully. It did not rerun the native checks. The local
+delivery commit contains this record and spec 002; it can be located with
+`git log -1 --diff-filter=A -- docs/specs/002-preserve-profiles-during-migration.md`.
+
+This walkthrough stops before `/ship` and does not install or launch the
+interactive app, exercise audio hardware or permissions, contact a live
+provider, run remote CI, push, deploy, or release. The automated results do not
+establish manual hardware/UI, permissions, provider quality, or remote workflow
+acceptance. Temporary logs are local evidence, not committed artifacts.

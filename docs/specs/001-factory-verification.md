@@ -1,8 +1,10 @@
 # 001: Preserve regression checks through factory adoption
 
-Status: built in local commit `d51d42c`; adoption repair applied with 18 passing
-tooling tests. Final independent review governs the local repair commit.
-Shipping and the complete real-change lifecycle remain pending.
+Status: initial adoption committed as `d51d42c`; repair committed as `6f11129`.
+The repair record below preserves its pre-commit verification scope. A bounded
+real-change walkthrough under spec 002 has an approved plan, a passing native
+gate, and independent review approval for local delivery. Its local commit
+adds spec 002. Shipping remains outside the current authorization.
 
 ## Problem
 
@@ -74,3 +76,19 @@ Native execution required an approval-capable session outside the sandbox.
 The subsequent shipping review found an unresolved retained-skill dependency.
 Repair verification is recorded in `docs/ops/factory-adoption.md`; remote CI,
 smoke and the complete real-change lifecycle remain pending.
+
+## Local real-change validation (2026-10-20)
+
+Spec `002-preserve-profiles-during-migration.md` exercises `/spec`, owner-approved
+`/plan`, delegated `/build`, and independent `/review` before a local commit.
+It addresses valid custom profiles being deleted when legacy vocabulary
+migration rejects an oversized stored value. The current editor caps input;
+this is a defensive migration fix for invalid existing preferences.
+
+The regression failed on the original production code (five profile-loss
+assertions) and passed after the fix. The focused suite passed 11 XCTest
+cases; the full gate passed 18 tooling tests, 149 Debug XCTest cases, and an
+unsigned Release build. Results and limitations are recorded in
+`docs/ops/factory-adoption.md`. Independent review approved the six-file diff
+with no findings; the local delivery commit is the one adding spec 002.
+No `/ship`, push, deployment, release, or installation is authorized.

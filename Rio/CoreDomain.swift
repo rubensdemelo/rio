@@ -374,11 +374,11 @@ final class MeetingProfileSettings: ObservableObject {
         defaults.set(true, forKey: legacyConfigurationMigrationKey)
         guard legacyCadence != .thirtySeconds || !legacyVocabulary.isEmpty else { return profiles }
 
-        let migratedProfiles = profiles.compactMap {
+        let migratedProfiles = profiles.map {
             $0.withConfiguration(
                 insightPace: legacyCadence,
                 technicalVocabulary: legacyVocabulary
-            )
+            ) ?? $0
         }
         if let data = try? JSONEncoder().encode(migratedProfiles) {
             defaults.set(data, forKey: profilesStorageKey)

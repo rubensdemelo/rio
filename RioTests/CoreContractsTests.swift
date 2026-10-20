@@ -45,6 +45,109 @@ final class CoreContractsTests: XCTestCase {
     }
 
     @MainActor
+    func testOversizedLegacyVocabularyPreservesCustomProfilesAndSelection() throws {
+        let suiteName = "RioTests.OversizedLegacyVocabulary.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let profiles = [
+            try XCTUnwrap(MeetingProfile.custom(
+                name: "Incident review",
+                guidance: "Prioritize symptoms and failed checks.",
+                insightPace: .sixtySeconds,
+                technicalVocabulary: "Db2, IRLM",
+                id: "incident-review"
+            )),
+            try XCTUnwrap(MeetingProfile.custom(
+                name: "Planning",
+                guidance: "Capture decisions and follow-up questions.",
+                insightPace: .ninetySeconds,
+                technicalVocabulary: "Roadmap, milestone",
+                id: "planning"
+            ))
+        ]
+        defaults.set(try JSONEncoder().encode(profiles), forKey: "meetingProfiles")
+        defaults.set(profiles[1].id, forKey: "meetingProfile")
+        defaults.set(30, forKey: ListeningCadenceSettings.storageKey)
+        defaults.set(
+            String(repeating: "x", count: TranscriptionVocabularyConfiguration.maximumPromptLength + 1),
+            forKey: TranscriptionVocabularyConfiguration.storageKey
+        )
+
+        let settings = MeetingProfileSettings(defaults: defaults)
+
+        XCTAssertEqual(settings.profiles, profiles)
+        XCTAssertEqual(settings.selection, profiles[1])
+        XCTAssertEqual(
+            try JSONDecoder().decode([MeetingProfile].self, from: XCTUnwrap(defaults.data(forKey: "meetingProfiles"))),
+            profiles
+        )
+        let reloaded = MeetingProfileSettings(defaults: defaults)
+        XCTAssertEqual(reloaded.profiles, profiles)
+        XCTAssertEqual(reloaded.selection, profiles[1])
+    }
+
+    @MainActor
+    func testValidLegacyConfigurationMigratesAndSurvivesReload() throws {
+        let suiteName = "RioTests.ValidLegacyConfiguration.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let original = try XCTUnwrap(MeetingProfile.custom(
+            name: "Incident review",
+            guidance: "Prioritize symptoms and failed checks.",
+            insightPace: .thirtySeconds,
+            technicalVocabulary: "Existing term",
+            id: "incident-review"
+        ))
+        defaults.set(try JSONEncoder().encode([original]), forKey: "meetingProfiles")
+        defaults.set(original.id, forKey: "meetingProfile")
+        defaults.set(90, forKey: ListeningCadenceSettings.storageKey)
+        defaults.set(" Db2, IRLM ", forKey: TranscriptionVocabularyConfiguration.storageKey)
+        let expected = try XCTUnwrap(original.withConfiguration(
+            insightPace: .ninetySeconds,
+            technicalVocabulary: "Db2, IRLM"
+        ))
+
+        let settings = MeetingProfileSettings(defaults: defaults)
+
+        XCTAssertEqual(settings.profiles, [expected])
+        XCTAssertEqual(settings.selection, expected)
+        XCTAssertEqual(
+            try JSONDecoder().decode([MeetingProfile].self, from: XCTUnwrap(defaults.data(forKey: "meetingProfiles"))),
+            [expected]
+        )
+        XCTAssertEqual(MeetingProfileSettings(defaults: defaults).profiles, [expected])
+    }
+
+    @MainActor
+    func testCompletedLegacyMigrationLeavesCurrentProfileUnchanged() throws {
+        let suiteName = "RioTests.CompletedLegacyMigration.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let profile = try XCTUnwrap(MeetingProfile.custom(
+            name: "Incident review",
+            guidance: "Prioritize symptoms and failed checks.",
+            insightPace: .sixtySeconds,
+            technicalVocabulary: "Current term",
+            id: "incident-review"
+        ))
+        defaults.set(try JSONEncoder().encode([profile]), forKey: "meetingProfiles")
+        defaults.set(profile.id, forKey: "meetingProfile")
+        defaults.set(true, forKey: "meetingProfileConfigurationMigrationCompleted")
+        defaults.set(90, forKey: ListeningCadenceSettings.storageKey)
+        defaults.set("Legacy term", forKey: TranscriptionVocabularyConfiguration.storageKey)
+
+        let settings = MeetingProfileSettings(defaults: defaults)
+
+        XCTAssertEqual(settings.profiles, [profile])
+        XCTAssertEqual(settings.selection, profile)
+        XCTAssertEqual(
+            try JSONDecoder().decode([MeetingProfile].self, from: XCTUnwrap(defaults.data(forKey: "meetingProfiles"))),
+            [profile]
+        )
+        XCTAssertEqual(MeetingProfileSettings(defaults: defaults).profiles, [profile])
+    }
+
+    @MainActor
     func testCustomMeetingProfileCanBeCreatedSelectedAndReloaded() throws {
         let suiteName = "RioTests.CustomMeetingProfile.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

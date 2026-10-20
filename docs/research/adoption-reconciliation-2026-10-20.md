@@ -1,8 +1,12 @@
 # Rio adoption reconciliation
 
 Date: 2026-10-20. Baseline: local `d51d42c`, not pushed.
-Status: repair applied; 18 actual-tree tooling tests and factory doctor pass.
-The local repair commit requires final independent review; shipping is pending.
+Status: repair committed as `6f11129`; its recorded 18 actual-tree tooling
+tests and doctor pass retain their original scope. Spec 002 now tracks an
+owner-approved real-change walkthrough with a passing 149-test native gate;
+independent review approved the six-file change for local delivery. The local
+delivery commit adds spec 002; the adoption record includes its lookup command.
+Shipping remains pending and is explicitly excluded from the current request.
 
 This is the current disposition of the two earlier audits, not a declaration
 that either audit's recommendations were all accepted. Read
@@ -86,6 +90,16 @@ Initial synchronization and doctor checks did not establish retained-skill
 dependency closure. The earlier review missed the TDD reference and cannot
 serve as approval of this repair. The owner applied the independently reviewed
 protected patch; dependency and privacy regression tests now pass in the actual
-tree. Final review of that tree governs the local commit.
-Remote CI, native/hardware acceptance for the final repair, and a full
-real-change `/spec` through `/ship` walkthrough remain separate claims.
+tree. Final review of that tree was required at the repair handoff; Git now
+records the repair as `6f11129`. This is not evidence of new native checks.
+
+The current real-change exercise is spec 002, preserving custom profiles when
+legacy vocabulary migration rejects invalid stored preferences. Its plan is
+owner-approved, its profile-loss regression was observed failing before the
+fix, and the full gate passed 18 tooling tests, 149 Debug XCTest cases, and an
+unsigned Release build. Independent review approved the six-file change with
+no findings for local delivery; results, the delivery-commit locator, and
+limitations are recorded in
+`docs/ops/factory-adoption.md`. The scope ends at independent review and a
+local commit. Remote CI, hardware acceptance, and `/ship` remain separate,
+unverified claims; push, deployment, release, and installation are excluded.
