@@ -68,7 +68,7 @@ The app requests the macOS System Audio Recording permission using
 must handle output changes, sleep and wake, permission revocation, and the
 selected meeting source disappearing.
 
-Signed development builds use a persistent Apple Development code-signing identity configured through the ignored `Config/Development.xcconfig`, so macOS privacy grants survive ordinary source rebuilds. The default local gate uses this signed app and verifies its signature, Keychain access, and entitlements before launch. When signing material is unavailable, `LOCAL_SIGNED=NO make final` provides a separate ad-hoc validation build that does not stop or launch Rio and cannot be installed by the local installer. Release builds require the appropriate Developer ID signing material. The identity is managed by Xcode and is not stored in the repository. A changed bundle identifier, signing authority, or user privacy decision remains a legitimate reason for macOS to request access again.
+Signed development builds use a persistent Apple Development code-signing identity configured through the ignored `Config/Development.xcconfig`, so macOS privacy grants survive ordinary source rebuilds. The interactive `make final` path uses this signed app and verifies its signature, Keychain access, and entitlements before launch. The factory shipping gate (`scripts/factory/gate.sh`) instead runs unsigned Debug tests and a Release build without installing or launching the interactive app. When signing material is unavailable, `LOCAL_SIGNED=NO make final` provides a separate ad-hoc validation build that does not stop or launch Rio and cannot be installed by the local installer. Release builds require the appropriate Developer ID signing material. The identity is managed by Xcode and is not stored in the repository. A changed bundle identifier, signing authority, or user privacy decision remains a legitimate reason for macOS to request access again.
 
 The MVP does not save audio or create a recording output. Capture callbacks only
 make a bounded copy of the ephemeral Core Audio buffers and attempt a
@@ -265,7 +265,7 @@ file.
 
 The user-provided API key is held by Rio's app-isolated macOS data-protection Keychain group in every build configuration rather than the meeting-data lifecycle and is never copied into `UserDefaults`, files, logs, or environment-dependent runtime configuration. Rio does not query or migrate the earlier file-based Keychain item because doing so can invoke a legacy per-binary access dialog; the user enters the key once into the isolated store. The two-day local meeting history is the only persisted meeting-derived content and lives in an atomically written application-support JSON file.
 
-The local final verification gate executes the built Rio binary in a dedicated
+The interactive `make final` verification executes the built Rio binary in a dedicated
 diagnostic mode and performs a synthetic save-load-delete round-trip through
 that same data-protection Keychain. It runs after signature and entitlement
 inspection and before launch, never reads the user's API key, and prevents an

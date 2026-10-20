@@ -1,6 +1,6 @@
 # Rio
 
-Rio is a deliberately simple macOS meeting assistant for IBM employees. Bob helps with coding; Rio helps with meetings by listening to a client troubleshooting call and surfacing useful, evidence-grounded directions while the conversation is still happening.
+Rio is a deliberately simple macOS meeting assistant for personal use. It helps the owner stay engaged in meetings, including technical troubleshooting calls, by surfacing useful, evidence-grounded insights while the conversation is still happening. User-facing text is English.
 
 ## Product promise
 

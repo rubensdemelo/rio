@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Rio is a macOS meeting assistant for IBM employees. Bob helps with coding; Rio helps with meetings by listening to browser and system meeting audio and surfacing the technical information a support engineer is likely to need while a client troubleshooting call is still happening.
+Rio is a macOS meeting assistant for the owner’s personal use. It listens to browser and system meeting audio and surfaces useful insights while the conversation is still happening, including technical signals during troubleshooting calls. All user-facing text is English.
 
 The insight stream is the primary live experience. A read-only transcript is also available from Recent Meetings after a session ends.
 
 ## Audience
 
-Rio is for people who want to stay engaged in meetings without operating a recorder or taking continuous notes. The first release is a focused technical preview for macOS 26+.
+Rio is for its owner, who wants to stay engaged in meetings without operating a recorder or taking continuous notes. The first release is a focused technical preview for macOS 26+.
 
 It is not an enterprise recording platform, collaboration workspace, meeting archive, diagnostic authority, or autonomous operator.
 

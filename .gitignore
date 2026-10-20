@@ -3,3 +3,5 @@
 .build/
 dist/
 Config/Development.xcconfig
+
+__pycache__/

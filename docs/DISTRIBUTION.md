@@ -34,15 +34,27 @@ local copies after setup.
 
 ## Continuous integration
 
-Pushes to `main` and pull requests targeting `main` run
-[`ci.yml`](../.github/workflows/ci.yml). It tests Rio and builds the Release
-configuration without Apple signing credentials, notarization, or DMG creation.
-The workflow has read-only repository permissions.
+Pushes to `main` run [`deploy.yml`](../.github/workflows/deploy.yml). Its plan
+checks every commit in the push. Factory-only or `docs/`-only changes run just
+the plan; code changes call [`ci.yml`](../.github/workflows/ci.yml), which runs
+`scripts/factory/gate.sh`: tooling tests, all Debug app tests and an unsigned
+Release build. Pull requests still call the same CI, as do release candidates.
+These workflows have read-only repository permissions and publish no artifact.
+The name `deploy.yml` lets `/ship` follow verification; Rio has no hosted service.
+Use `/review` for the reviewed commit and `/ship` for the checked main push.
 
 ## Publish a release
 
-Push a semantic-version tag from `main` or publish a GitHub Release for that
-tag. Either action runs the release workflow:
+Use `/ship --release` when explicitly publishing a release and its notarized DMG.
+Rio's project exception in `AGENTS.md` keeps release creation, generated notes,
+and DMG attachment in the existing workflow. Draft releases are unsupported:
+reject a draft request before any push because a new tag publishes immediately.
+After the workflow succeeds, verify its release and asset; skip the factory
+skill's separate notes-writing and `gh release create` steps.
+
+Its existing distribution
+trigger is a semantic-version tag from `main` or a published GitHub Release for
+that tag. Either action runs the release workflow; the underlying commands are:
 
 ```sh
 git tag v1.2.3
@@ -95,3 +107,19 @@ downloaded artifact on a supported clean Mac with quarantine metadata intact
 and record the Gatekeeper launch result. CI verification is necessary but does
 not replace that clean-machine check, the live hardware soak, or the model
 quality gates in the GA release plan.
+
+## Local smoke and rollback
+
+`scripts/factory/smoke.sh` verifies the installed signed app and a synthetic
+Keychain save/load/delete round-trip. It does not start capture, call OpenAI,
+or prove that the installed app matches the latest checked source commit.
+A main push does not replace `/Applications/Rio.app`; use the established
+signed `make install` flow when installation is wanted.
+
+Only an explicit `/rollback` request invokes
+`scripts/factory/rollback.sh /absolute/path/to/saved-release/Rio.app`. Keep the
+signed app version you intend to restore outside the source tree. The script
+prints the plan and delegates to the existing staging/verification installer;
+it does not discover an earlier version, rewrite GitHub Releases, downgrade
+meeting data, or change history retention. Check data compatibility before
+restoring an older app. Cloud/CI execution is refused.

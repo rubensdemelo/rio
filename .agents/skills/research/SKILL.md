@@ -1,12 +1,18 @@
 ---
 name: research
-description: Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent.
+description: Research a market, user or UX question for this product and write the result to docs/research/<slug>.md. Use when a decision needs evidence before a spec.
+argument-hint: "<question or topic>"
 ---
 
-Spin up a **background agent** to do the research, so you keep working while it reads.
+Research: $ARGUMENTS
 
-Its job:
-
-1. Investigate the question against **primary sources** — official docs, source code, specs, first-party APIs — not a secondary write-up of them. Follow every claim back to the source that owns it.
-2. Write the findings to a single Markdown file, citing each claim's source.
-3. Save it where the repo already keeps such notes; match the existing convention, and if there is none, put it somewhere sensible and say where.
+1. Name the question in one sentence and the decision it serves. If no
+   decision depends on it, say so and stop.
+2. Check `docs/research` and `docs/adr` for prior work; build on it.
+3. Delegate: market, pricing, competitors or user feedback → `researcher`;
+   flows, screens, friction, first-use questions → `ux-researcher`. Both for a
+   feature with a UI and a business case. Give each the question, the product
+   context in two sentences, and the template at `docs/research/TEMPLATE.md`.
+4. Merge into `docs/research/<slug>.md`: findings with sources and dates,
+   what it means for the product, the decision it supports, what is unknown.
+5. Report the file and the one-paragraph answer. No code changes.

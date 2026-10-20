@@ -1,9 +1,6 @@
 name: Rio CI
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
     branches:
       - main
@@ -26,34 +23,7 @@ jobs:
       - name: Check out Rio
         uses: actions/checkout@v7
 
-      - name: Test Rio
-        shell: bash
-        run: |
-          set -euo pipefail
-          xcodebuild test \
-            -project Rio.xcodeproj \
-            -scheme Rio \
-            -configuration Debug \
-            -destination 'platform=macOS' \
-            -derivedDataPath "$RUNNER_TEMP/RioDerivedData" \
-            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
-            ONLY_ACTIVE_ARCH=YES \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
-
-      - name: Build Release configuration without signing
-        shell: bash
-        run: |
-          set -euo pipefail
-          xcodebuild build \
-            -project Rio.xcodeproj \
-            -scheme Rio \
-            -configuration Release \
-            -destination 'platform=macOS' \
-            -derivedDataPath "$RUNNER_TEMP/RioDerivedData" \
-            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
-            ONLY_ACTIVE_ARCH=YES \
-            COMPILER_INDEX_STORE_ENABLE=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO
+      - name: Run the complete shipping gate
+        env:
+          RIO_FACTORY_DERIVED_DATA: ${{ runner.temp }}/RioDerivedData
+        run: bash scripts/factory/gate.sh

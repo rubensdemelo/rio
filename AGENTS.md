@@ -1,3 +1,109 @@
+<!-- factory:begin (managed by ~/git/factory/scripts/sync.sh; edit the factory, not this block) -->
+# Factory rules
+
+These rules apply in every product. Project facts and exceptions follow this
+block in each project's `AGENTS.md`. Lifecycle: `WORKFLOW.md` in the factory,
+summarized here.
+
+## How work flows
+
+1. Research and specs are files (`docs/research`, `docs/specs`, `docs/adr`),
+   not chat. A feature starts with `/spec` unless the fix fits in one sentence.
+2. Plan before building unless the diff fits in one sentence. Agree the plan,
+   then build the smallest change with tests. Every behaviour change gets a
+   test that fails without it.
+3. `/review` before every commit. Commit only after the reviewer approves (no
+   open Must fix or Should fix). Commit on `main`, this task's files only.
+   The one exception is the commit `/factory-sync` makes: byte-identical
+   copies of the factory, reviewed by the doctor, shipped with the next push.
+4. `/ship` is the only way code leaves the machine: gate, review, push, follow
+   `deploy.yml`, smoke. No PRs. The local gate is the gate.
+5. `/ship --release` cuts tags and GitHub Releases. Never without the flag.
+
+## Hard rules
+
+- Never force-push, never `--no-verify`, never skip or weaken a failing check.
+- Never deploy, roll back, apply remote migrations, change secrets or publish
+  a release unless the current request names that step.
+- Never print, copy or commit secrets. Report variable names and exit codes.
+- Never edit `scripts/factory/*.sh`, `deploy.yml` or a skill during a run of it.
+- One owner per file. Builders return uncommitted work. Reviewers never edit.
+- Touch only what the task needs. Mention unrelated problems, don't fix them.
+- Prefer a change that makes a mistake impossible over a rule here. When the
+  same mistake happens twice, fix it at the highest level that works:
+  architecture, types, a check whose error names the fix, a test, then a rule.
+  Record it in the project's "Rule / Enforced by" table.
+
+## The six scripts
+
+Every project has `scripts/factory/{bootstrap,format,test,gate,smoke,rollback}.sh`.
+Use them instead of remembering commands. `gate.sh` exit 0 means shippable.
+`rollback.sh` runs only from `/rollback`, never unasked.
+
+## User-facing text
+
+User-facing text is in the language the project's `AGENTS.md` names below
+this block (default: Brazilian Portuguese). Before writing any text a user
+sees: list the actions on the screen, map every heading and button to one,
+write helper text only where a first-time user has a question, offer two or
+three options and let the owner pick, then implement verbatim. Natural, with
+accents, as the user talks. Never the same heading twice on a screen. A
+project that says it has no user-facing copy skips the copywriter.
+
+## Reporting
+
+Say what you are doing in one line before each step. Report what ran and its
+result, what was skipped and why, and what was not verified. Never claim a
+check covered code it did not see.
+<!-- factory:end -->
+
+User-facing text: English. Rio is for the owner's personal use.
+
+Project-owned: .agents/skills/claude-handoff .agents/skills/codebase-design .agents/skills/diagnosing-bugs .agents/skills/domain-modeling .agents/skills/git-guardrails-claude-code .agents/skills/grill-me .agents/skills/grill-with-docs .agents/skills/grilling .agents/skills/handoff .agents/skills/improve-codebase-architecture .agents/skills/install .agents/skills/loop-me .agents/skills/migrate-to-shoehorn .agents/skills/prototype .agents/skills/resolving-merge-conflicts .agents/skills/scaffold-exercises .agents/skills/setup-pre-commit .agents/skills/setup-ts-deep-modules .agents/skills/tdd .agents/skills/teach .agents/skills/to-questionnaire .agents/skills/wait-what .agents/skills/wizard .agents/skills/writing-beats .agents/skills/writing-for-agents .agents/skills/writing-fragments .agents/skills/writing-shape .github/workflows/ci.yml .github/workflows/release.yml
+
+## Rio project rules
+
+Read `docs/PRODUCT.md` for behavior, `docs/ARCHITECTURE.md` for layer boundaries,
+and `docs/PRIVACY.md` before changing meeting-data handling. These describe the
+current product; IDEA.md is its direction, and dated audits and implementation
+plans are historical evidence, not completion claims. Read `docs/DEVELOPMENT.md`
+for local verification and `docs/DISTRIBUTION.md` before shipping or releasing.
+
+Use `scripts/factory/test.sh RioTests/SessionLifecycleTests` (choose the relevant
+suite) during iteration; run `scripts/factory/gate.sh` before shipping. The gate
+runs unsigned Debug tests and a Release build without installing the app.
+`make install` and `make final` retain the signed interactive installation flow.
+Only the primary agent owns final app/hardware validation when required.
+
+Native app builds require macOS 26 and Xcode. Linux/cloud tooling checks do not
+validate the app. Main pushes verify code; explicit releases still publish
+notarized Apple Silicon DMGs. Smoke checks the local installed signed app,
+not a remote deployment. Rollback requires an explicitly selected saved signed
+app bundle and never changes meeting history.
+
+Rio release exception to `/ship` step 7: tags use `vMAJOR.MINOR.PATCH`.
+The existing tag workflow owns public GitHub Release creation, generated notes,
+and the notarized DMG. Reject `draft` before any push: the workflow publishes
+immediately. Before publication approval, explain that Rio uses workflow-generated
+notes and distributes a DMG; require the request to authorize that distribution.
+After pushing the approved tag and waiting for `release.yml`, verify the release
+and `Rio-<version>.dmg` asset and report their URL. Skip the generic notes-writing
+and `gh release create` steps; do not create a second release.
+
+The factory lifecycle replaces old `implement`, `to-spec`, and `code-review`
+delivery routes: use `/spec`, `/plan`, `/build`, `/review`, `/ship`. Use the
+factory research workflow for product work;
+code/API research still cites primary sources and records findings in
+`docs/research`. No runtime dependency or cloud service is added by adoption.
+
+| Rule | Enforced by |
+| --- | --- |
+| Preserve existing behavior during features and fixes | Focused regression tests, full shipping gate, independent review |
+| No shipping without passing checks | `scripts/factory/gate.sh` and `/ship` |
+| Factory-only pushes skip macOS builds | `scripts/ci-plan.py` and its range-classification tests |
+| Review privacy, cleanup, bounds and owner attribution | `REVIEW.local.md` and existing RioTests suites |
+| Signed app required for interactive installation | `scripts/install-rio.sh` and `scripts/verify-keychain-access.sh` |
+
 # Engineering agents
 
 Use agents when a bounded task benefits from independent discovery, implementation, or review. The primary agent owns decisions and the final answer. Keep ownership aligned with Rio's native macOS architecture and existing file boundaries.

@@ -11,6 +11,37 @@ out of the product-facing README.
 
 Rio uses native Swift and SwiftUI, Apple frameworks, and the standard library.
 
+## Factory iteration and shipping checks
+
+Bootstrap with `bash scripts/factory/bootstrap.sh`. There are no package
+services to install. Linux can work on documents and tooling; native builds
+require a supported Mac and Xcode. Bootstrap reports that distinction.
+
+For a short iteration, choose the suite owning the changed behavior:
+
+```sh
+bash scripts/factory/test.sh RioTests/SessionLifecycleTests
+# Or one XCTest method:
+bash scripts/factory/test.sh RioTests/SessionLifecycleTests/testMethodName
+```
+
+The optional selector is passed to Xcode's `-only-testing`; use an existing
+class/method from `RioTests`. No selector runs all app tests. Tooling regression
+tests always run first. Builds use `.build/FactoryValidation` (override with
+`RIO_FACTORY_DERIVED_DATA`) and need no signing credentials.
+
+Before shipping, run `bash scripts/factory/gate.sh`. It runs all tooling and
+Debug app tests and builds Release, preserving the previous CI checks. It
+never installs or launches the interactive app. Both main CI and release CI
+call this gate. A passing gate reduces regression risk; hardware, permissions,
+UI acceptance and provider quality still require the applicable manual checks.
+Use synthetic content and add a regression test for changed behavior. Rio has
+no configured formatter; `format.sh` intentionally preserves existing style.
+
+New features follow `/spec`, `/plan`, `/build`, `/review`, `/ship`; one-sentence
+fixes can skip the spec/plan ceremony. Keep focused tests quick during iteration
+and retain the full gate before shipping. `/ship --release` remains separate.
+
 ## Local signing setup
 
 Signed development builds use a stable Apple Development identity so macOS can

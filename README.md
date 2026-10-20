@@ -2,13 +2,15 @@
 
 > Stay in the meeting. Bring back the signal.
 
-Rio is a small macOS meeting assistant for people who want to stay engaged in
-the conversation instead of operating a recorder or taking continuous notes.
+Rio is a small macOS meeting assistant for personal use, with an English interface.
+It helps its owner stay engaged in the conversation instead of operating a recorder
+or taking continuous notes.
 It listens to meeting audio and turns the important moments into concise,
 useful insight cards.
 
 Rio lives quietly in the menu bar. Start listening when the meeting begins,
-keep your attention on the room, and review the signal when you need it.
+keep your attention on the room, and review the signal when you need it. Recent Meetings provides read-only transcripts
+and insights from the last two days.
 
 ## What Rio captures
 
@@ -69,6 +71,6 @@ cloud synchronization.
 
 ## Status
 
-Rio is a focused technical preview for macOS 26+. The automated product and
-release checks pass; direct hardware acceptance of meeting capture remains
-part of the ongoing roadmap.
+Rio is a focused technical preview for macOS 26+. Automated regression checks run before shipping; their latest result belongs
+to the specific checked commit. Direct hardware acceptance of meeting capture
+remains part of the ongoing roadmap.
