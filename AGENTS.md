@@ -72,6 +72,47 @@ User-facing text: English. Rio is for the owner's personal use.
 
 Project-owned: none
 
+## Commands
+
+The six scripts in `scripts/factory/` call `xcodebuild`, the Python tooling
+suite and the `scripts/*.sh` helpers directly, not the Makefile;
+`scripts/factory/README.md` is the factory's contract table and is replaced
+by `/factory-sync`.
+
+- `scripts/factory/bootstrap.sh`: checks Git, Python and the native toolchain
+  on the Mac; elsewhere it explains the limits.
+- `scripts/factory/format.sh [files...]`: no-op, no formatter is configured;
+  it does not fail for deleted paths.
+- `scripts/factory/test.sh [RioTests/Class[/method]]`: the tooling tests, then
+  the selected unsigned Debug tests (all of them without a selector). It
+  takes an XCTest selector, never a file path.
+- `scripts/factory/gate.sh`: all tooling and Debug tests and an unsigned
+  Release build; never installs.
+- `scripts/factory/smoke.sh [signed-app]`: the installed app by default;
+  checks signature and entitlements and runs a synthetic Keychain check.
+  Refuses outside an interactive local Mac (CI or a remote session).
+- `scripts/factory/rollback.sh /absolute/saved-release/Rio.app`: installs an
+  explicitly named saved signed bundle through the verified installer; local
+  Mac only.
+
+Native tests fail clearly outside macOS rather than report a partial gate as
+passed. On Linux run only the tooling tests:
+`python3 -m unittest discover -s scripts/tests -p 'test_*.py'`. That suite
+also checks retained instruction dependencies; for just that check run
+`python3 scripts/check-agent-instructions.py`. Signing and interactive
+installation stay in the Makefile. See `docs/DEVELOPMENT.md` and
+`docs/DISTRIBUTION.md` for acceptance boundaries.
+
+## Contract extensions
+
+- `smoke.sh [signed-app]`: there is no deployed target, so the contract's
+  `[url]` is here the path of a signed app bundle (default the installed
+  app); it refuses outside an interactive local Mac.
+- `rollback.sh /absolute/saved-release/Rio.app`: there is no remote release
+  and no default, so the contract's `[release]` is here a required absolute
+  path to a saved signed bundle, installed through the verified installer on
+  the local Mac only; it never changes meeting history.
+
 ## Rio project rules
 
 Read `docs/PRODUCT.md` for behavior, `docs/ARCHITECTURE.md` for layer boundaries,

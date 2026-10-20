@@ -12,7 +12,7 @@ spec.loader.exec_module(ci_plan)
 class PushPlanTests(unittest.TestCase):
     def test_factory_only_paths_skip_verification(self):
         self.assertFalse(ci_plan.needs_verification([
-            '.factory-version', '.claude/settings.json', '.agents/skills/spec/SKILL.md',
+            '.factory-version', 'scripts/factory/README.md', '.claude/settings.json', '.agents/skills/spec/SKILL.md',
             'AGENTS.md', 'CLAUDE.md', 'REVIEW.md', 'REVIEW.local.md', 'docs/PRODUCT.md']))
 
     def test_code_mixed_with_factory_paths_runs_verification(self):

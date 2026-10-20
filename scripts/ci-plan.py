@@ -3,7 +3,7 @@
 import os
 import subprocess
 
-NOOP_FILES = {'.factory-version', 'AGENTS.md', 'CLAUDE.md', 'REVIEW.md', 'REVIEW.local.md'}
+NOOP_FILES = {'.factory-version', 'scripts/factory/README.md', 'AGENTS.md', 'CLAUDE.md', 'REVIEW.md', 'REVIEW.local.md'}
 NOOP_PREFIXES = ('.claude/', '.agents/', 'docs/')
 
 
