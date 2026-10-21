@@ -8,8 +8,9 @@ or taking continuous notes.
 It listens to meeting audio and turns the important moments into concise,
 useful insight cards.
 
-Rio lives quietly in the menu bar. Start listening when the meeting begins,
-keep your attention on the room, and review the signal when you need it. Recent Meetings provides read-only transcripts
+Rio opens its window at launch and stays in the Dock and the menu bar. Start
+listening when the meeting begins, keep your attention on the room, and review
+the signal when you need it. Recent Meetings provides read-only transcripts
 and insights from the last two days.
 
 ## What Rio captures
