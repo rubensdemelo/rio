@@ -3,7 +3,7 @@
 PROJECT = Rio.xcodeproj
 SCHEME = Rio
 CONFIGURATION = Debug
-DESTINATION = platform=macOS
+DESTINATION = platform=macOS,arch=arm64
 LOCAL_SIGNED ?= YES
 CAPTURE_CYCLES ?= 2
 CAPTURE_SECONDS ?= 3
@@ -14,7 +14,7 @@ else
 DERIVED_DATA_PATH = .build/UnsignedValidation
 endif
 RIO_APP_PATH = $(DERIVED_DATA_PATH)/Build/Products/Debug/Rio.app
-XCODEBUILD_BASE_FLAGS = -project $(PROJECT) -scheme $(SCHEME) -configuration $(CONFIGURATION) -destination '$(DESTINATION)' -derivedDataPath $(DERIVED_DATA_PATH) -arch arm64 SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
+XCODEBUILD_BASE_FLAGS = -project $(PROJECT) -scheme $(SCHEME) -configuration $(CONFIGURATION) -destination '$(DESTINATION)' -derivedDataPath $(DERIVED_DATA_PATH) SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
 XCODEBUILD_FLAGS = $(XCODEBUILD_BASE_FLAGS)
 
 ifneq ($(wildcard Config/Development.xcconfig),)
