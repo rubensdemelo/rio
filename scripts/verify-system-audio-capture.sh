@@ -6,6 +6,7 @@ usage() {
     echo "Usage: $0 [APP_PATH] [CAPTURE_CYCLES] [CAPTURE_SECONDS]" >&2
     exit 2
 }
+fail() { echo "System-audio verification failed: $1" >&2; exit 1; }
 
 app_path="${1:-.build/Iteration/Build/Products/Debug/Rio.app}"
 capture_cycles="${2:-2}"
@@ -29,29 +30,18 @@ fi
 
 console_session_state="$(ioreg -n Root -d1)"
 if [[ "$console_session_state" == *'"CGSSessionScreenIsLocked"=Yes'* ]]; then
-    echo "System-audio verification failed: unlock the active macOS session before testing system-audio capture." >&2
-    exit 1
+    fail "unlock the active macOS session before testing system-audio capture."
 fi
 
-if [[ ! -d "$app_path" ]]; then
-    echo "System-audio verification failed: Rio app not found at $app_path." >&2
-    exit 1
-fi
+[[ -d "$app_path" ]] || fail "Rio app not found at $app_path."
 app_path="$(cd "$(dirname "$app_path")" && pwd -P)/$(basename "$app_path")"
 executable_path="$app_path/Contents/MacOS/Rio"
-if [[ ! -x "$executable_path" ]]; then
-    echo "System-audio verification failed: Rio executable not found at $executable_path." >&2
-    exit 1
-fi
+[[ -x "$executable_path" ]] || fail "Rio executable not found at $executable_path."
 
 codesign --verify --deep --strict "$app_path"
 signature_details="$(codesign -dv --verbose=4 "$app_path" 2>&1 || true)"
-if ! grep -Fq -e 'Authority=Apple Development:' \
-    -e 'Authority=Mac Development:' \
-    -e 'Authority=Developer ID Application:' <<<"$signature_details"; then
-    echo "System-audio verification failed: Rio is not signed by an Apple development or Developer ID identity." >&2
-    exit 1
-fi
+grep -Eq '^Authority=(Apple Development|Mac Development|Developer ID Application):' <<<"$signature_details" \
+    || fail "Rio is not signed by an Apple development or Developer ID identity."
 
 work_directory="$(mktemp -d "${TMPDIR:-/tmp}/rio-system-audio-verification.XXXXXX")"
 stdout_path="$work_directory/rio.stdout"
@@ -61,10 +51,7 @@ open_pid=""
 rio_pid=""
 audio_loop_pid=""
 capture_run_token="$(uuidgen)"
-if [[ ! "$capture_run_token" =~ ^[A-Za-z0-9-]{16,64}$ ]]; then
-    echo "System-audio verification failed: could not generate a safe run token." >&2
-    exit 1
-fi
+[[ "$capture_run_token" =~ ^[A-Za-z0-9-]{16,64}$ ]] || fail "could not generate a safe run token."
 
 verifier_process_matches() {
     local process_id="$1"
@@ -190,10 +177,7 @@ while kill -0 "$open_pid" 2>/dev/null; do
         fi
     fi
 
-    if (( SECONDS >= deadline )); then
-        echo "System-audio verification failed: outer watchdog expired after ${watchdog_seconds}s." >&2
-        exit 1
-    fi
+    (( SECONDS < deadline )) || fail "outer watchdog expired after ${watchdog_seconds}s."
     sleep 0.2
 done
 
@@ -203,71 +187,33 @@ open_status=$?
 set -e
 open_pid=""
 
-if [[ ! -s "$stdout_path" ]]; then
-    echo "System-audio verification failed: Rio produced no JSON report." >&2
-    exit 1
-fi
-if [[ "$(awk 'END { print NR }' "$stdout_path")" != 1 ]] \
-    || ! plutil -lint "$stdout_path" >/dev/null 2>&1; then
-    echo "System-audio verification failed: Rio did not produce exactly one valid JSON report." >&2
-    exit 1
-fi
+[[ -s "$stdout_path" ]] || fail "Rio produced no JSON report."
+# plutil -lint rejects JSON; the field reads below reject an invalid report.
+[[ "$(awk 'END { print NR }' "$stdout_path")" == 1 ]] || fail "Rio did not produce exactly one JSON report."
 
-read_json_field() {
-    plutil -extract "$1" raw -o - "$stdout_path" 2>/dev/null
+# Prints an integer report field; a missing or non-integer field fails the run.
+metric() {
+    plutil -extract "$1" raw -expect integer -o - "$stdout_path" 2>/dev/null \
+        || fail "report field $1 is missing or not an integer."
 }
+reported_cycles="$(metric cyclesRequested)"
+completed_cycles="$(metric cyclesCompleted)"
+reported_seconds="$(metric captureSeconds)"
+signal_chunks_observed="$(metric signalChunksObserved)"
+audio_milliseconds_observed="$(metric audioMillisecondsObserved)"
+maximum_callback_gap_milliseconds="$(metric maximumCallbackGapMilliseconds)"
+failure_category="$(plutil -extract failureCategory raw -expect string -o - "$stdout_path" 2>/dev/null)" \
+    || fail "report field failureCategory is missing or not a string."
 
-reported_cycles="$(read_json_field cyclesRequested)"
-completed_cycles="$(read_json_field cyclesCompleted)"
-reported_seconds="$(read_json_field captureSeconds)"
-chunks_observed="$(read_json_field chunksObserved)"
-signal_chunks_observed="$(read_json_field signalChunksObserved)"
-audio_milliseconds_observed="$(read_json_field audioMillisecondsObserved)"
-maximum_callback_gap_milliseconds="$(read_json_field maximumCallbackGapMilliseconds)"
-elapsed_milliseconds="$(read_json_field elapsedMilliseconds)"
-failure_category="$(read_json_field failureCategory)"
+[[ "$reported_cycles" == "$capture_cycles" && "$reported_seconds" == "$capture_seconds" ]] \
+    || fail "report options do not match the requested run."
+(( rss_start_kb > 0 && rss_max_kb > 0 && rss_end_kb > 0 )) || fail "Rio RSS could not be sampled."
 
-for numeric_value in \
-    "$reported_cycles" \
-    "$completed_cycles" \
-    "$reported_seconds" \
-    "$chunks_observed" \
-    "$signal_chunks_observed" \
-    "$audio_milliseconds_observed" \
-    "$maximum_callback_gap_milliseconds" \
-    "$elapsed_milliseconds" \
-    "$rss_start_kb" \
-    "$rss_max_kb" \
-    "$rss_end_kb"; do
-    if [[ ! "$numeric_value" =~ ^[0-9]+$ ]]; then
-        echo "System-audio verification failed: report contains a non-numeric metric." >&2
-        exit 1
-    fi
-done
-
-if [[ "$reported_cycles" != "$capture_cycles" \
-    || "$reported_seconds" != "$capture_seconds" ]]; then
-    echo "System-audio verification failed: report options do not match the requested run." >&2
-    exit 1
-fi
-if (( rss_start_kb == 0 || rss_max_kb == 0 || rss_end_kb == 0 )); then
-    echo "System-audio verification failed: Rio RSS could not be sampled." >&2
-    exit 1
-fi
-
-printf '{"audioMillisecondsObserved":%s,"captureSeconds":%s,"chunksObserved":%s,"cyclesCompleted":%s,"cyclesRequested":%s,"elapsedMilliseconds":%s,"failureCategory":"%s","maximumCallbackGapMilliseconds":%s,"rssEndKB":%s,"rssMaxKB":%s,"rssStartKB":%s,"signalChunksObserved":%s}\n' \
-    "$audio_milliseconds_observed" \
-    "$reported_seconds" \
-    "$chunks_observed" \
-    "$completed_cycles" \
-    "$reported_cycles" \
-    "$elapsed_milliseconds" \
-    "$failure_category" \
-    "$maximum_callback_gap_milliseconds" \
-    "$rss_end_kb" \
-    "$rss_max_kb" \
-    "$rss_start_kb" \
-    "$signal_chunks_observed"
+plutil -insert rssStartKB -integer "$rss_start_kb" "$stdout_path"
+plutil -insert rssMaxKB -integer "$rss_max_kb" "$stdout_path"
+plutil -insert rssEndKB -integer "$rss_end_kb" "$stdout_path"
+plutil -convert json -o - "$stdout_path"
+echo
 
 if (( open_status != 0 )) \
     || [[ "$failure_category" != none ]] \
