@@ -14,11 +14,11 @@ Rio uses native Swift and SwiftUI, Apple frameworks, and the standard library.
 ## Tests
 
 Run all app tests with `make test` (`LOCAL_SIGNED=NO make test` without a
-signing identity). For one suite or method, pass `-only-testing` to Xcode:
+signing identity). For one suite or method, pass it as `ONLY`:
 
 ```sh
-xcodebuild -project Rio.xcodeproj -scheme Rio -destination 'platform=macOS' \
-  test -only-testing:RioTests/SessionLifecycleTests
+make test ONLY=RioTests/SessionLifecycleTests
+make test ONLY=RioTests/SessionLifecycleTests/testMethodName
 ```
 
 The Python tests for the helper scripts run anywhere:

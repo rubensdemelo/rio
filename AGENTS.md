@@ -14,7 +14,7 @@ boundaries, and `docs/PRIVACY.md` before changing meeting-data handling.
   no signing identity is available.
 - `make build`, `make install` (signed build, verified, installed to
   `/Applications`), `make final` (test then install).
-- One suite: `xcodebuild -project Rio.xcodeproj -scheme Rio -destination 'platform=macOS' test -only-testing:RioTests/SessionLifecycleTests`
+- One suite or method: `make test ONLY=RioTests/SessionLifecycleTests`
 - Tooling tests: `python3 -m unittest discover -s scripts/tests -p 'test_*.py'`
 
 Add a regression test for changed behavior. Commit on `main`. Releases are

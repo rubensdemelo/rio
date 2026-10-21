@@ -34,12 +34,18 @@ local copies after setup.
 
 ## Publish a release
 
-Run `make test` on the Mac before tagging; the release workflow does not run
-the tests. Draft releases are unsupported: a new tag publishes immediately.
+The release workflow runs no tests, so check the commit on the Mac before
+tagging: run `make test`, then an unsigned Release build:
 
-The distribution
-trigger is a semantic-version tag from `main` or a published GitHub Release for
-that tag. Either action runs the release workflow; the underlying commands are:
+```sh
+xcodebuild -project Rio.xcodeproj -scheme Rio -configuration Release \
+  -destination 'platform=macOS,arch=arm64' CODE_SIGNING_ALLOWED=NO \
+  SWIFT_TREAT_WARNINGS_AS_ERRORS=YES build
+```
+
+Draft releases are unsupported: a new tag publishes immediately. The trigger is
+a semantic-version tag from `main` or a published GitHub Release for that tag.
+Either action runs the release workflow; the underlying commands are:
 
 ```sh
 git tag v1.2.3
@@ -94,6 +100,15 @@ quality gates in the GA release plan.
 
 ## Rollback
 
-To go back to an earlier build, check out that commit and run `make install`.
+To go back to an earlier build, install it from a throwaway worktree so `main`
+stays untouched:
+
+```sh
+git worktree add /tmp/rio-rollback <commit>
+cp Config/Development.xcconfig /tmp/rio-rollback/Config/
+make -C /tmp/rio-rollback install
+git worktree remove --force /tmp/rio-rollback
+```
+
 This does not rewrite GitHub Releases, downgrade meeting data, or change
 history retention; check data compatibility before restoring an older app.

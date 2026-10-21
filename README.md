@@ -72,6 +72,6 @@ cloud synchronization.
 
 ## Status
 
-Rio is a focused technical preview for macOS 26+. Automated regression checks run before shipping; their latest result belongs
-to the specific checked commit. Direct hardware acceptance of meeting capture
+Rio is a focused technical preview for macOS 26+. Tests run on the Mac with
+`make test` before a release is tagged. Direct hardware acceptance of meeting capture
 remains part of the ongoing roadmap.

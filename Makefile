@@ -34,7 +34,7 @@ clean:
 
 test:
 	@echo "Running the complete test suite..."
-	@xcodebuild $(TEST_XCODEBUILD_FLAGS) test
+	@xcodebuild $(TEST_XCODEBUILD_FLAGS) test $(if $(ONLY),-only-testing:$(ONLY))
 
 build:
 	@echo "Building the application..."
