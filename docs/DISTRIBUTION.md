@@ -32,27 +32,12 @@ gh variable set APPLE_TEAM_ID
 provisioning profile, and `.p8` files outside the repository; remove temporary
 local copies after setup.
 
-## Continuous integration
-
-The gate runs on the Mac: `/ship` runs `scripts/factory/gate.sh` (tooling
-tests, all Debug app tests and an unsigned Release build) before every push,
-and `/ship --release` requires it before a tag. A tag pushed by hand skips
-that check. Pushes to `main` run [`deploy.yml`](../.github/workflows/deploy.yml),
-the factory template: a plan job skips factory-only and `docs/`-only pushes,
-and the deploy job deploys nothing, because Rio has no hosted service. The
-name `deploy.yml` lets `/ship` follow the push.
-Use `/review` for the reviewed commit and `/ship` for the checked main push.
-
 ## Publish a release
 
-Use `/ship --release` when explicitly publishing a release and its notarized DMG.
-Rio's project exception in `AGENTS.md` keeps release creation, generated notes,
-and DMG attachment in the existing workflow. Draft releases are unsupported:
-reject a draft request before any push because a new tag publishes immediately.
-After the workflow succeeds, verify its release and asset; skip the factory
-skill's separate notes-writing and `gh release create` steps.
+Run `make test` on the Mac before tagging; the release workflow does not run
+the tests. Draft releases are unsupported: a new tag publishes immediately.
 
-Its existing distribution
+The distribution
 trigger is a semantic-version tag from `main` or a published GitHub Release for
 that tag. Either action runs the release workflow; the underlying commands are:
 
@@ -62,9 +47,7 @@ git push origin v1.2.3
 ```
 
 For a new tag, Actions signs, notarizes, and creates a GitHub Release with the
-DMG. The workflow does not run the gate itself: `/ship --release` requires a
-passing local gate for the tagged commit first, so a tag pushed
-by hand skips that check. Publishing a release for an existing tag also runs
+DMG. Publishing a release for an existing tag also runs
 the workflow and attaches a DMG to that release. If the release already has its
 versioned DMG, the workflow skips the build. Tag updates are ignored.
 
@@ -109,19 +92,8 @@ and record the Gatekeeper launch result. CI verification is necessary but does
 not replace that clean-machine check, the live hardware soak, or the model
 quality gates in the GA release plan.
 
-## Local smoke and rollback
+## Rollback
 
-`scripts/factory/smoke.sh` verifies the installed signed app and a synthetic
-Keychain save/load/delete round-trip. It does not start capture, call OpenAI,
-or prove that the installed app matches the latest checked source commit.
-A main push does not replace `/Applications/Rio.app`; use the established
-signed `make install` flow when installation is wanted.
-
-Only an explicit `/rollback` request invokes
-`scripts/factory/rollback.sh [commit]` (default the parent of HEAD; name the
-commit that was installed before when it differs). The script prints the plan,
-builds that commit in a throwaway worktree with the local signing settings, and
-installs it with `make install`, which uses the staging/verification installer.
-`main` is unchanged. It does not rewrite GitHub Releases, downgrade meeting
-data, or change history retention. Check data compatibility before restoring an
-older app. Cloud/CI execution is refused.
+To go back to an earlier build, check out that commit and run `make install`.
+This does not rewrite GitHub Releases, downgrade meeting data, or change
+history retention; check data compatibility before restoring an older app.
