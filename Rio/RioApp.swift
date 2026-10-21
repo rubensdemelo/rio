@@ -147,7 +147,7 @@ struct RioApp: App {
                 .environmentObject(meetingProfileSettings)
         }
         .defaultSize(width: 640, height: 240)
-        .defaultLaunchBehavior(.suppressed)
+        .defaultLaunchBehavior(.presented)
         .restorationBehavior(.disabled)
         .windowResizability(.contentMinSize)
 

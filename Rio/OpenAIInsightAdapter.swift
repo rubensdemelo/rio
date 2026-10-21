@@ -2,7 +2,7 @@ import Foundation
 import OSLog
 
 struct OpenAIAPIConfiguration: Sendable, Equatable {
-    static let defaultModel = "gpt-5.6-terra"
+    static let defaultModel = "gpt-6.1-sol"
     static let defaultTranscriptionModel = "gpt-transcribe"
 
     let apiKey: String

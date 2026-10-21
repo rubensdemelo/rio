@@ -185,7 +185,7 @@ late cannot deactivate a resumed session or apply stale output.
 
 ### Meeting understanding
 
-Use OpenAI's Responses API with `gpt-5.6-terra` by default. OpenAI is the default and only MVP provider. The user supplies their own API key in Provider settings; Rio stores it only in the macOS Keychain in every build configuration and never in the bundle, source tree, diagnostics, app preferences, or an environment variable. Transcription uses `gpt-transcribe` by default.
+Use OpenAI's Responses API with `gpt-6.1-sol` by default. OpenAI is the default and only MVP provider. The user supplies their own API key in Provider settings; Rio stores it only in the macOS Keychain in every build configuration and never in the bundle, source tree, diagnostics, app preferences, or an environment variable. Transcription uses `gpt-transcribe` by default.
 
 Every Responses request explicitly sets `store: false`. The shared OpenAI HTTP
 transport disables `URLCache` and ignores local cached responses for both
@@ -293,12 +293,13 @@ stream remains visible.
 Open Rio targets the main window scene by ID, Recent Meetings and Diagnostics
 target their own scene IDs, and Quit Rio enters the application delegate's asynchronous stop-and-save termination path. Menu commands use the
 `MenuBarExtra` scene's SwiftUI `openWindow` action rather than searching
-`NSApp.windows`, because no window exists yet after a menu-bar-only launch. The
+`NSApp.windows`, because the target window may not exist yet. The
 scene observes provider and session readiness directly so Start Listening
-updates when setup completes. Default launch is suppressed and restoration is
-disabled for every window scene, so stale SwiftUI window state cannot override
-a menu-bar-only launch. Windows open only through explicit menu actions. The
-application-agent configuration keeps Rio out of the Dock and app switcher.
+updates when setup completes. The main window opens at launch; the other windows
+have default launch suppressed and open only through explicit menu actions.
+Restoration is disabled for every window scene, so stale SwiftUI window state
+cannot reopen extra windows. The regular activation policy shows Rio in the
+Dock and app switcher.
 The menu offers profile management without duplicating the selected profile as
 a passive row. The menu-bar scene has no meeting-data state of its own.
 

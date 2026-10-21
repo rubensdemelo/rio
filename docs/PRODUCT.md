@@ -23,12 +23,9 @@ menu-bar menu provides the same start/stop listening action as the main window,
 along with Manage Profiles, Recent Meetings, Provider & API Key, Open Rio, and
 Diagnostics actions, plus Quit Rio. The menu does not repeat the selected
 meeting profile as a passive status row.
-When Rio launches, it keeps the main window suppressed so a ready setup starts
-with only the menu-bar item visible. Open Rio remains available whenever the
-full interface or setup guidance is needed. Rio is a menu-bar utility rather
-than a foreground app, so it does not appear in the Dock or app switcher.
-Closing the main window does not quit Rio; the menu-bar item remains the way to
-reopen the app or access those controls.
+When Rio launches, it opens the main window and appears in the Dock and app
+switcher like a regular app. Closing the main window does not quit Rio; the
+menu-bar item's Open Rio action reopens it.
 
 The start listening action remains disabled while a blocking prerequisite is
 unavailable. Permission states that macOS can request or re-check only when
@@ -138,7 +135,7 @@ Rio must not guess an action-item owner. Owner attribution is retained only when
 
 ## OpenAI API
 
-Rio uses OpenAI's `gpt-transcribe` API for speech-to-text and the Responses API for meeting understanding. Insight requests use a strict JSON Schema and Rio validates the returned updates before rendering cards. OpenAI is the default and only MVP provider. The current defaults are `gpt-5.6-terra` for insights and `gpt-transcribe` for transcription.
+Rio uses OpenAI's `gpt-transcribe` API for speech-to-text and the Responses API for meeting understanding. Insight requests use a strict JSON Schema and Rio validates the returned updates before rendering cards. OpenAI is the default and only MVP provider. The current defaults are `gpt-6.1-sol` for insights and `gpt-transcribe` for transcription.
 
 Before listening, Rio checks system audio availability and whether the user has added an OpenAI API key in Provider settings. Rio stores the key only in its app-isolated macOS data-protection Keychain group in every build configuration, never in the app bundle, preferences, logs, or an environment variable. A missing or rejected key blocks listening with direct guidance. The UI retains the direct button to the System Audio Recording privacy pane. There are no macOS speech assets to install.
 

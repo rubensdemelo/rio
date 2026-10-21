@@ -3,8 +3,7 @@ import AppKit
 import SwiftUI
 
 enum RioLaunchPresentation {
-    static let activationPolicy: NSApplication.ActivationPolicy = .accessory
-    static let opensMainWindowOnLaunch = false
+    static let activationPolicy: NSApplication.ActivationPolicy = .regular
 }
 
 @MainActor
