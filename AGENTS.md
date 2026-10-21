@@ -25,6 +25,10 @@ summarized here.
 - Never force-push, never `--no-verify`, never skip or weaken a failing check.
 - Never deploy, roll back, apply remote migrations, change secrets or publish
   a release unless the current request names that step.
+- The harness asks before the commands a project lists under
+  `## Ask before running` in its `AGENTS.md` (deploy, promote, a real
+  rollback, remote migrations, secret writes); say which step of the request
+  names it when you answer.
 - Never print, copy or commit secrets. Report variable names and exit codes.
 - Never edit `scripts/factory/*.sh`, `deploy.yml` or a skill during a run of it.
 - One owner per file. Builders return uncommitted work. Reviewers never edit.
@@ -36,12 +40,15 @@ summarized here.
 
 ## Additions
 
-Anything you add beyond the factory (skills, agents, scripts, workflows,
-hooks) shows on the factory dashboard as an addition. Say in your report and
-commit message what you added and why. The owner allows, promotes or retires
-it there. Never edit the factory's `allowed/` files or the project's
-`AGENTS.md` to acknowledge it.
+Anything you add beyond the factory (scripts, workflows) shows on the
+factory dashboard as an addition. Say in your report and commit message what
+you added and why. The owner allows, promotes or retires it there. Never edit
+the factory's `allowed/` files or the project's `AGENTS.md` to acknowledge
+it. A harness folder or a `CLAUDE.md` tracked in a project is never an
+addition to allow: projects carry none, and `/factory-sync` removes the
+tracked files. Untracked ones (`.claude/worktrees/`) stay.
 
+<!-- contract:begin -->
 ## The six scripts
 
 Every project has `scripts/factory/{bootstrap,format,test,gate,smoke,rollback}.sh`.
@@ -49,7 +56,10 @@ Use them instead of remembering commands. `gate.sh` exit 0 means shippable.
 `rollback.sh` runs only from `/rollback`, never unasked. Run contract scripts
 exactly as the skill writes them (`bash scripts/factory/gate.sh`), never
 wrapped in a shell, with a redirect, a pipe or an env prefix: the harness's
-persisted permissions match only that exact form.
+persisted permissions match only that exact form. A project's `AGENTS.md`
+may extend a script's usage line under `## Contract extensions`; the skills
+use that line instead of the default.
+<!-- contract:end -->
 
 ## User-facing text
 
