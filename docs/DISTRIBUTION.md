@@ -36,11 +36,11 @@ local copies after setup.
 
 Pushes to `main` run [`deploy.yml`](../.github/workflows/deploy.yml). Its plan
 checks every commit in the push. Factory-only or `docs/`-only changes run just
-the plan, including agent-instruction dependency validation; code changes call
-[`ci.yml`](../.github/workflows/ci.yml), which runs
-`scripts/factory/gate.sh`: tooling tests, all Debug app tests and an unsigned
-Release build. Pull requests still call the same CI, as do release candidates.
-These workflows have read-only repository permissions and publish no artifact.
+the plan, including agent-instruction dependency validation; code changes run
+`scripts/factory/gate.sh` on macOS: tooling tests, all Debug app tests and an
+unsigned Release build. Release tags do not rerun it: `/ship --release`
+requires the gate to pass first. A tag pushed by hand skips that check. This workflow has read-only repository
+permissions and publishes no artifact.
 The name `deploy.yml` lets `/ship` follow verification; Rio has no hosted service.
 Use `/review` for the reviewed commit and `/ship` for the checked main push.
 
@@ -62,11 +62,12 @@ git tag v1.2.3
 git push origin v1.2.3
 ```
 
-For a new tag, Actions runs the same CI checks on the tagged commit, then signs,
-notarizes, and creates a GitHub Release with the DMG. Publishing a release for an
-existing tag also runs the workflow and attaches a DMG to that release. If the
-release already has its versioned DMG, the workflow skips CI and the build. Tag
-updates are ignored.
+For a new tag, Actions signs, notarizes, and creates a GitHub Release with the
+DMG. The workflow does not run the gate itself: `/ship --release` requires a
+passing gate and `deploy.yml` run for the tagged commit first, so a tag pushed
+by hand skips that check. Publishing a release for an existing tag also runs
+the workflow and attaches a DMG to that release. If the release already has its
+versioned DMG, the workflow skips the build. Tag updates are ignored.
 
 The release job uses a full checkout and rejects a tag whose commit is not an
 ancestor of `origin/main`. A semantic version alone is not release provenance.

@@ -30,6 +30,11 @@ jobs:
     name: Verify pushed commit (no publication)
     needs: plan
     if: needs.plan.outputs.deploy == 'true'
-    uses: ./.github/workflows/ci.yml
-    permissions:
-      contents: read
+    runs-on: macos-26
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run the complete shipping gate
+        env:
+          RIO_FACTORY_DERIVED_DATA: ${{ runner.temp }}/RioDerivedData
+        run: bash scripts/factory/gate.sh

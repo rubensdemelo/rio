@@ -1,0 +1,218 @@
+name: Release Rio
+
+on:
+  push:
+    tags:
+      - "v*"
+  release:
+    types:
+      - published
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check-release:
+    name: Check for an existing DMG
+    if: github.event_name != 'push' || github.event.created == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    outputs:
+      asset_exists: ${{ steps.asset.outputs.exists }}
+    steps:
+      - name: Skip if this release already has its DMG
+        id: asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tags must look like v1.2.3; received $GITHUB_REF_NAME." >&2
+            exit 1
+          fi
+          version="${GITHUB_REF_NAME#v}"
+
+          asset_name="Rio-$version.dmg"
+          if gh release view "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json assets \
+            --jq '.assets[].name' 2>/dev/null | grep -Fxq "$asset_name"; then
+            echo "Release $GITHUB_REF_NAME already has $asset_name; skipping rebuild."
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No published $asset_name found; release build will run."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  build-release:
+    if: needs.check-release.outputs.asset_exists != 'true'
+    needs: check-release
+    runs-on: macos-26
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+      APPLE_DEVELOPER_ID_CERTIFICATE_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_BASE64 }}
+      APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+      APPLE_PROVISIONING_PROFILE_BASE64: ${{ secrets.APPLE_PROVISIONING_PROFILE_BASE64 }}
+      APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+      APPLE_NOTARY_ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+      APPLE_NOTARY_PRIVATE_KEY_BASE64: ${{ secrets.APPLE_NOTARY_PRIVATE_KEY_BASE64 }}
+
+    steps:
+      - name: Check out Rio
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Verify release provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          release_commit="$(git rev-parse "${GITHUB_SHA}^{commit}")"
+          if ! git merge-base --is-ancestor "$release_commit" refs/remotes/origin/main; then
+            echo "Release tag $GITHUB_REF_NAME does not point to a commit on origin/main." >&2
+            exit 1
+          fi
+          echo "Release commit: $release_commit"
+
+      - name: Prepare release signing
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          : "${APPLE_TEAM_ID:?APPLE_TEAM_ID repository variable is required}"
+          : "${APPLE_DEVELOPER_ID_CERTIFICATE_BASE64:?APPLE_DEVELOPER_ID_CERTIFICATE_BASE64 secret is required}"
+          : "${APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD:?APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD secret is required}"
+          : "${APPLE_PROVISIONING_PROFILE_BASE64:?APPLE_PROVISIONING_PROFILE_BASE64 secret is required}"
+          : "${APPLE_NOTARY_KEY_ID:?APPLE_NOTARY_KEY_ID secret is required}"
+          : "${APPLE_NOTARY_ISSUER_ID:?APPLE_NOTARY_ISSUER_ID secret is required}"
+          : "${APPLE_NOTARY_PRIVATE_KEY_BASE64:?APPLE_NOTARY_PRIVATE_KEY_BASE64 secret is required}"
+
+          version="${GITHUB_REF_NAME#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tags must look like v1.2.3; received $GITHUB_REF_NAME." >&2
+            exit 1
+          fi
+
+          keychain_password="$(uuidgen)"
+
+          printf '%s' "$APPLE_DEVELOPER_ID_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/developer-id.p12"
+          printf '%s' "$APPLE_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$RUNNER_TEMP/rio.provisionprofile"
+          printf '%s' "$APPLE_NOTARY_PRIVATE_KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/rio-notary-key.p8"
+
+          security create-keychain -p "$keychain_password" "$RUNNER_TEMP/rio-release.keychain-db"
+          security set-keychain-settings -lut 21600 "$RUNNER_TEMP/rio-release.keychain-db"
+          security unlock-keychain -p "$keychain_password" "$RUNNER_TEMP/rio-release.keychain-db"
+          security import "$RUNNER_TEMP/developer-id.p12" -k "$RUNNER_TEMP/rio-release.keychain-db" -P "$APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$RUNNER_TEMP/rio-release.keychain-db" >/dev/null
+          security list-keychain -d user -s "$RUNNER_TEMP/rio-release.keychain-db"
+
+          signing_identity="$(security find-identity -v -p codesigning "$RUNNER_TEMP/rio-release.keychain-db" | awk -v team="($APPLE_TEAM_ID)" '/Developer ID Application:/ && index($0, team) && !found { print $2; found = 1 } END { if (!found) exit 1 }')"
+          if [[ -z "$signing_identity" ]]; then
+            echo "No Developer ID Application identity was found for team $APPLE_TEAM_ID." >&2
+            exit 1
+          fi
+
+          openssl smime -inform DER -verify -noverify \
+            -in "$RUNNER_TEMP/rio.provisionprofile" \
+            -out "$RUNNER_TEMP/rio-profile.plist" \
+            >/dev/null 2>&1
+          profile_uuid="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$RUNNER_TEMP/rio-profile.plist")"
+          {
+            echo "RELEASE_VERSION=$version"
+            echo "RELEASE_BUILD=$GITHUB_RUN_NUMBER"
+            echo "SIGNING_IDENTITY=$signing_identity"
+            echo "PROFILE_UUID=$profile_uuid"
+            echo "APP_PATH=$RUNNER_TEMP/Rio.xcarchive/Products/Applications/Rio.app"
+            echo "DMG_PATH=$GITHUB_WORKSPACE/dist/Rio-$version.dmg"
+          } >> "$GITHUB_ENV"
+
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          cp "$RUNNER_TEMP/rio.provisionprofile" "$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.provisionprofile"
+
+      - name: Archive Rio
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild archive \
+            -project Rio.xcodeproj \
+            -scheme Rio \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/RioDerivedData" \
+            -archivePath "$RUNNER_TEMP/Rio.xcarchive" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="$SIGNING_IDENTITY" \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID" \
+            ENABLE_HARDENED_RUNTIME=YES \
+            MARKETING_VERSION="$RELEASE_VERSION" \
+            CURRENT_PROJECT_VERSION="$RELEASE_BUILD" \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=NO \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES \
+            COMPILER_INDEX_STORE_ENABLE=NO
+
+      - name: Package and notarize Rio
+        timeout-minutes: 12
+        shell: bash
+        run: |
+          set -euo pipefail
+          scripts/verify-keychain-access.sh "$APP_PATH"
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          scripts/package-dmg.sh "$APP_PATH" "$DMG_PATH" "$SIGNING_IDENTITY"
+
+          xcrun notarytool submit "$DMG_PATH" \
+            --key "$RUNNER_TEMP/rio-notary-key.p8" \
+            --key-id "$APPLE_NOTARY_KEY_ID" \
+            --issuer "$APPLE_NOTARY_ISSUER_ID" \
+            --wait
+          xcrun stapler staple "$DMG_PATH"
+          scripts/verify-release.sh \
+            "$DMG_PATH" \
+            "$RELEASE_VERSION" \
+            "$RELEASE_BUILD" \
+            "$APPLE_TEAM_ID" \
+            26.0
+          echo "Published artifact candidate: $(shasum -a 256 "$DMG_PATH")"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -f "$DMG_PATH"
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$DMG_PATH" --repo "$GITHUB_REPOSITORY"
+          else
+            gh release create "$GITHUB_REF_NAME" "$DMG_PATH" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Rio $RELEASE_VERSION" \
+              --generate-notes
+          fi
+
+      - name: Remove signing material
+        if: always()
+        shell: bash
+        run: |
+          security delete-keychain "$RUNNER_TEMP/rio-release.keychain-db" >/dev/null 2>&1 || true
+          profile_uuid="${PROFILE_UUID:-}"
+          if [[ -z "$profile_uuid" && -f "$RUNNER_TEMP/rio-profile.plist" ]]; then
+            profile_uuid="$(/usr/libexec/PlistBuddy -c 'Print :UUID' "$RUNNER_TEMP/rio-profile.plist" 2>/dev/null || true)"
+          fi
+          if [[ -n "$profile_uuid" ]]; then
+            rm -f "$HOME/Library/MobileDevice/Provisioning Profiles/$profile_uuid.provisionprofile"
+          fi
+          rm -f "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/rio.provisionprofile" "$RUNNER_TEMP/rio-profile.plist" "$RUNNER_TEMP/rio-notary-key.p8"

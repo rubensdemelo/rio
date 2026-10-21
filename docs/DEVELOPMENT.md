@@ -32,8 +32,8 @@ tests always run first. Builds use `.build/FactoryValidation` (override with
 
 Before shipping, run `bash scripts/factory/gate.sh`. It runs all tooling and
 Debug app tests and builds Release, preserving the previous CI checks. It
-never installs or launches the interactive app. Both main CI and release CI
-call this gate. A passing gate reduces regression risk; hardware, permissions,
+never installs or launches the interactive app. Main pushes run this gate
+in `deploy.yml`; releases rely on `/ship --release` requiring it first. A passing gate reduces regression risk; hardware, permissions,
 UI acceptance and provider quality still require the applicable manual checks.
 Use synthetic content and add a regression test for changed behavior. Rio has
 no configured formatter; `format.sh` intentionally preserves existing style.
