@@ -101,9 +101,9 @@ by `/factory-sync`.
 - `scripts/factory/smoke.sh [signed-app]`: the installed app by default;
   checks signature and entitlements and runs a synthetic Keychain check.
   Refuses outside an interactive local Mac (CI or a remote session).
-- `scripts/factory/rollback.sh /absolute/saved-release/Rio.app`: installs an
-  explicitly named saved signed bundle through the verified installer; local
-  Mac only.
+- `scripts/factory/rollback.sh [commit]`: builds the given commit (default
+  the parent of HEAD) in a throwaway worktree and installs it with
+  `make install`; local Mac only.
 
 Native tests fail clearly outside macOS rather than report a partial gate as
 passed. On Linux run only the tooling tests:
@@ -118,10 +118,10 @@ installation stay in the Makefile. See `docs/DEVELOPMENT.md` and
 - `smoke.sh [signed-app]`: there is no deployed target, so the contract's
   `[url]` is here the path of a signed app bundle (default the installed
   app); it refuses outside an interactive local Mac.
-- `rollback.sh /absolute/saved-release/Rio.app`: there is no remote release
-  and no default, so the contract's `[release]` is here a required absolute
-  path to a saved signed bundle, installed through the verified installer on
-  the local Mac only; it never changes meeting history.
+- `rollback.sh [commit]`: there is no remote release, so the contract's
+  `[release]` is here the commit to restore (default the parent of HEAD); it
+  builds that commit in a throwaway worktree and installs it with
+  `make install` on the local Mac only; it never changes meeting history.
 
 ## Rio project rules
 
@@ -153,10 +153,10 @@ Current adoption decisions and the disposition of earlier audit proposals are
 in `docs/research/adoption-reconciliation-2026-10-20.md`.
 
 Native app builds require macOS 26 and Xcode. Linux/cloud tooling checks do not
-validate the app. Main pushes verify code; explicit releases still publish
-notarized Apple Silicon DMGs. Smoke checks the local installed signed app,
-not a remote deployment. Rollback requires an explicitly selected saved signed
-app bundle and never changes meeting history.
+validate the app. The local gate verifies code before a push; `deploy.yml` deploys nothing.
+Explicit releases still publish notarized Apple Silicon DMGs. Smoke checks the
+local installed signed app, not a remote deployment. Rollback rebuilds an
+earlier commit and never changes meeting history.
 
 Rio release exception to `/ship` step 7: tags use `vMAJOR.MINOR.PATCH`.
 The existing tag workflow owns public GitHub Release creation, generated notes,
@@ -177,8 +177,8 @@ code/API research still cites primary sources and records findings in
 | --- | --- |
 | Preserve existing behavior during features and fixes | Focused regression tests, full shipping gate, independent review |
 | No shipping without passing checks | `scripts/factory/gate.sh` and `/ship` |
-| Factory-only pushes skip macOS builds | `scripts/ci-plan.py` and its range-classification tests |
-| Retained skill dependencies resolve before shipping | `scripts/check-agent-instructions.py`, tooling tests, and the CI plan job |
+| Retained skill dependencies resolve before shipping | `scripts/check-agent-instructions.py` in the tooling tests the gate runs |
+| Rollback installs the named earlier commit and leaves main alone | `scripts/tests/test_rollback.py` |
 | Review privacy, cleanup, bounds and owner attribution | `REVIEW.local.md` and existing RioTests suites |
 | Signed app required for interactive installation | `scripts/install-rio.sh` and `scripts/verify-keychain-access.sh` |
 

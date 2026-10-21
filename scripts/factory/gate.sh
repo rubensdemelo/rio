@@ -1,4 +1,6 @@
 #!/bin/bash
+# factory contract: gate.sh. The full local gate; exit 0 means shippable: all
+# tooling and Debug tests, then an unsigned Release build. Never installs.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 bash scripts/factory/test.sh

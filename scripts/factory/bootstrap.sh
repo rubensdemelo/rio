@@ -1,4 +1,6 @@
 #!/bin/bash
+# factory contract: bootstrap.sh. Checks Git and Python everywhere and Xcode on
+# the Mac; Rio has no package dependencies. Idempotent; prints no secrets.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 command -v python3 >/dev/null

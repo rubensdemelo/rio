@@ -1,4 +1,6 @@
 #!/bin/bash
+# factory contract: test.sh [RioTests/Class[/method]]. The tooling tests, then
+# the selected unsigned Debug XCTests (all of them without a selector).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 if [[ $# -gt 1 ]]; then

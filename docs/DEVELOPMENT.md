@@ -32,8 +32,9 @@ tests always run first. Builds use `.build/FactoryValidation` (override with
 
 Before shipping, run `bash scripts/factory/gate.sh`. It runs all tooling and
 Debug app tests and builds Release, preserving the previous CI checks. It
-never installs or launches the interactive app. Main pushes run this gate
-in `deploy.yml`; releases rely on `/ship --release` requiring it first. A passing gate reduces regression risk; hardware, permissions,
+never installs or launches the interactive app. `/ship` runs this gate on the
+Mac before every push, and `/ship --release` before a tag; `deploy.yml` does
+not rerun it. A passing gate reduces regression risk; hardware, permissions,
 UI acceptance and provider quality still require the applicable manual checks.
 Use synthetic content and add a regression test for changed behavior. Rio has
 no configured formatter; `format.sh` intentionally preserves existing style.
@@ -48,8 +49,7 @@ python3 scripts/check-agent-instructions.py
 The instruction check catches explicit missing skill/resource dependencies and
 obsolete skill-installer ownership; it does not assess every natural-language
 instruction. Independent review still checks conflicts with the factory and
-Rio's native boundaries. The CI plan job runs this check even when a
-factory-only push skips macOS. Tooling results do not replace the native gate.
+Rio's native boundaries. The tooling tests the gate runs include this check. Tooling results do not replace the native gate.
 
 New features follow `/spec`, `/plan`, `/build`, `/review`, `/ship`; one-sentence
 fixes can skip the spec/plan ceremony. Keep focused tests quick during iteration

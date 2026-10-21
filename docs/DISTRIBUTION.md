@@ -34,14 +34,13 @@ local copies after setup.
 
 ## Continuous integration
 
-Pushes to `main` run [`deploy.yml`](../.github/workflows/deploy.yml). Its plan
-checks every commit in the push. Factory-only or `docs/`-only changes run just
-the plan, including agent-instruction dependency validation; code changes run
-`scripts/factory/gate.sh` on macOS: tooling tests, all Debug app tests and an
-unsigned Release build. Release tags do not rerun it: `/ship --release`
-requires the gate to pass first. A tag pushed by hand skips that check. This workflow has read-only repository
-permissions and publishes no artifact.
-The name `deploy.yml` lets `/ship` follow verification; Rio has no hosted service.
+The gate runs on the Mac: `/ship` runs `scripts/factory/gate.sh` (tooling
+tests, all Debug app tests and an unsigned Release build) before every push,
+and `/ship --release` requires it before a tag. A tag pushed by hand skips
+that check. Pushes to `main` run [`deploy.yml`](../.github/workflows/deploy.yml),
+the factory template: a plan job skips factory-only and `docs/`-only pushes,
+and the deploy job deploys nothing, because Rio has no hosted service. The
+name `deploy.yml` lets `/ship` follow the push.
 Use `/review` for the reviewed commit and `/ship` for the checked main push.
 
 ## Publish a release
@@ -64,7 +63,7 @@ git push origin v1.2.3
 
 For a new tag, Actions signs, notarizes, and creates a GitHub Release with the
 DMG. The workflow does not run the gate itself: `/ship --release` requires a
-passing gate and `deploy.yml` run for the tagged commit first, so a tag pushed
+passing local gate for the tagged commit first, so a tag pushed
 by hand skips that check. Publishing a release for an existing tag also runs
 the workflow and attaches a DMG to that release. If the release already has its
 versioned DMG, the workflow skips the build. Tag updates are ignored.
@@ -119,9 +118,10 @@ A main push does not replace `/Applications/Rio.app`; use the established
 signed `make install` flow when installation is wanted.
 
 Only an explicit `/rollback` request invokes
-`scripts/factory/rollback.sh /absolute/path/to/saved-release/Rio.app`. Keep the
-signed app version you intend to restore outside the source tree. The script
-prints the plan and delegates to the existing staging/verification installer;
-it does not discover an earlier version, rewrite GitHub Releases, downgrade
-meeting data, or change history retention. Check data compatibility before
-restoring an older app. Cloud/CI execution is refused.
+`scripts/factory/rollback.sh [commit]` (default the parent of HEAD; name the
+commit that was installed before when it differs). The script prints the plan,
+builds that commit in a throwaway worktree with the local signing settings, and
+installs it with `make install`, which uses the staging/verification installer.
+`main` is unchanged. It does not rewrite GitHub Releases, downgrade meeting
+data, or change history retention. Check data compatibility before restoring an
+older app. Cloud/CI execution is refused.

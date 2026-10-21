@@ -1,4 +1,5 @@
 #!/bin/bash
+# factory contract: format.sh [files...]. Rio has no configured formatter, so
+# this keeps existing formatting and never fails, including on deleted paths.
 set -euo pipefail
-# Rio has no configured formatter. Preserve existing formatting, including deleted paths.
 exit 0
