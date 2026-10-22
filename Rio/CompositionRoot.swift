@@ -6,7 +6,7 @@ import Observation
 final class LiveSessionController: SessionShellControlling, RioTerminationSessionPreparing {
     @Published private(set) var status: SessionStatus = .stopped
     @Published private(set) var cards: [InsightCard] = []
-    @Published private(set) var feedback: SessionFeedbackSnapshot = .inactive
+    let feedback = SessionFeedbackModel()
     @Published private(set) var readiness: SessionReadiness?
     @Published private(set) var unavailableReason: UnavailableReason?
     @Published private(set) var failure: PipelineFailure?
@@ -186,7 +186,7 @@ final class LiveSessionController: SessionShellControlling, RioTerminationSessio
         }
         let nextFeedback = await lifecycle.feedbackSnapshot()
         let nextCards = insightStore.cards
-        if feedback != nextFeedback { feedback = nextFeedback }
+        feedback.update(nextFeedback)
         if cards != nextCards { cards = nextCards }
     }
 

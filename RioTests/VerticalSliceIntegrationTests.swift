@@ -1,3 +1,4 @@
+import Combine
 import Foundation
 import XCTest
 
@@ -86,6 +87,42 @@ final class VerticalSliceIntegrationTests: XCTestCase {
         XCTAssertEqual(captureStops, 2)
         XCTAssertEqual(generatorStarts, 2)
         XCTAssertEqual(generatorStops, 2)
+    }
+
+    func testAudioLevelUpdatesDoNotInvalidateTheSessionController() async {
+        let capture = TestSessionAudioCapture(inputSnapshot: liveInput(level: 0.2))
+        let store = InMemoryInsightStore()
+        let lifecycle = SessionLifecycleCoordinator(
+            localeIdentifier: "en-US",
+            capture: capture,
+            speechRecognizer: TestSessionSpeechRecognizer(),
+            contextFactory: TestMeetingContextFactory(),
+            insightGenerator: TestSessionInsightGenerator(),
+            insightState: store
+        )
+        let controller = LiveSessionController(lifecycle: lifecycle, insightStore: store)
+        await controller.performPrimaryAction()
+        XCTAssertEqual(controller.status, SessionStatus.listening)
+        await waitUntil(description: "initial level") {
+            controller.feedback.snapshot.audioInput.level == 0.2
+        }
+
+        var controllerChangeCount = 0
+        let subscription = controller.objectWillChange.sink { controllerChangeCount += 1 }
+        for level: Float in [0.3, 0.6, 0.4] {
+            await capture.setInputSnapshot(liveInput(level: level))
+            await waitUntil(description: "level \(level)") {
+                controller.feedback.snapshot.audioInput.level == level
+            }
+        }
+        subscription.cancel()
+
+        XCTAssertEqual(controllerChangeCount, 0, "level-only updates leave the session view alone")
+        await controller.performPrimaryAction()
+    }
+
+    private func liveInput(level: Float) -> AudioInputSnapshot {
+        AudioInputSnapshot(level: level, hasReceivedAudio: true, isMuted: false)
     }
 
     private func waitUntil(

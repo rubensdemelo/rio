@@ -1317,7 +1317,7 @@ actor TestSessionAudioCapture: SessionAudioCapture {
     private let configuredAvailability: Availability
     private var startFailure: PipelineFailure?
     private var remainingStartFailures: Int
-    private let configuredInputSnapshot: AudioInputSnapshot
+    private var configuredInputSnapshot: AudioInputSnapshot
     private var currentStream: TestStream<AudioChunk>?
     private var starts = 0
     private var stops = 0
@@ -1350,6 +1350,10 @@ actor TestSessionAudioCapture: SessionAudioCapture {
 
     func inputSnapshot() async -> AudioInputSnapshot {
         configuredInputSnapshot
+    }
+
+    func setInputSnapshot(_ snapshot: AudioInputSnapshot) {
+        configuredInputSnapshot = snapshot
     }
 
     func start() async throws(PipelineFailure) -> AudioStream {

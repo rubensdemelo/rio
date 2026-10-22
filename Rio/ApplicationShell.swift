@@ -142,11 +142,28 @@ enum FakeSessionStartOutcome: Sendable, Equatable {
     case failure(PipelineFailure)
 }
 
+/// Audio feedback changes several times a second while listening. It is
+/// observed apart from the controller so those updates redraw only the
+/// voice feedback instead of the whole session window.
+@MainActor
+@Observable
+final class SessionFeedbackModel {
+    private(set) var snapshot: SessionFeedbackSnapshot
+
+    init(_ snapshot: SessionFeedbackSnapshot = .inactive) {
+        self.snapshot = snapshot
+    }
+
+    func update(_ nextSnapshot: SessionFeedbackSnapshot) {
+        if snapshot != nextSnapshot { snapshot = nextSnapshot }
+    }
+}
+
 @MainActor
 protocol SessionShellControlling: ObservableObject {
     var status: SessionStatus { get }
     var cards: [InsightCard] { get }
-    var feedback: SessionFeedbackSnapshot { get }
+    var feedback: SessionFeedbackModel { get }
     var readiness: SessionReadiness? { get }
     var unavailableReason: UnavailableReason? { get }
     var failure: PipelineFailure? { get }
@@ -253,7 +270,7 @@ struct RioMenuBarContent<Controller: SessionShellControlling>: View {
 final class FakeSessionController: SessionShellControlling {
     @Published private(set) var status: SessionStatus
     @Published private(set) var cards: [InsightCard]
-    @Published private(set) var feedback: SessionFeedbackSnapshot
+    let feedback: SessionFeedbackModel
     @Published private(set) var readiness: SessionReadiness?
     @Published private(set) var unavailableReason: UnavailableReason?
     @Published private(set) var failure: PipelineFailure?
@@ -278,7 +295,7 @@ final class FakeSessionController: SessionShellControlling {
     ) {
         self.status = status
         self.cards = cards
-        self.feedback = feedback
+        self.feedback = SessionFeedbackModel(feedback)
         self.readiness = readiness
         self.unavailableReason = unavailableReason
         self.failure = failure
@@ -349,7 +366,7 @@ final class FakeSessionController: SessionShellControlling {
     ) {
         self.status = status
         self.cards = cards
-        self.feedback = feedback
+        self.feedback.update(feedback)
         self.readiness = readiness
         self.unavailableReason = unavailableReason
         self.failure = failure
@@ -375,14 +392,14 @@ final class FakeSessionController: SessionShellControlling {
         switch startOutcome {
         case .listening:
             status = .listening
-            feedback = SessionFeedbackSnapshot(
+            feedback.update(SessionFeedbackSnapshot(
                 audioInput: AudioInputSnapshot(
                     level: 0,
                     hasReceivedAudio: true,
                     isMuted: false
                 ),
                 finalizedSpeechSegmentCount: 0
-            )
+            ))
         case .unavailable(let reason):
             unavailableReason = reason
             status = .unavailable
@@ -400,7 +417,7 @@ final class FakeSessionController: SessionShellControlling {
         stopCount += 1
         isPerformingPrimaryAction = true
         cards.removeAll()
-        feedback = .inactive
+        feedback.update(.inactive)
         unavailableReason = nil
         failure = nil
         status = .stopped
@@ -468,7 +485,7 @@ struct RioView<Controller: SessionShellControlling>: View {
             if showsVoiceFeedback {
                 VoiceFeedbackView(
                     status: controller.status,
-                    feedback: controller.feedback,
+                    feedbackModel: controller.feedback,
                     failure: controller.failure,
                     unavailableReason: controller.unavailableReason
                 )
@@ -931,9 +948,13 @@ struct VoiceFeedbackPresentation: Equatable {
 
 private struct VoiceFeedbackView: View {
     let status: SessionStatus
-    let feedback: SessionFeedbackSnapshot
+    let feedbackModel: SessionFeedbackModel
     let failure: PipelineFailure?
     let unavailableReason: UnavailableReason?
+
+    private var feedback: SessionFeedbackSnapshot {
+        feedbackModel.snapshot
+    }
 
     var body: some View {
         let presentation = VoiceFeedbackPresentation(
