@@ -7,6 +7,23 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		091E20473F8D681E2D6BDEA4 /* RioMenuBarContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A744A5FA8357BC99D54BD7AC /* RioMenuBarContent.swift */; };
+		0D26FB81AC8D733F3F473123 /* VoiceFeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F37E957D75E091CDEC4030BB /* VoiceFeedbackView.swift */; };
+		10BB260031BBDAF60AF9AECD /* InsightStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38755420208A988C12B305A4 /* InsightStreamView.swift */; };
+		1A36575FEB2C0176CE0312BA /* ListeningSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08DCF82DB16659C215BDA364 /* ListeningSetupView.swift */; };
+		1D6613D753C99BD45022CAAA /* InsightStreamView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 38755420208A988C12B305A4 /* InsightStreamView.swift */; };
+		2E4310B30A1121875A228EAB /* RecentMeetingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 085B32725F4B78DC177F20B4 /* RecentMeetingsView.swift */; };
+		35889565CC08B3ADAD30A61F /* RioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9139DD5EF955616A729B5FD /* RioView.swift */; };
+		3B509C7A48B5CDC53EFFC41D /* MeetingProfileSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F851E836A18DA986D2AEB310 /* MeetingProfileSettingsView.swift */; };
+		3CC78F417FAE952EE3DD92B9 /* RioMenuBarContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = A744A5FA8357BC99D54BD7AC /* RioMenuBarContent.swift */; };
+		3D0FFDCFA91F109D24AE1054 /* ListeningSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08DCF82DB16659C215BDA364 /* ListeningSetupView.swift */; };
+		43D13564FC4E7D212C3001B0 /* VoiceFeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F37E957D75E091CDEC4030BB /* VoiceFeedbackView.swift */; };
+		5D268DC2ABE996A8B269452C /* OpenAIProviderSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64D32A86E965ED3D09CDE8D7 /* OpenAIProviderSetupView.swift */; };
+		88A3783202DD0EF07DA3F371 /* SessionStatusPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E2C784DA7DE6BFB5F608051 /* SessionStatusPresentation.swift */; };
+		8F470D76A7A605AB5D9653A3 /* MeetingProfileSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F851E836A18DA986D2AEB310 /* MeetingProfileSettingsView.swift */; };
+		967CBC27C26EFCF75E53D21E /* ApplicationTermination.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92A250A24760E66A55AD218 /* ApplicationTermination.swift */; };
+		99BC43299F2EF5EC64AA5E4F /* FakeSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05DA3F4CCED440BCB333A978 /* FakeSessionController.swift */; };
+		9A3916F4CAFD2EAF3F395AFD /* OpenAIProviderSetupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 64D32A86E965ED3D09CDE8D7 /* OpenAIProviderSetupView.swift */; };
 		A10000010000000000000001 /* RioApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000001 /* RioApp.swift */; };
 		A10000010000000000000003 /* CoreDomain.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000007 /* CoreDomain.swift */; };
 		A10000010000000000000004 /* CoreContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000008 /* CoreContracts.swift */; };
@@ -16,8 +33,6 @@
 		A1000001000000000000000A /* OpenAIInsightAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000B /* OpenAIInsightAdapter.swift */; };
 		A1000001000000000000000B /* OpenAIInsightAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000B /* OpenAIInsightAdapter.swift */; };
 		A1000001000000000000000E /* OpenAIInsightAdapterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000D /* OpenAIInsightAdapterTests.swift */; };
-		A1000001000000000000000F /* ApplicationShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000E /* ApplicationShell.swift */; };
-		A10000010000000000000010 /* ApplicationShell.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000E /* ApplicationShell.swift */; };
 		A10000010000000000000011 /* ApplicationShellTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000F /* ApplicationShellTests.swift */; };
 		A10000010000000000000012 /* MicrophoneCapture.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000010 /* MicrophoneCapture.swift */; };
 		A10000010000000000000015 /* MicrophoneCaptureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000012 /* MicrophoneCaptureTests.swift */; };
@@ -47,9 +62,23 @@
 		A10000010000000000000030 /* Diagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000023 /* Diagnostics.swift */; };
 		A10000010000000000000031 /* DiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000024 /* DiagnosticsTests.swift */; };
 		A10000010000000000000032 /* SystemAudioCaptureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000025 /* SystemAudioCaptureTests.swift */; };
+		AE80A8B8116B8DEDCC4DF0F9 /* ApplicationTermination.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92A250A24760E66A55AD218 /* ApplicationTermination.swift */; };
+		C9262C9F560BD7B00A3EB0B0 /* RioView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9139DD5EF955616A729B5FD /* RioView.swift */; };
+		CAE0DD0BD7F9F1698FB216B1 /* SessionShellControlling.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DAECF01CA5C168887EC5964 /* SessionShellControlling.swift */; };
+		D3F72947FE369A2C08CF30D0 /* RecentMeetingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 085B32725F4B78DC177F20B4 /* RecentMeetingsView.swift */; };
+		F0ABC72D059BB39A46A7A43E /* FakeSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 05DA3F4CCED440BCB333A978 /* FakeSessionController.swift */; };
+		F4580E79CC26DC51D3BC1E81 /* SessionStatusPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E2C784DA7DE6BFB5F608051 /* SessionStatusPresentation.swift */; };
+		F9E6BE000AEAF14B386DE26A /* SessionShellControlling.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DAECF01CA5C168887EC5964 /* SessionShellControlling.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		05DA3F4CCED440BCB333A978 /* FakeSessionController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FakeSessionController.swift; sourceTree = "<group>"; };
+		085B32725F4B78DC177F20B4 /* RecentMeetingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RecentMeetingsView.swift; sourceTree = "<group>"; };
+		08DCF82DB16659C215BDA364 /* ListeningSetupView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ListeningSetupView.swift; sourceTree = "<group>"; };
+		0DAECF01CA5C168887EC5964 /* SessionShellControlling.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionShellControlling.swift; sourceTree = "<group>"; };
+		38755420208A988C12B305A4 /* InsightStreamView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = InsightStreamView.swift; sourceTree = "<group>"; };
+		3E2C784DA7DE6BFB5F608051 /* SessionStatusPresentation.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SessionStatusPresentation.swift; sourceTree = "<group>"; };
+		64D32A86E965ED3D09CDE8D7 /* OpenAIProviderSetupView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OpenAIProviderSetupView.swift; sourceTree = "<group>"; };
 		A20000010000000000000001 /* RioApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RioApp.swift; sourceTree = "<group>"; };
 		A20000010000000000000002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000010000000000000003 /* Rio.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Rio.entitlements; sourceTree = "<group>"; };
@@ -60,7 +89,6 @@
 		A2000001000000000000000A /* CoreContractsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreContractsTests.swift; sourceTree = "<group>"; };
 		A2000001000000000000000B /* OpenAIInsightAdapter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIInsightAdapter.swift; sourceTree = "<group>"; };
 		A2000001000000000000000D /* OpenAIInsightAdapterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenAIInsightAdapterTests.swift; sourceTree = "<group>"; };
-		A2000001000000000000000E /* ApplicationShell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationShell.swift; sourceTree = "<group>"; };
 		A2000001000000000000000F /* ApplicationShellTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplicationShellTests.swift; sourceTree = "<group>"; };
 		A20000010000000000000010 /* MicrophoneCapture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneCapture.swift; sourceTree = "<group>"; };
 		A20000010000000000000012 /* MicrophoneCaptureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneCaptureTests.swift; sourceTree = "<group>"; };
@@ -80,6 +108,11 @@
 		A20000010000000000000023 /* Diagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Diagnostics.swift; sourceTree = "<group>"; };
 		A20000010000000000000024 /* DiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsTests.swift; sourceTree = "<group>"; };
 		A20000010000000000000025 /* SystemAudioCaptureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemAudioCaptureTests.swift; sourceTree = "<group>"; };
+		A744A5FA8357BC99D54BD7AC /* RioMenuBarContent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RioMenuBarContent.swift; sourceTree = "<group>"; };
+		A92A250A24760E66A55AD218 /* ApplicationTermination.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ApplicationTermination.swift; sourceTree = "<group>"; };
+		B9139DD5EF955616A729B5FD /* RioView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = RioView.swift; sourceTree = "<group>"; };
+		F37E957D75E091CDEC4030BB /* VoiceFeedbackView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VoiceFeedbackView.swift; sourceTree = "<group>"; };
+		F851E836A18DA986D2AEB310 /* MeetingProfileSettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeetingProfileSettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -125,13 +158,24 @@
 				A2000001000000000000001E /* InsightHistoryStore.swift */,
 				A20000010000000000000021 /* MeetingHistoryStore.swift */,
 				A20000010000000000000023 /* Diagnostics.swift */,
-				A2000001000000000000000E /* ApplicationShell.swift */,
 				A20000010000000000000010 /* MicrophoneCapture.swift */,
 				A20000010000000000000013 /* OpenAITranscriptionAdapter.swift */,
 				A20000010000000000000016 /* SessionOrchestration.swift */,
 				A20000010000000000000018 /* CompositionRoot.swift */,
 				A2000001000000000000001A /* Assets.xcassets */,
 				A2000001000000000000001B /* SystemAudioCapture.swift */,
+				A92A250A24760E66A55AD218 /* ApplicationTermination.swift */,
+				05DA3F4CCED440BCB333A978 /* FakeSessionController.swift */,
+				38755420208A988C12B305A4 /* InsightStreamView.swift */,
+				08DCF82DB16659C215BDA364 /* ListeningSetupView.swift */,
+				F851E836A18DA986D2AEB310 /* MeetingProfileSettingsView.swift */,
+				64D32A86E965ED3D09CDE8D7 /* OpenAIProviderSetupView.swift */,
+				085B32725F4B78DC177F20B4 /* RecentMeetingsView.swift */,
+				A744A5FA8357BC99D54BD7AC /* RioMenuBarContent.swift */,
+				B9139DD5EF955616A729B5FD /* RioView.swift */,
+				0DAECF01CA5C168887EC5964 /* SessionShellControlling.swift */,
+				3E2C784DA7DE6BFB5F608051 /* SessionStatusPresentation.swift */,
+				F37E957D75E091CDEC4030BB /* VoiceFeedbackView.swift */,
 			);
 			path = Rio;
 			sourceTree = "<group>";
@@ -272,12 +316,23 @@
 				A10000010000000000000029 /* InsightHistoryStore.swift in Sources */,
 				A1000001000000000000002C /* MeetingHistoryStore.swift in Sources */,
 				A1000001000000000000002F /* Diagnostics.swift in Sources */,
-				A1000001000000000000000F /* ApplicationShell.swift in Sources */,
 				A10000010000000000000012 /* MicrophoneCapture.swift in Sources */,
 				A10000010000000000000017 /* OpenAITranscriptionAdapter.swift in Sources */,
 				A1000001000000000000001C /* SessionOrchestration.swift in Sources */,
 				A1000001000000000000001F /* CompositionRoot.swift in Sources */,
 				A10000010000000000000023 /* SystemAudioCapture.swift in Sources */,
+				AE80A8B8116B8DEDCC4DF0F9 /* ApplicationTermination.swift in Sources */,
+				F0ABC72D059BB39A46A7A43E /* FakeSessionController.swift in Sources */,
+				1D6613D753C99BD45022CAAA /* InsightStreamView.swift in Sources */,
+				3D0FFDCFA91F109D24AE1054 /* ListeningSetupView.swift in Sources */,
+				3B509C7A48B5CDC53EFFC41D /* MeetingProfileSettingsView.swift in Sources */,
+				5D268DC2ABE996A8B269452C /* OpenAIProviderSetupView.swift in Sources */,
+				D3F72947FE369A2C08CF30D0 /* RecentMeetingsView.swift in Sources */,
+				3CC78F417FAE952EE3DD92B9 /* RioMenuBarContent.swift in Sources */,
+				C9262C9F560BD7B00A3EB0B0 /* RioView.swift in Sources */,
+				CAE0DD0BD7F9F1698FB216B1 /* SessionShellControlling.swift in Sources */,
+				F4580E79CC26DC51D3BC1E81 /* SessionStatusPresentation.swift in Sources */,
+				0D26FB81AC8D733F3F473123 /* VoiceFeedbackView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -292,7 +347,6 @@
 				A10000010000000000000028 /* OpenAIKeychainStore.swift in Sources */,
 				A1000001000000000000002A /* InsightHistoryStore.swift in Sources */,
 				A1000001000000000000000E /* OpenAIInsightAdapterTests.swift in Sources */,
-				A10000010000000000000010 /* ApplicationShell.swift in Sources */,
 				A10000010000000000000011 /* ApplicationShellTests.swift in Sources */,
 				A10000010000000000000016 /* MicrophoneCapture.swift in Sources */,
 				A10000010000000000000015 /* MicrophoneCaptureTests.swift in Sources */,
@@ -308,6 +362,18 @@
 				A10000010000000000000031 /* DiagnosticsTests.swift in Sources */,
 				A10000010000000000000032 /* SystemAudioCaptureTests.swift in Sources */,
 				A10000010000000000000025 /* SystemAudioCapture.swift in Sources */,
+				967CBC27C26EFCF75E53D21E /* ApplicationTermination.swift in Sources */,
+				99BC43299F2EF5EC64AA5E4F /* FakeSessionController.swift in Sources */,
+				10BB260031BBDAF60AF9AECD /* InsightStreamView.swift in Sources */,
+				1A36575FEB2C0176CE0312BA /* ListeningSetupView.swift in Sources */,
+				8F470D76A7A605AB5D9653A3 /* MeetingProfileSettingsView.swift in Sources */,
+				9A3916F4CAFD2EAF3F395AFD /* OpenAIProviderSetupView.swift in Sources */,
+				2E4310B30A1121875A228EAB /* RecentMeetingsView.swift in Sources */,
+				091E20473F8D681E2D6BDEA4 /* RioMenuBarContent.swift in Sources */,
+				35889565CC08B3ADAD30A61F /* RioView.swift in Sources */,
+				F9E6BE000AEAF14B386DE26A /* SessionShellControlling.swift in Sources */,
+				88A3783202DD0EF07DA3F371 /* SessionStatusPresentation.swift in Sources */,
+				43D13564FC4E7D212C3001B0 /* VoiceFeedbackView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -353,8 +419,8 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.rubensmelo.rio;
 				PRODUCT_NAME = Rio;
 				SDKROOT = macosx;
-				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_STRICT_CONCURRENCY = complete;
 				SWIFT_VERSION = 6.0;
 			};
@@ -366,13 +432,13 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_ENTITLEMENTS = Rio/Rio.entitlements;
 				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = Q857P34S8A;
 				ENABLE_HARDENED_RUNTIME = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Rio/Info.plist;
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
 				MARKETING_VERSION = 1.0;
-				CURRENT_PROJECT_VERSION = 1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.rubensmelo.rio;
 				PRODUCT_NAME = Rio;
 				SDKROOT = macosx;
