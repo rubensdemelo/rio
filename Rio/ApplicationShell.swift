@@ -88,7 +88,6 @@ struct RioMenuWindowRouter {
 final class RioPanelRouter: ObservableObject {
     enum Panel: String, Identifiable {
         case provider
-        case profiles
 
         var id: String { rawValue }
     }
@@ -97,10 +96,6 @@ final class RioPanelRouter: ObservableObject {
 
     func showProvider() {
         presentedPanel = .provider
-    }
-
-    func showProfiles() {
-        presentedPanel = .profiles
     }
 
 }
@@ -240,7 +235,7 @@ struct RioMenuBarContent<Controller: SessionShellControlling>: View {
     private var windowRouter: RioMenuWindowRouter {
         RioMenuWindowRouter(
             openWindow: { openWindow(id: $0) },
-            activate: { NSApp.activate(ignoringOtherApps: true) }
+            activate: { NSApp.activate() }
         )
     }
 
@@ -507,7 +502,6 @@ struct RioView<Controller: SessionShellControlling>: View {
             maxHeight: hasInsights ? .infinity : nil,
             alignment: .topLeading
         )
-        .background(.clear)
         .task {
             await controller.checkReadiness()
         }
@@ -529,8 +523,6 @@ struct RioView<Controller: SessionShellControlling>: View {
                 OpenAIProviderSetupView {
                     Task { await controller.checkReadiness() }
                 }
-            case .profiles:
-                MeetingProfileSettingsView()
             }
         }
     }
@@ -552,7 +544,8 @@ struct RioView<Controller: SessionShellControlling>: View {
     }
 
     private func resizeMainWindowIfNeeded() {
-        DispatchQueue.main.async {
+        // Runs after the current update so the window resizes to the new layout.
+        Task { @MainActor in
             guard let window = NSApp.windows.first(where: { $0.title == "Rio" }) else {
                 return
             }
@@ -698,14 +691,12 @@ struct RioView<Controller: SessionShellControlling>: View {
                 .disabled(!isStartAction)
             }
 
-            Button {
-                openWindow(id: "profiles")
-            } label: {
-                Image(systemName: "slider.horizontal.3")
+            Button("Configure meeting profiles", systemImage: "slider.horizontal.3") {
+                openWindow(id: RioWindow.profiles.rawValue)
             }
+            .labelStyle(.iconOnly)
             .buttonStyle(.borderless)
             .help("Configure meeting profiles")
-            .accessibilityLabel("Configure meeting profiles")
         }
         .font(.subheadline)
         .help(meetingProfileSettings.selection.detail)
@@ -925,15 +916,7 @@ struct VoiceFeedbackPresentation: Equatable {
     }
 
     private static func elapsedTimestamp(_ duration: Duration) -> String {
-        let components = duration.components
-        let seconds = max(0, Int(components.seconds))
-        let hours = seconds / 3_600
-        let minutes = (seconds % 3_600) / 60
-        let remainingSeconds = seconds % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, remainingSeconds)
-        }
-        return String(format: "%02d:%02d", minutes, remainingSeconds)
+        Duration.seconds(max(0, duration.components.seconds)).elapsedTimestamp
     }
 
     var tint: Color {
@@ -1023,11 +1006,11 @@ private struct VoiceFeedbackView: View {
         }
         .padding(12)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 12)
                 .fill(Color(nsColor: .controlBackgroundColor))
         )
         .overlay {
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 12)
                 .stroke(presentation.tint.opacity(0.22), lineWidth: 1)
         }
         .accessibilityElement(children: .ignore)
@@ -1091,7 +1074,7 @@ private struct ListeningSetupView: View {
         .padding(showsProviderSetup ? 0 : 16)
         .background {
             if !showsProviderSetup {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: 12)
                     .fill(Color(nsColor: .controlBackgroundColor))
             }
         }
@@ -1202,7 +1185,7 @@ struct MeetingProfileSettingsView: View {
                 return
             }
         }
-        .frame(width: 760, height: 560)
+        .frame(minWidth: 680, idealWidth: 760, minHeight: 500, idealHeight: 560)
     }
 
     private var selectedProfile: MeetingProfile? {
@@ -1353,7 +1336,6 @@ struct MeetingProfileSettingsView: View {
 private struct MeetingProfileEditorRow: View {
     let profile: MeetingProfile
 
-    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var meetingProfileSettings: MeetingProfileSettings
     @State private var name: String
     @State private var guidance: String
@@ -1432,16 +1414,15 @@ private struct MeetingProfileEditorRow: View {
                         Text("This removes the profile from this Mac and can’t be undone.")
                     }
                 }
-                Button("Save Changes") { saveProfile() }
+                Button("Save Changes", action: saveProfile)
                     .buttonStyle(.borderedProminent)
-                    .disabled(
-                        MeetingProfile.custom(
-                            name: name,
-                            guidance: guidance,
-                            insightPace: insightPace,
-                            technicalVocabulary: technicalVocabulary
-                        ) == nil
-                    )
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(!hasChanges || MeetingProfile.custom(
+                        name: name,
+                        guidance: guidance,
+                        insightPace: insightPace,
+                        technicalVocabulary: technicalVocabulary
+                    ) == nil)
             }
         }
         .padding(20)
@@ -1470,20 +1451,26 @@ private struct MeetingProfileEditorRow: View {
             return
         }
         saveError = nil
-        dismiss()
+    }
+
+    private var hasChanges: Bool {
+        name != profile.name
+            || guidance != profile.guidance
+            || insightPace != profile.insightPace
+            || technicalVocabulary != profile.technicalVocabulary
     }
 
 }
 
 private struct ProfileField<Content: View>: View {
     let title: String
-    @ViewBuilder let content: () -> Content
+    @ViewBuilder let content: Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.body.weight(.semibold))
-            content()
+            content
         }
     }
 }
@@ -1553,7 +1540,7 @@ private struct OpenAIProviderSetupView: View {
         .padding(24)
         .frame(width: 440)
         .confirmationDialog(
-            "Delete Open AI API key?",
+            "Delete OpenAI API key?",
             isPresented: $isConfirmingDeletion,
             titleVisibility: .visible
         ) {
@@ -1576,7 +1563,7 @@ private struct OpenAIProviderSetupView: View {
 
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 5) {
-                    Text("Open AI")
+                    Text("OpenAI")
                         .font(.body.weight(.medium))
                     HStack(spacing: 8) {
                         Circle()
@@ -1672,7 +1659,7 @@ private struct OpenAIAPIKeyDetailsView: View {
             }
         }
         .confirmationDialog(
-            "Delete Open AI API key?",
+            "Delete OpenAI API key?",
             isPresented: $isConfirmingDeletion,
             titleVisibility: .visible
         ) {
@@ -1729,14 +1716,15 @@ struct RecentTranscriptSegment: Equatable, Identifiable {
     var id: UInt64 { sequenceNumber }
 
     var timestamp: String {
-        let seconds = max(0, Int(startOffset))
-        let hours = seconds / 3_600
-        let minutes = (seconds % 3_600) / 60
-        let remainingSeconds = seconds % 60
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, remainingSeconds)
-        }
-        return String(format: "%02d:%02d", minutes, remainingSeconds)
+        Duration.seconds(max(0, Int(startOffset))).elapsedTimestamp
+    }
+}
+
+private extension Duration {
+    var elapsedTimestamp: String {
+        formatted(.time(pattern: self >= .seconds(3_600)
+            ? .hourMinuteSecond
+            : .minuteSecond(padMinuteToLength: 2)))
     }
 }
 
@@ -1755,7 +1743,7 @@ struct RecentMeetingDetailPresentation: Equatable {
         let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedQuery.isEmpty else { return orderedTranscriptSegments }
         return orderedTranscriptSegments.filter {
-            $0.text.localizedCaseInsensitiveContains(normalizedQuery)
+            $0.text.localizedStandardContains(normalizedQuery)
         }
     }
 
@@ -1808,9 +1796,9 @@ struct RecentMeetingsView: View {
             }
         }
         .frame(minWidth: 680, idealWidth: 760, minHeight: 500, idealHeight: 620)
-        .onAppear {
-            selectFirstMeetingIfNeeded()
-            Task { await meetingHistory.load() }
+        .onAppear(perform: selectFirstMeetingIfNeeded)
+        .task {
+            await meetingHistory.load()
         }
         .onReceive(
             NSWorkspace.shared.notificationCenter.publisher(
@@ -1829,31 +1817,13 @@ struct RecentMeetingsView: View {
         }
         .confirmationDialog(
             "Delete this meeting?",
-            isPresented: Binding(
-                get: { meetingPendingDeletion != nil },
-                set: { if !$0 { meetingPendingDeletion = nil } }
-            ),
+            item: $meetingPendingDeletion,
             titleVisibility: .visible
-        ) {
+        ) { meeting in
             Button("Delete", role: .destructive) {
-                if let meetingPendingDeletion {
-                    let deletedID = meetingPendingDeletion.id
-                    Task {
-                        do {
-                            try await meetingHistory.clear(meetingID: deletedID)
-                            if selectedMeetingID == deletedID {
-                                selectedMeetingID = nil
-                            }
-                        } catch {
-                            historyDeletionErrorMessage = "Your saved meetings are still available. Try again."
-                        }
-                    }
-                }
-                meetingPendingDeletion = nil
+                delete(meeting)
             }
-            Button("Cancel", role: .cancel) {
-                meetingPendingDeletion = nil
-            }
+            Button("Cancel", role: .cancel) {}
         }
         .confirmationDialog(
             "Clear all recent meetings?",
@@ -1876,14 +1846,23 @@ struct RecentMeetingsView: View {
         }
         .alert(
             "Couldn't delete saved meetings",
-            isPresented: Binding(
-                get: { historyDeletionErrorMessage != nil },
-                set: { if !$0 { historyDeletionErrorMessage = nil } }
-            )
-        ) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(historyDeletionErrorMessage ?? "")
+            item: $historyDeletionErrorMessage
+        ) { _ in
+        } message: { message in
+            Text(message)
+        }
+    }
+
+    private func delete(_ meeting: SavedMeeting) {
+        Task {
+            do {
+                try await meetingHistory.clear(meetingID: meeting.id)
+                if selectedMeetingID == meeting.id {
+                    selectedMeetingID = nil
+                }
+            } catch {
+                historyDeletionErrorMessage = "Your saved meetings are still available. Try again."
+            }
         }
     }
 
@@ -2061,12 +2040,10 @@ struct RecentMeetingsView: View {
     }
 
     private func meetingDuration(for meeting: SavedMeeting) -> String {
-        let seconds = max(0, meeting.endedAt.timeIntervalSince(meeting.startedAt))
-        let minutes = Int(seconds / 60)
-        let remainingSeconds = Int(seconds) % 60
-        return minutes > 0
-            ? "\(minutes)m \(remainingSeconds)s"
-            : "\(remainingSeconds)s"
+        let seconds = max(0, Int(meeting.endedAt.timeIntervalSince(meeting.startedAt)))
+        return Duration.seconds(seconds).formatted(
+            .units(allowed: [.hours, .minutes, .seconds], width: .narrow)
+        )
     }
 }
 
@@ -2114,7 +2091,7 @@ private struct RecentMeetingTranscriptView: View {
                         }
                     }
                     .background(Color(nsColor: .textBackgroundColor).opacity(0.35))
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .clipShape(.rect(cornerRadius: 10))
                 }
             }
         }
@@ -2147,7 +2124,7 @@ private struct MeetingHistoryRow: View {
             .foregroundStyle(.secondary)
             if meeting.incompleteTranscript {
                 Text("Transcript incomplete")
-                    .font(.caption2)
+                    .font(.caption)
                     .foregroundStyle(.orange)
             }
         }
@@ -2254,7 +2231,7 @@ private struct InsightStreamView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: 12)
                 .fill(Color(nsColor: .controlBackgroundColor))
         )
         .accessibilityElement(children: .contain)
@@ -2301,7 +2278,6 @@ private struct InsightCardView: View {
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
-        .opacity(card.state == .resolved ? 0.72 : 1)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(card.accessibilityDescription)
     }

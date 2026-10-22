@@ -169,6 +169,18 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(presentation.transcriptText, "The customer described the sign-in issue.\nThe billing workspace still returns 403.")
     }
 
+    func testTranscriptSearchIgnoresCaseAndAccents() {
+        let presentation = RecentMeetingDetailPresentation(
+            insights: [],
+            transcriptSegments: [
+                RecentTranscriptSegment(sequenceNumber: 1, text: "The café rollout moves to Friday."),
+                RecentTranscriptSegment(sequenceNumber: 2, text: "Billing stays unchanged."),
+            ]
+        )
+
+        XCTAssertEqual(presentation.transcriptSegments(matching: "CAFE").map(\.sequenceNumber), [1])
+    }
+
     func testRecentMeetingRowCountsTranscriptChunksWithGrammaticalNumber() {
         let english = Locale(identifier: "en_US")
 
