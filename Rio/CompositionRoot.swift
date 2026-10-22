@@ -36,31 +36,6 @@ final class LiveSessionController: SessionShellControlling, RioTerminationSessio
         }
     }
 
-    var primaryActionTitle: String {
-        switch status {
-        case .listening, .processing:
-            "Stop Listening"
-        case .paused:
-            "Stop Listening"
-        case .checkingAvailability:
-            "Checking…"
-        case .stopped, .unavailable:
-            "Start Listening"
-        case .interrupted:
-            failure == nil ? "Stop Listening" : "Start Listening"
-        }
-    }
-
-    var pauseActionTitle: String {
-        status == .paused ? "Resume Listening" : "Pause Listening"
-    }
-
-    var isReadyToStartListening: Bool {
-        // Permission states that macOS can request or re-check only when the
-        // capture starts must not disable the action that triggers that check.
-        readiness != nil && readiness?.blockingReason == nil
-    }
-
     func checkReadiness() async {
         _ = await lifecycle.checkReadiness()
         await refreshSnapshot()

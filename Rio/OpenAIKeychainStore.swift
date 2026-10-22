@@ -128,12 +128,7 @@ final class OpenAIProviderSettings: ObservableObject {
     @Published private(set) var isConfigured = false
     @Published private(set) var errorMessage: String?
 
-    let providerName = "OpenAI"
     private let keyStore: any OpenAIAPIKeyStore
-
-    var storageDescription: String {
-        "Stored securely in your macOS Keychain. It is never shown again."
-    }
 
     init(keyStore: any OpenAIAPIKeyStore = KeychainOpenAIAPIKeyStore()) {
         self.keyStore = keyStore

@@ -24,7 +24,7 @@ final class ApplicationShellTests: XCTestCase {
         )
     }
 
-    func testStatusAndEmptyPresentationsAreDeterministic() {
+    func testStatusPresentationsAreDeterministic() {
         MainActor.assertIsolated()
 
         let stopped = SessionStatusPresentation(status: .stopped)
@@ -49,18 +49,22 @@ final class ApplicationShellTests: XCTestCase {
             ).detail,
             "Meeting transcription stopped unexpectedly. Start listening again."
         )
-        XCTAssertEqual(
-            EmptyStatePresentation(status: .stopped, statusDetail: stopped.detail).title,
-            "Ready to listen"
+    }
+
+    func testReconnectingInterruptionOffersStopUntilRecoveryFails() async {
+        let reconnecting = FakeSessionController(status: .interrupted)
+        XCTAssertFalse(reconnecting.isStartAction)
+        XCTAssertEqual(reconnecting.primaryActionTitle, "Stop Listening")
+        await reconnecting.performPrimaryAction()
+        XCTAssertEqual(reconnecting.stopCount, 1)
+        XCTAssertEqual(reconnecting.startCount, 0)
+
+        let failed = FakeSessionController(
+            status: .interrupted,
+            failure: .stage(.audioCapture, .interrupted)
         )
-        XCTAssertEqual(
-            EmptyStatePresentation(status: .interrupted, statusDetail: interrupted.detail).title,
-            "Listening was interrupted"
-        )
-        XCTAssertEqual(
-            EmptyStatePresentation(status: .unavailable, statusDetail: unavailable.detail).detail,
-            "Resolve the unavailable prerequisite above, then try again."
-        )
+        XCTAssertTrue(failed.isStartAction)
+        XCTAssertEqual(failed.primaryActionTitle, "Start Listening")
     }
 
     func testTranscriptionOverloadExplainsContinuityAndRecovery() {
@@ -92,7 +96,6 @@ final class ApplicationShellTests: XCTestCase {
         let store = TestOpenAIAPIKeyStore()
         let settings = OpenAIProviderSettings(keyStore: store)
 
-        XCTAssertEqual(settings.providerName, "OpenAI")
         XCTAssertFalse(settings.isConfigured)
 
         settings.apiKey = " test-key "

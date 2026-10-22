@@ -164,13 +164,40 @@ protocol SessionShellControlling: ObservableObject {
     var failure: PipelineFailure? { get }
     var isPerformingPrimaryAction: Bool { get }
     var isPerformingPauseAction: Bool { get }
-    var isReadyToStartListening: Bool { get }
-    var primaryActionTitle: String { get }
-    var pauseActionTitle: String { get }
 
     func checkReadiness() async
     func performPrimaryAction() async
     func performPauseAction() async
+}
+
+extension SessionShellControlling {
+    /// An interruption without a failure is still reconnecting, so its primary
+    /// action stops the session rather than starting a new one.
+    var isStartAction: Bool {
+        switch status {
+        case .stopped, .unavailable:
+            true
+        case .interrupted:
+            failure != nil
+        case .checkingAvailability, .listening, .processing, .paused:
+            false
+        }
+    }
+
+    var primaryActionTitle: String {
+        if status == .checkingAvailability { return "Checking…" }
+        return isStartAction ? "Start Listening" : "Stop Listening"
+    }
+
+    var pauseActionTitle: String {
+        status == .paused ? "Resume Listening" : "Pause Listening"
+    }
+
+    var isReadyToStartListening: Bool {
+        // Permission states that macOS can request or re-check only when the
+        // capture starts must not disable the action that triggers that check.
+        readiness != nil && readiness?.blockingReason == nil
+    }
 }
 
 struct RioMenuBarContent<Controller: SessionShellControlling>: View {
@@ -246,18 +273,11 @@ struct RioMenuBarContent<Controller: SessionShellControlling>: View {
     }
 
     private var primaryActionSystemImage: String {
-        controller.status == .listening || controller.status == .processing
-            ? "stop.fill"
-            : "record.circle"
+        isStartAction ? "record.circle" : "stop.fill"
     }
 
     private var isStartAction: Bool {
-        switch controller.status {
-        case .stopped, .interrupted, .unavailable:
-            true
-        case .checkingAvailability, .listening, .processing, .paused:
-            false
-        }
+        controller.isStartAction
     }
 }
 
@@ -298,43 +318,17 @@ final class FakeSessionController: SessionShellControlling {
         self.transitionDelay = transitionDelay
     }
 
-    var primaryActionTitle: String {
-        switch status {
-        case .listening, .processing:
-            "Stop Listening"
-        case .checkingAvailability:
-            "Checking…"
-        case .paused:
-            "Stop Listening"
-        case .stopped, .interrupted, .unavailable:
-            "Start Listening"
-        }
-    }
-
-    var pauseActionTitle: String {
-        status == .paused ? "Resume Listening" : "Pause Listening"
-    }
-
-    var isReadyToStartListening: Bool {
-        readiness != nil && readiness?.blockingReason == nil
-    }
-
     func checkReadiness() async {
         // The fake controller receives readiness through its initializer or inject().
     }
 
     func performPrimaryAction() async {
-        guard !isPerformingPrimaryAction else { return }
+        guard !isPerformingPrimaryAction, status != .checkingAvailability else { return }
 
-        switch status {
-        case .listening, .processing:
-            await stop()
-        case .paused:
-            await stop()
-        case .stopped, .interrupted, .unavailable:
+        if isStartAction {
             await start()
-        case .checkingAvailability:
-            break
+        } else {
+            await stop()
         }
     }
 
@@ -653,10 +647,6 @@ struct RioView<Controller: SessionShellControlling>: View {
         return false
     }
 
-    private var hasUnavailablePrerequisite: Bool {
-        controller.unavailableReason != nil || controller.readiness?.isReady == false
-    }
-
     @ViewBuilder
     private var content: some View {
         if !providerSettings.isConfigured || controller.readiness?.isReady == false {
@@ -790,25 +780,12 @@ struct RioView<Controller: SessionShellControlling>: View {
     }
 
     private var isStartAction: Bool {
-        switch controller.status {
-        case .stopped, .interrupted, .unavailable:
-            true
-        case .checkingAvailability, .listening, .processing, .paused:
-            false
-        }
+        controller.isStartAction
     }
 
     private var primaryActionSymbol: String {
-        switch controller.status {
-        case .listening, .processing:
-            "stop.fill"
-        case .paused:
-            "stop.fill"
-        case .checkingAvailability:
-            "hourglass"
-        case .stopped, .interrupted, .unavailable:
-            "waveform"
-        }
+        if controller.status == .checkingAvailability { return "hourglass" }
+        return isStartAction ? "waveform" : "stop.fill"
     }
 
     private var primaryActionHint: String {
@@ -830,16 +807,15 @@ struct RioView<Controller: SessionShellControlling>: View {
             return "Start Listening to request the remaining macOS audio permission."
         }
 
-        switch controller.status {
-        case .listening, .processing:
-            return "Stops the current session and clears its insights. Keyboard shortcut Command-L."
-        case .paused:
-            return "Stops the paused session and clears its insights. Keyboard shortcut Command-L."
-        case .checkingAvailability:
+        if controller.status == .checkingAvailability {
             return "Rio is checking whether listening can begin."
-        case .stopped, .interrupted, .unavailable:
+        }
+        if isStartAction {
             return "Starts a new listening session. Keyboard shortcut Command-L."
         }
+        return controller.status == .paused
+            ? "Stops the paused session and clears its insights. Keyboard shortcut Command-L."
+            : "Stops the current session and clears its insights. Keyboard shortcut Command-L."
     }
 }
 
@@ -2373,54 +2349,6 @@ enum SessionRecoveryAction: Equatable {
     case openSystemAudioRecording
 }
 
-struct EmptyStatePresentation: Equatable {
-    let title: String
-    let detail: String
-    let symbolName: String
-
-    init(
-        status: SessionStatus,
-        statusDetail: String,
-        hasUnavailablePrerequisite: Bool = true
-    ) {
-        switch status {
-        case .stopped:
-            title = "Ready to listen"
-            detail = "Start listening to see live insights here."
-            symbolName = "waveform"
-        case .checkingAvailability:
-            title = "Getting ready"
-            detail = "This should only take a moment."
-            symbolName = "hourglass"
-        case .listening:
-            title = "Listening for useful moments"
-            detail = "Important points, decisions, actions, questions, and risks will appear here."
-            symbolName = "ear"
-        case .processing:
-            title = "Insights are on the way"
-            detail = "Rio is processing the latest meeting context."
-            symbolName = "sparkles"
-        case .paused:
-            title = "Listening is paused"
-            detail = "Resume listening when you are ready."
-            symbolName = "pause.circle"
-        case .interrupted:
-            title = "Listening was interrupted"
-            detail = "Start listening to try again."
-            symbolName = "exclamationmark.circle"
-        case .unavailable:
-            if hasUnavailablePrerequisite {
-                title = "Rio needs setup"
-                detail = "Resolve the unavailable prerequisite above, then try again."
-            } else {
-                title = "Couldn’t restart listening"
-                detail = "Try Start Listening again."
-            }
-            symbolName = "xmark.circle"
-        }
-    }
-}
-
 private extension PrerequisiteKind {
     var title: String {
         switch self {
@@ -2514,15 +2442,6 @@ private extension InsightCategory {
         }
     }
 
-    var tint: Color {
-        switch self {
-        case .important: .indigo
-        case .decision: .green
-        case .action: .blue
-        case .question: .purple
-        case .risk: .orange
-        }
-    }
 }
 
 private extension InsightCardState {
