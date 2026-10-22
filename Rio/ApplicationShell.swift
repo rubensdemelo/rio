@@ -1360,6 +1360,7 @@ private struct MeetingProfileEditorRow: View {
     @State private var insightPace: ListeningCadence
     @State private var technicalVocabulary: String
     @State private var saveError: String?
+    @State private var isConfirmingDeletion = false
 
     init(profile: MeetingProfile) {
         self.profile = profile
@@ -1416,7 +1417,19 @@ private struct MeetingProfileEditorRow: View {
                 Spacer()
                 if !profile.isFallback {
                     Button("Delete", role: .destructive) {
-                        meetingProfileSettings.deleteCustomProfile(id: profile.id)
+                        isConfirmingDeletion = true
+                    }
+                    .confirmationDialog(
+                        "Delete “\(profile.name)”?",
+                        isPresented: $isConfirmingDeletion,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Delete Profile", role: .destructive) {
+                            meetingProfileSettings.deleteCustomProfile(id: profile.id)
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("This removes the profile from this Mac and can’t be undone.")
                     }
                 }
                 Button("Save Changes") { saveProfile() }
@@ -1681,6 +1694,12 @@ enum RecentMeetingDetailSection: String, CaseIterable, Identifiable {
 
     var id: Self { self }
 
+    /// Technical meetings open on the transcript, where exact terms and error
+    /// codes are; other meetings open on their insights.
+    static func preferred(for profile: MeetingProfile) -> Self {
+        profile == .internalTechnical ? .transcript : .insights
+    }
+
     var title: String {
         switch self {
         case .insights: "Insights"
@@ -1803,6 +1822,11 @@ struct RecentMeetingsView: View {
         .onChange(of: meetingHistory.meetings) { _, _ in
             selectFirstMeetingIfNeeded()
         }
+        .onChange(of: selectedMeetingID) { _, _ in
+            if let selectedMeeting {
+                selectedSection = .preferred(for: selectedMeeting.profile)
+            }
+        }
         .confirmationDialog(
             "Delete this meeting?",
             isPresented: Binding(
@@ -1907,19 +1931,13 @@ struct RecentMeetingsView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 List(meetings, selection: $selectedMeetingID) { meeting in
-                    Button {
-                        selectedMeetingID = meeting.id
-                        selectedSection = meeting.profile == .internalTechnical ? .transcript : .insights
-                    } label: {
-                        MeetingHistoryRow(meeting: meeting)
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button("Delete Meeting", role: .destructive) {
-                            meetingPendingDeletion = meeting
+                    MeetingHistoryRow(meeting: meeting)
+                        .contextMenu {
+                            Button("Delete Meeting", role: .destructive) {
+                                meetingPendingDeletion = meeting
+                            }
                         }
-                    }
-                    .tag(meeting.id)
+                        .tag(meeting.id)
                 }
                 .listStyle(.sidebar)
             }
@@ -2038,9 +2056,6 @@ struct RecentMeetingsView: View {
         guard let selectedMeetingID,
               meetings.contains(where: { $0.id == selectedMeetingID }) else {
             selectedMeetingID = meetings.first?.id
-            if let first = meetings.first {
-                selectedSection = first.profile == .internalTechnical ? .transcript : .insights
-            }
             return
         }
     }
@@ -2106,8 +2121,15 @@ private struct RecentMeetingTranscriptView: View {
     }
 }
 
+enum MeetingHistoryRowPresentation {
+    static func transcriptChunkSummary(count: Int, locale: Locale) -> AttributedString {
+        AttributedString(localized: "^[\(count) transcript chunk](inflect: true)", locale: locale)
+    }
+}
+
 private struct MeetingHistoryRow: View {
     let meeting: SavedMeeting
+    @Environment(\.locale) private var locale
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -2116,7 +2138,10 @@ private struct MeetingHistoryRow: View {
             HStack(spacing: 8) {
                 Text(meeting.endedAt, format: .dateTime.hour().minute())
                 Text("•")
-                Text("\(meeting.transcriptSegments.count) transcript chunks")
+                Text(MeetingHistoryRowPresentation.transcriptChunkSummary(
+                    count: meeting.transcriptSegments.count,
+                    locale: locale
+                ))
             }
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -2548,14 +2573,12 @@ extension InsightCard {
 
 #Preview("Stopped") {
     RioView(controller: FakeSessionController())
-        .environmentObject(OpenAIProviderSettings())
-        .environmentObject(RioPanelRouter())
+        .previewEnvironment()
 }
 
 #Preview("Listening — empty") {
     RioView(controller: FakeSessionController(status: .listening))
-        .environmentObject(OpenAIProviderSettings())
-        .environmentObject(RioPanelRouter())
+        .previewEnvironment()
 }
 
 #Preview("Insight cards") {
@@ -2587,8 +2610,7 @@ extension InsightCard {
             ]
         )
     )
-    .environmentObject(OpenAIProviderSettings())
-    .environmentObject(RioPanelRouter())
+    .previewEnvironment()
 }
 
 #Preview("Unavailable") {
@@ -2599,8 +2621,7 @@ extension InsightCard {
             startOutcome: .unavailable(.openAIAPIKeyMissing)
         )
     )
-    .environmentObject(OpenAIProviderSettings())
-    .environmentObject(RioPanelRouter())
+    .previewEnvironment(apiKey: nil)
 }
 
 #Preview("Interrupted") {
@@ -2611,6 +2632,23 @@ extension InsightCard {
             startOutcome: .interrupted
         )
     )
-    .environmentObject(OpenAIProviderSettings())
-    .environmentObject(RioPanelRouter())
+    .previewEnvironment()
+}
+
+private struct PreviewAPIKeyStore: OpenAIAPIKeyStore {
+    let key: String?
+
+    func load() throws -> String? { key }
+    func save(_ key: String) throws {}
+    func remove() throws {}
+}
+
+private extension View {
+    /// Previews never touch the real Keychain and always supply every
+    /// environment object the session window reads.
+    func previewEnvironment(apiKey: String? = "sk-preview") -> some View {
+        environmentObject(OpenAIProviderSettings(keyStore: PreviewAPIKeyStore(key: apiKey)))
+            .environmentObject(RioPanelRouter())
+            .environmentObject(MeetingProfileSettings(defaults: UserDefaults(suiteName: "RioPreviews") ?? .standard))
+    }
 }

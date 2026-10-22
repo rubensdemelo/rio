@@ -169,6 +169,24 @@ final class ApplicationShellTests: XCTestCase {
         XCTAssertEqual(presentation.transcriptText, "The customer described the sign-in issue.\nThe billing workspace still returns 403.")
     }
 
+    func testRecentMeetingRowCountsTranscriptChunksWithGrammaticalNumber() {
+        let english = Locale(identifier: "en_US")
+
+        XCTAssertEqual(
+            String(MeetingHistoryRowPresentation.transcriptChunkSummary(count: 1, locale: english).characters),
+            "1 transcript chunk"
+        )
+        XCTAssertEqual(
+            String(MeetingHistoryRowPresentation.transcriptChunkSummary(count: 3, locale: english).characters),
+            "3 transcript chunks"
+        )
+    }
+
+    func testRecentMeetingOpensOnTheSectionItsProfilePrefers() {
+        XCTAssertEqual(RecentMeetingDetailSection.preferred(for: .internalTechnical), .transcript)
+        XCTAssertEqual(RecentMeetingDetailSection.preferred(for: .fallback), .insights)
+    }
+
     func testTerminationCoordinatorCoalescesRepeatedQuitRequests() async {
         let state = TerminationPreparationState()
         let preparationStarted = expectation(description: "preparation started")
