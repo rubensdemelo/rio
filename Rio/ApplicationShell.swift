@@ -1038,7 +1038,7 @@ private struct ListeningSetupView: View {
                         .controlSize(.small)
                 }
             } else if !unmetChecks.isEmpty {
-                ForEach(Array(unmetChecks.enumerated()), id: \.element.id) { index, check in
+                ForEach(unmetChecks.enumerated(), id: \.element.id) { index, check in
                     if index > 0 {
                         Divider().padding(.vertical, 12)
                     }
@@ -2159,11 +2159,9 @@ struct LiveInsightPresentation: Equatable {
 private struct InsightStreamView: View {
     let cards: [InsightCard]
 
-    private var presentation: LiveInsightPresentation {
-        LiveInsightPresentation(cards: cards)
-    }
-
     var body: some View {
+        let orderedCards = LiveInsightPresentation(cards: cards).cards
+
         VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("Insights")
@@ -2183,25 +2181,23 @@ private struct InsightStreamView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(
-                            Array(presentation.cards.enumerated()),
-                            id: \.element.stableKey
-                        ) { index, card in
-                            InsightCardView(card: card)
-                                .id(card.stableKey)
-
-                            if index != presentation.cards.count - 1 {
-                                Divider()
-                                    .padding(.leading, 16)
+                        ForEach(orderedCards.enumerated(), id: \.element.stableKey) { index, card in
+                            VStack(spacing: 0) {
+                                InsightCardView(card: card)
+                                if index != orderedCards.count - 1 {
+                                    Divider()
+                                        .padding(.leading, 16)
+                                }
                             }
+                            .id(card.stableKey)
                         }
                     }
                 }
                 .onAppear {
-                    scrollToNewest(using: proxy)
+                    scrollToNewest(of: orderedCards, using: proxy)
                 }
-                .onChange(of: presentation.cards.map(\.changedAt)) { _, _ in
-                    scrollToNewest(using: proxy)
+                .onChange(of: orderedCards.map(\.changedAt)) { _, _ in
+                    scrollToNewest(of: orderedCards, using: proxy)
                 }
             }
         }
@@ -2214,8 +2210,8 @@ private struct InsightStreamView: View {
         .accessibilityLabel("Meeting insights")
     }
 
-    private func scrollToNewest(using proxy: ScrollViewProxy) {
-        guard let newestCard = presentation.cards.first else {
+    private func scrollToNewest(of orderedCards: [InsightCard], using proxy: ScrollViewProxy) {
+        guard let newestCard = orderedCards.first else {
             return
         }
         proxy.scrollTo(newestCard.stableKey, anchor: .top)
