@@ -1723,10 +1723,11 @@ struct RecentTranscriptSegment: Equatable, Identifiable {
 
 struct RecentMeetingDetailPresentation: Equatable {
     let insights: [InsightCard]
-    let transcriptSegments: [RecentTranscriptSegment]
+    let orderedTranscriptSegments: [RecentTranscriptSegment]
 
-    var orderedTranscriptSegments: [RecentTranscriptSegment] {
-        transcriptSegments
+    init(insights: [InsightCard], transcriptSegments: [RecentTranscriptSegment]) {
+        self.insights = insights
+        orderedTranscriptSegments = transcriptSegments
             .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
             .sorted { $0.sequenceNumber < $1.sequenceNumber }
     }
@@ -1760,7 +1761,6 @@ struct RecentMeetingsView: View {
     @State private var meetingPendingDeletion: SavedMeeting?
     @State private var isConfirmingClear = false
     @State private var historyDeletionErrorMessage: String?
-    @State private var transcriptQuery = ""
 
     private var meetings: [SavedMeeting] {
         meetingHistory.meetings.sorted { $0.startedAt > $1.startedAt }
@@ -1910,7 +1910,6 @@ struct RecentMeetingsView: View {
                     Button {
                         selectedMeetingID = meeting.id
                         selectedSection = meeting.profile == .internalTechnical ? .transcript : .insights
-                        transcriptQuery = ""
                     } label: {
                         MeetingHistoryRow(meeting: meeting)
                     }
@@ -2003,7 +2002,10 @@ struct RecentMeetingsView: View {
                 case .insights:
                     insightsContent(presentation.insights)
                 case .transcript:
-                    transcriptContent(presentation)
+                    // The search query lives in this view, so typing redraws only
+                    // the transcript, and a different meeting starts a fresh query.
+                    RecentMeetingTranscriptView(presentation: presentation)
+                        .id(meeting.id)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -2032,8 +2034,32 @@ struct RecentMeetingsView: View {
         }
     }
 
-    @ViewBuilder
-    private func transcriptContent(_ presentation: RecentMeetingDetailPresentation) -> some View {
+    private func selectFirstMeetingIfNeeded() {
+        guard let selectedMeetingID,
+              meetings.contains(where: { $0.id == selectedMeetingID }) else {
+            selectedMeetingID = meetings.first?.id
+            if let first = meetings.first {
+                selectedSection = first.profile == .internalTechnical ? .transcript : .insights
+            }
+            return
+        }
+    }
+
+    private func meetingDuration(for meeting: SavedMeeting) -> String {
+        let seconds = max(0, meeting.endedAt.timeIntervalSince(meeting.startedAt))
+        let minutes = Int(seconds / 60)
+        let remainingSeconds = Int(seconds) % 60
+        return minutes > 0
+            ? "\(minutes)m \(remainingSeconds)s"
+            : "\(remainingSeconds)s"
+    }
+}
+
+private struct RecentMeetingTranscriptView: View {
+    let presentation: RecentMeetingDetailPresentation
+    @State private var query = ""
+
+    var body: some View {
         if presentation.orderedTranscriptSegments.isEmpty {
             ContentUnavailableView(
                 "No transcript",
@@ -2042,14 +2068,14 @@ struct RecentMeetingsView: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            let matches = presentation.transcriptSegments(matching: transcriptQuery)
+            let matches = presentation.transcriptSegments(matching: query)
             VStack(alignment: .leading, spacing: 10) {
-                TextField("Search transcript", text: $transcriptQuery)
+                TextField("Search transcript", text: $query)
                     .textFieldStyle(.roundedBorder)
                     .accessibilityLabel("Search saved transcript")
 
                 if matches.isEmpty {
-                    ContentUnavailableView.search(text: transcriptQuery)
+                    ContentUnavailableView.search(text: query)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
                     ScrollView {
@@ -2077,27 +2103,6 @@ struct RecentMeetingsView: View {
                 }
             }
         }
-    }
-
-    private func selectFirstMeetingIfNeeded() {
-        guard let selectedMeetingID,
-              meetings.contains(where: { $0.id == selectedMeetingID }) else {
-            selectedMeetingID = meetings.first?.id
-            transcriptQuery = ""
-            if let first = meetings.first {
-                selectedSection = first.profile == .internalTechnical ? .transcript : .insights
-            }
-            return
-        }
-    }
-
-    private func meetingDuration(for meeting: SavedMeeting) -> String {
-        let seconds = max(0, meeting.endedAt.timeIntervalSince(meeting.startedAt))
-        let minutes = Int(seconds / 60)
-        let remainingSeconds = Int(seconds) % 60
-        return minutes > 0
-            ? "\(minutes)m \(remainingSeconds)s"
-            : "\(remainingSeconds)s"
     }
 }
 
