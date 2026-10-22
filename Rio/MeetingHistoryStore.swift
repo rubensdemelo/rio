@@ -170,9 +170,9 @@ struct SavedMeeting: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
-protocol MeetingHistoryPersisting {
-    func load() throws -> [SavedMeeting]
-    func save(_ meetings: [SavedMeeting]) throws
+protocol MeetingHistoryPersisting: Sendable {
+    func load() async throws -> [SavedMeeting]
+    func save(_ meetings: [SavedMeeting]) async throws
 }
 
 enum MeetingHistoryPersistenceIssue: Equatable {
@@ -188,14 +188,14 @@ struct FileMeetingHistoryRepository: MeetingHistoryPersisting {
         self.fileURL = fileURL ?? Self.defaultFileURL()
     }
 
-    func load() throws -> [SavedMeeting] {
+    func load() async throws -> [SavedMeeting] {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             return []
         }
         return try JSONDecoder().decode([SavedMeeting].self, from: Data(contentsOf: fileURL))
     }
 
-    func save(_ meetings: [SavedMeeting]) throws {
+    func save(_ meetings: [SavedMeeting]) async throws {
         try FileManager.default.createDirectory(
             at: fileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -217,9 +217,9 @@ struct FileMeetingHistoryRepository: MeetingHistoryPersisting {
 
 @MainActor
 final class MeetingHistoryStore: ObservableObject, RioTerminationHistoryPreparing {
-    static let retention: TimeInterval = 48 * 60 * 60
-    static let maximumMeetingCount = 50
-    static let maximumEncodedByteCount = 8_000_000
+    nonisolated static let retention: TimeInterval = 48 * 60 * 60
+    nonisolated static let maximumMeetingCount = 50
+    nonisolated static let maximumEncodedByteCount = 8_000_000
 
     @Published private(set) var meetings: [SavedMeeting]
     @Published private(set) var persistenceIssue: MeetingHistoryPersistenceIssue?
@@ -227,6 +227,10 @@ final class MeetingHistoryStore: ObservableObject, RioTerminationHistoryPreparin
 
     private let repository: any MeetingHistoryPersisting
     private var expiryPersistencePending = false
+    // Operations suspend while the repository works off the main actor, so
+    // each one waits for the previous one; otherwise a slower save could
+    // overwrite a newer history with a snapshot taken before it.
+    private var lastOperation: Task<Void, Never>?
 
     init(
         repository: any MeetingHistoryPersisting = FileMeetingHistoryRepository(),
@@ -236,24 +240,85 @@ final class MeetingHistoryStore: ObservableObject, RioTerminationHistoryPreparin
         meetings = []
         persistenceIssue = nil
         pendingMeeting = nil
-        load(now: now)
+        lastOperation = Task { await self.performLoad(now: now) }
     }
 
-    func load(now: Date = Date()) {
+    func waitForPendingOperations() async {
+        await lastOperation?.value
+    }
+
+    func load(now: Date = Date()) async {
+        _ = try? await serialized { await self.performLoad(now: now) }
+    }
+
+    func record(_ meeting: SavedMeeting, now: Date = Date()) async throws {
+        try await serialized { try await self.performRecord(meeting, now: now) }
+    }
+
+    func retryPendingMeeting(now: Date = Date()) async throws {
+        try await serialized {
+            guard let pendingMeeting = self.pendingMeeting else { return }
+            try await self.performRecord(pendingMeeting, now: now)
+        }
+    }
+
+    var hasPendingTerminationRecord: Bool {
+        pendingMeeting != nil
+    }
+
+    func retryPendingTerminationRecord() async throws {
+        try await retryPendingMeeting()
+    }
+
+    func pruneExpired(now: Date = Date()) async throws {
+        try await serialized { try await self.performPruneExpired(now: now) }
+    }
+
+    func clear(meetingID: UUID) async throws {
+        try await serialized {
+            let updatedMeetings = self.meetings.filter { $0.id != meetingID }
+            try await self.repository.save(updatedMeetings)
+            self.meetings = updatedMeetings
+            self.persistenceIssue = self.pendingMeeting == nil ? nil : .saveFailed
+        }
+    }
+
+    func clearAll() async throws {
+        try await serialized {
+            try await self.repository.save([])
+            self.meetings = []
+            self.pendingMeeting = nil
+            self.persistenceIssue = nil
+        }
+    }
+
+    private func serialized<T: Sendable>(
+        _ operation: @escaping @MainActor @Sendable () async throws -> T
+    ) async throws -> T {
+        let previous = lastOperation
+        let task = Task {
+            await previous?.value
+            return try await operation()
+        }
+        lastOperation = Task { _ = await task.result }
+        return try await task.value
+    }
+
+    private func performLoad(now: Date) async {
         let loadedMeetings: [SavedMeeting]
         do {
-            loadedMeetings = try repository.load()
+            loadedMeetings = try await repository.load()
         } catch {
             meetings = []
             persistenceIssue = .loadFailed
             return
         }
 
-        let retainedMeetings = Self.retainedMeetings(from: loadedMeetings, now: now)
+        let retainedMeetings = await Self.retainedMeetings(from: loadedMeetings, now: now)
         meetings = retainedMeetings
         if retainedMeetings != loadedMeetings {
             do {
-                try repository.save(retainedMeetings)
+                try await repository.save(retainedMeetings)
                 expiryPersistencePending = false
                 persistenceIssue = pendingMeeting == nil ? nil : .saveFailed
             } catch {
@@ -265,12 +330,12 @@ final class MeetingHistoryStore: ObservableObject, RioTerminationHistoryPreparin
         }
     }
 
-    func record(_ meeting: SavedMeeting, now: Date = Date()) throws {
+    private func performRecord(_ meeting: SavedMeeting, now: Date) async throws {
         var updatedMeetings = meetings.filter { $0.id != meeting.id }
         updatedMeetings.append(meeting)
-        let retainedMeetings = Self.retainedMeetings(from: updatedMeetings, now: now)
+        let retainedMeetings = await Self.retainedMeetings(from: updatedMeetings, now: now)
         do {
-            try repository.save(retainedMeetings)
+            try await repository.save(retainedMeetings)
             meetings = retainedMeetings
             if pendingMeeting?.id == meeting.id {
                 pendingMeeting = nil
@@ -285,28 +350,18 @@ final class MeetingHistoryStore: ObservableObject, RioTerminationHistoryPreparin
         }
     }
 
-    func retryPendingMeeting(now: Date = Date()) throws {
-        guard let pendingMeeting else { return }
-        try record(pendingMeeting, now: now)
-    }
-
-    var hasPendingTerminationRecord: Bool {
-        pendingMeeting != nil
-    }
-
-    func retryPendingTerminationRecord() throws {
-        try retryPendingMeeting()
-    }
-
-    func pruneExpired(now: Date = Date()) throws {
-        let retainedMeetings = Self.retainedMeetings(from: meetings, now: now)
+    private func performPruneExpired(now: Date) async throws {
+        // Every write already enforced the count and size bounds, and expiry
+        // only removes meetings, so the date filter alone keeps them.
+        let earliestRetainedDate = now.addingTimeInterval(-Self.retention)
+        let retainedMeetings = meetings.filter { $0.endedAt >= earliestRetainedDate }
         guard retainedMeetings != meetings || expiryPersistencePending else { return }
 
         // Expired content is hidden immediately even if the disk write fails.
         // `persistenceIssue` keeps the UI truthful that removal at rest did not succeed.
         meetings = retainedMeetings
         do {
-            try repository.save(retainedMeetings)
+            try await repository.save(retainedMeetings)
             expiryPersistencePending = false
             if persistenceIssue == .expirySaveFailed {
                 persistenceIssue = pendingMeeting == nil ? nil : .saveFailed
@@ -318,24 +373,10 @@ final class MeetingHistoryStore: ObservableObject, RioTerminationHistoryPreparin
         }
     }
 
-    func clear(meetingID: UUID) throws {
-        let updatedMeetings = meetings.filter { $0.id != meetingID }
-        try repository.save(updatedMeetings)
-        meetings = updatedMeetings
-        persistenceIssue = pendingMeeting == nil ? nil : .saveFailed
-    }
-
-    func clearAll() throws {
-        try repository.save([])
-        meetings = []
-        pendingMeeting = nil
-        persistenceIssue = nil
-    }
-
-    private static func retainedMeetings(
+    private nonisolated static func retainedMeetings(
         from meetings: [SavedMeeting],
         now: Date
-    ) -> [SavedMeeting] {
+    ) async -> [SavedMeeting] {
         let earliestRetainedDate = now.addingTimeInterval(-retention)
         var retained = meetings
             .filter { $0.endedAt >= earliestRetainedDate }
@@ -348,17 +389,21 @@ final class MeetingHistoryStore: ObservableObject, RioTerminationHistoryPreparin
             .prefix(maximumMeetingCount)
             .map { $0 }
 
-        while retained.count > 1,
-              encodedByteCount(of: retained) > maximumEncodedByteCount {
-            retained.removeLast()
+        // The saved file is `[` + the meetings joined by `,` + `]`, so its size
+        // follows from encoding each meeting once.
+        let encoder = JSONEncoder()
+        var meetingByteCounts = retained.map {
+            (try? encoder.encode($0).count) ?? maximumEncodedByteCount + 1
         }
-        if encodedByteCount(of: retained) > maximumEncodedByteCount {
+        var encodedByteCount = 2 + meetingByteCounts.reduce(0, +)
+            + max(0, meetingByteCounts.count - 1)
+        while retained.count > 1, encodedByteCount > maximumEncodedByteCount {
+            retained.removeLast()
+            encodedByteCount -= meetingByteCounts.removeLast() + 1
+        }
+        if encodedByteCount > maximumEncodedByteCount {
             retained.removeAll()
         }
         return retained
-    }
-
-    private static func encodedByteCount(of meetings: [SavedMeeting]) -> Int {
-        (try? JSONEncoder().encode(meetings).count) ?? .max
     }
 }

@@ -742,7 +742,7 @@ final class InMemoryTranscriptCollector: TranscriptCollecting {
 @MainActor
 protocol MeetingHistoryRecording: AnyObject {
     var hasPendingRecord: Bool { get }
-    func record(_ meeting: MeetingHistoryRecord) throws
+    func record(_ meeting: MeetingHistoryRecord) async throws
 }
 
 extension MeetingHistoryRecording {
@@ -751,7 +751,7 @@ extension MeetingHistoryRecording {
 
 @MainActor
 final class NoopMeetingHistoryRecorder: MeetingHistoryRecording {
-    func record(_ meeting: MeetingHistoryRecord) throws {}
+    func record(_ meeting: MeetingHistoryRecord) async throws {}
 }
 
 @MainActor

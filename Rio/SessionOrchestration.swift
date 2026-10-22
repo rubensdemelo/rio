@@ -673,7 +673,7 @@ final class SessionLifecycleCoordinator: SessionLifecycle {
 
         if let meetingRecord {
             do {
-                try historyRecorder.record(meetingRecord)
+                try await historyRecorder.record(meetingRecord)
             } catch {
                 let persistenceFailure = PipelineFailure.stage(
                     .meetingHistory,

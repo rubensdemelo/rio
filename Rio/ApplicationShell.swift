@@ -36,7 +36,7 @@ protocol RioTerminationSessionPreparing: AnyObject {
 @MainActor
 protocol RioTerminationHistoryPreparing: AnyObject {
     var hasPendingTerminationRecord: Bool { get }
-    func retryPendingTerminationRecord() throws
+    func retryPendingTerminationRecord() async throws
 }
 
 @MainActor
@@ -57,7 +57,7 @@ final class RioTerminationPreparation {
         await session.prepareForTermination()
         if history.hasPendingTerminationRecord {
             do {
-                try history.retryPendingTerminationRecord()
+                try await history.retryPendingTerminationRecord()
             } catch {
                 return false
             }
@@ -1769,15 +1769,15 @@ struct RecentMeetingsView: View {
         }
         .frame(minWidth: 680, idealWidth: 760, minHeight: 500, idealHeight: 620)
         .onAppear {
-            meetingHistory.load()
             selectFirstMeetingIfNeeded()
+            Task { await meetingHistory.load() }
         }
         .onReceive(
             NSWorkspace.shared.notificationCenter.publisher(
                 for: NSWorkspace.didWakeNotification
             )
         ) { _ in
-            meetingHistory.load()
+            Task { await meetingHistory.load() }
         }
         .onChange(of: meetingHistory.meetings) { _, _ in
             selectFirstMeetingIfNeeded()
@@ -1793,13 +1793,15 @@ struct RecentMeetingsView: View {
             Button("Delete", role: .destructive) {
                 if let meetingPendingDeletion {
                     let deletedID = meetingPendingDeletion.id
-                    do {
-                        try meetingHistory.clear(meetingID: deletedID)
-                        if selectedMeetingID == deletedID {
-                            selectedMeetingID = nil
+                    Task {
+                        do {
+                            try await meetingHistory.clear(meetingID: deletedID)
+                            if selectedMeetingID == deletedID {
+                                selectedMeetingID = nil
+                            }
+                        } catch {
+                            historyDeletionErrorMessage = "Your saved meetings are still available. Try again."
                         }
-                    } catch {
-                        historyDeletionErrorMessage = "Your saved meetings are still available. Try again."
                     }
                 }
                 meetingPendingDeletion = nil
@@ -1814,11 +1816,13 @@ struct RecentMeetingsView: View {
             titleVisibility: .visible
         ) {
             Button("Clear All", role: .destructive) {
-                do {
-                    try meetingHistory.clearAll()
-                    selectedMeetingID = nil
-                } catch {
-                    historyDeletionErrorMessage = "Your saved meetings are still available. Try again."
+                Task {
+                    do {
+                        try await meetingHistory.clearAll()
+                        selectedMeetingID = nil
+                    } catch {
+                        historyDeletionErrorMessage = "Your saved meetings are still available. Try again."
+                    }
                 }
             }
             Button("Cancel", role: .cancel) {}
@@ -1865,7 +1869,7 @@ struct RecentMeetingsView: View {
 
                     if meetingHistory.pendingMeeting != nil {
                         Button("Retry Save") {
-                            try? meetingHistory.retryPendingMeeting()
+                            Task { try? await meetingHistory.retryPendingMeeting() }
                         }
                         .font(.caption)
                     }

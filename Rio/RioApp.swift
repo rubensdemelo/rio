@@ -111,7 +111,7 @@ struct RioApp: App {
                     return
                 }
                 guard let meetingHistory else { return }
-                try? meetingHistory.pruneExpired()
+                try? await meetingHistory.pruneExpired()
             }
         }
 
@@ -132,7 +132,7 @@ struct RioApp: App {
                     for: NSWorkspace.didWakeNotification
                 )
             ) { _ in
-                meetingHistory.load()
+                Task { await meetingHistory.load() }
             }
         } label: {
             Image("RioMenuBarIcon")

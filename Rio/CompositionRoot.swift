@@ -280,7 +280,7 @@ private final class MeetingHistoryStoreRecorder: MeetingHistoryRecording {
         store.pendingMeeting != nil
     }
 
-    func record(_ meeting: MeetingHistoryRecord) throws {
+    func record(_ meeting: MeetingHistoryRecord) async throws {
         let savedMeeting = SavedMeeting(
             id: meeting.meetingID,
             startedAt: meeting.startedAt,
@@ -303,7 +303,7 @@ private final class MeetingHistoryStoreRecorder: MeetingHistoryRecording {
             incompleteTranscript: meeting.incompleteTranscript,
             profile: meeting.profile
         )
-        try store.record(savedMeeting, now: meeting.endedAt)
+        try await store.record(savedMeeting, now: meeting.endedAt)
     }
 }
 

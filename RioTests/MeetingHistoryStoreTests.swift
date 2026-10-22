@@ -21,33 +21,33 @@ final class MeetingHistoryStoreTests: XCTestCase {
         XCTAssertEqual(meeting.transcriptSegments.map(\.text), ["First", "Second"])
     }
 
-    func testLoadingAndWritingPrunesMeetingsOutsideTheLastTwoDays() throws {
+    func testLoadingAndWritingPrunesMeetingsOutsideTheLastTwoDays() async throws {
         let now = date(100_000)
         let expired = meeting(id: UUID(), endedAt: now.timeIntervalSince1970 - MeetingHistoryStore.retention - 1)
         let recent = meeting(id: UUID(), endedAt: now.timeIntervalSince1970)
         let repository = TestMeetingHistoryRepository(meetings: [expired, recent])
 
-        let history = MeetingHistoryStore(repository: repository, now: now)
+        let history = await makeHistory(repository, now: now)
 
         XCTAssertEqual(history.meetings.map(\.id), [recent.id])
         XCTAssertEqual(repository.meetings, [recent])
 
-        try history.record(expired, now: now)
+        try await history.record(expired, now: now)
 
         XCTAssertEqual(history.meetings, [recent])
         XCTAssertEqual(repository.meetings, [recent])
     }
 
-    func testRecordingTheSameMeetingIDReplacesThePreviousSnapshot() throws {
+    func testRecordingTheSameMeetingIDReplacesThePreviousSnapshot() async throws {
         let repository = TestMeetingHistoryRepository()
-        let history = MeetingHistoryStore(repository: repository, now: date(100))
+        let history = await makeHistory(repository, now: date(100))
         let id = UUID()
 
-        try history.record(
+        try await history.record(
             meeting(id: id, endedAt: 50, transcriptText: "Initial"),
             now: date(100)
         )
-        try history.record(
+        try await history.record(
             meeting(id: id, endedAt: 60, transcriptText: "Final"),
             now: date(100)
         )
@@ -56,86 +56,86 @@ final class MeetingHistoryStoreTests: XCTestCase {
         XCTAssertEqual(history.meetings[0].transcriptSegments.map(\.text), ["Final"])
     }
 
-    func testClearMeetingAndClearAllPersistTheChange() throws {
+    func testClearMeetingAndClearAllPersistTheChange() async throws {
         let repository = TestMeetingHistoryRepository()
-        let history = MeetingHistoryStore(repository: repository, now: date(100))
+        let history = await makeHistory(repository, now: date(100))
         let first = meeting(id: UUID(), endedAt: 50)
         let second = meeting(id: UUID(), endedAt: 60)
-        try history.record(first, now: date(100))
-        try history.record(second, now: date(100))
+        try await history.record(first, now: date(100))
+        try await history.record(second, now: date(100))
 
-        try history.clear(meetingID: first.id)
+        try await history.clear(meetingID: first.id)
 
         XCTAssertEqual(history.meetings, [second])
         XCTAssertEqual(repository.meetings, [second])
 
-        try history.clearAll()
+        try await history.clearAll()
 
         XCTAssertTrue(history.meetings.isEmpty)
         XCTAssertTrue(repository.meetings.isEmpty)
     }
 
-    func testClearMeetingFailureKeepsEveryMeetingVisibleAndCanRetry() throws {
+    func testClearMeetingFailureKeepsEveryMeetingVisibleAndCanRetry() async throws {
         let first = meeting(id: UUID(), endedAt: 50)
         let second = meeting(id: UUID(), endedAt: 60)
         let repository = TestMeetingHistoryRepository(meetings: [second, first])
-        let history = MeetingHistoryStore(repository: repository, now: date(100))
+        let history = await makeHistory(repository, now: date(100))
         repository.shouldFailSaves = true
 
-        XCTAssertThrowsError(try history.clear(meetingID: first.id))
+        await assertThrows { try await history.clear(meetingID: first.id) }
         XCTAssertEqual(history.meetings, [second, first])
         XCTAssertEqual(repository.meetings, [second, first])
 
         repository.shouldFailSaves = false
-        try history.clear(meetingID: first.id)
+        try await history.clear(meetingID: first.id)
 
         XCTAssertEqual(history.meetings, [second])
         XCTAssertEqual(repository.meetings, [second])
     }
 
-    func testClearAllFailureKeepsMeetingsVisibleAndCanRetry() throws {
+    func testClearAllFailureKeepsMeetingsVisibleAndCanRetry() async throws {
         let first = meeting(id: UUID(), endedAt: 50)
         let second = meeting(id: UUID(), endedAt: 60)
         let repository = TestMeetingHistoryRepository(meetings: [second, first])
-        let history = MeetingHistoryStore(repository: repository, now: date(100))
+        let history = await makeHistory(repository, now: date(100))
         repository.shouldFailSaves = true
 
-        XCTAssertThrowsError(try history.clearAll())
+        await assertThrows { try await history.clearAll() }
         XCTAssertEqual(history.meetings, [second, first])
         XCTAssertEqual(repository.meetings, [second, first])
 
         repository.shouldFailSaves = false
-        try history.clearAll()
+        try await history.clearAll()
 
         XCTAssertTrue(history.meetings.isEmpty)
         XCTAssertTrue(repository.meetings.isEmpty)
     }
 
-    func testRecordFailureKeepsBoundedPendingSnapshotAndCanRetry() throws {
+    func testRecordFailureKeepsBoundedPendingSnapshotAndCanRetry() async throws {
         let repository = TestMeetingHistoryRepository()
-        let history = MeetingHistoryStore(repository: repository, now: date(100))
+        let history = await makeHistory(repository, now: date(100))
         let failedMeeting = meeting(id: UUID(), endedAt: 100)
         repository.shouldFailSaves = true
 
-        XCTAssertThrowsError(try history.record(failedMeeting, now: date(100)))
+        await assertThrows { try await history.record(failedMeeting, now: date(100)) }
         XCTAssertTrue(history.meetings.isEmpty)
         XCTAssertEqual(history.pendingMeeting, failedMeeting)
         XCTAssertEqual(history.persistenceIssue, .saveFailed)
 
         repository.shouldFailSaves = false
-        try history.retryPendingMeeting(now: date(100))
+        try await history.retryPendingMeeting(now: date(100))
 
         XCTAssertEqual(history.meetings, [failedMeeting])
         XCTAssertNil(history.pendingMeeting)
         XCTAssertNil(history.persistenceIssue)
     }
 
-    func testClockAdvancementPrunesWithoutRecordingAnotherMeeting() throws {
+    func testClockAdvancementPrunesWithoutRecordingAnotherMeeting() async throws {
         let meeting = meeting(id: UUID(), endedAt: 100)
         let repository = TestMeetingHistoryRepository(meetings: [meeting])
-        let history = MeetingHistoryStore(repository: repository, now: date(100))
+        let history = await makeHistory(repository, now: date(100))
 
-        try history.pruneExpired(
+        try await history.pruneExpired(
             now: date(100 + MeetingHistoryStore.retention + 1)
         )
 
@@ -143,33 +143,31 @@ final class MeetingHistoryStoreTests: XCTestCase {
         XCTAssertTrue(repository.meetings.isEmpty)
     }
 
-    func testFailedExpiryWriteHidesExpiredMeetingAndSurfacesAtRestFailure() {
+    func testFailedExpiryWriteHidesExpiredMeetingAndSurfacesAtRestFailure() async throws {
         let meeting = meeting(id: UUID(), endedAt: 100)
         let repository = TestMeetingHistoryRepository(meetings: [meeting])
-        let history = MeetingHistoryStore(repository: repository, now: date(100))
+        let history = await makeHistory(repository, now: date(100))
         repository.shouldFailSaves = true
 
-        XCTAssertThrowsError(
-            try history.pruneExpired(
+        await assertThrows {
+            try await history.pruneExpired(
                 now: date(100 + MeetingHistoryStore.retention + 1)
             )
-        )
+        }
 
         XCTAssertTrue(history.meetings.isEmpty)
         XCTAssertEqual(repository.meetings, [meeting])
         XCTAssertEqual(history.persistenceIssue, .expirySaveFailed)
 
         repository.shouldFailSaves = false
-        XCTAssertNoThrow(
-            try history.pruneExpired(
-                now: date(100 + MeetingHistoryStore.retention + 2)
-            )
+        try await history.pruneExpired(
+            now: date(100 + MeetingHistoryStore.retention + 2)
         )
         XCTAssertTrue(repository.meetings.isEmpty)
         XCTAssertNil(history.persistenceIssue)
     }
 
-    func testAggregateMeetingCountEvictsOldestDeterministically() throws {
+    func testAggregateMeetingCountEvictsOldestDeterministically() async throws {
         let now = date(1_000_000)
         let meetings = (0...MeetingHistoryStore.maximumMeetingCount).map { offset in
             meeting(
@@ -179,14 +177,14 @@ final class MeetingHistoryStoreTests: XCTestCase {
         }
         let repository = TestMeetingHistoryRepository(meetings: meetings)
 
-        let history = MeetingHistoryStore(repository: repository, now: now)
+        let history = await makeHistory(repository, now: now)
 
         XCTAssertEqual(history.meetings.count, MeetingHistoryStore.maximumMeetingCount)
         XCTAssertEqual(history.meetings.map(\.endedAt), meetings.dropLast().map(\.endedAt))
         XCTAssertEqual(repository.meetings, history.meetings)
     }
 
-    func testAggregateEncodedByteBoundEvictsOldestMeetings() throws {
+    func testAggregateEncodedByteBoundEvictsOldestMeetings() async throws {
         let now = date(1_000_000)
         let largeTranscript = (0..<1_000).map { sequence in
             segment(
@@ -207,56 +205,85 @@ final class MeetingHistoryStoreTests: XCTestCase {
         }
         let repository = TestMeetingHistoryRepository(meetings: meetings)
 
-        let history = MeetingHistoryStore(repository: repository, now: now)
+        let history = await makeHistory(repository, now: now)
         let encoded = try JSONEncoder().encode(history.meetings)
 
         XCTAssertLessThan(history.meetings.count, meetings.count)
         XCTAssertLessThanOrEqual(encoded.count, MeetingHistoryStore.maximumEncodedByteCount)
         XCTAssertEqual(history.meetings.first?.id, meetings.first?.id)
+        let withNextOldest = Array(meetings.prefix(history.meetings.count + 1))
+        XCTAssertGreaterThan(
+            try JSONEncoder().encode(withNextOldest).count,
+            MeetingHistoryStore.maximumEncodedByteCount,
+            "eviction keeps every meeting that fits within the byte bound"
+        )
     }
 
-    func testCorruptHistoryLoadIsReportedWithoutOverwritingTheRepository() {
+    func testRecordDoesNotPublishUntilTheSaveFinishesAndLaterOperationsWaitForIt() async throws {
+        let existing = meeting(id: UUID(), endedAt: 50)
+        let recorded = meeting(id: UUID(), endedAt: 60)
+        let repository = TestMeetingHistoryRepository(meetings: [existing])
+        let history = await makeHistory(repository, now: date(100))
+        repository.holdsSaves = true
+
+        let recording = Task { try await history.record(recorded, now: date(100)) }
+        await repository.waitForHeldSave()
+        let clearing = Task { try await history.clear(meetingID: existing.id) }
+        for _ in 0..<20 { await Task.yield() }
+
+        XCTAssertEqual(history.meetings, [existing])
+        XCTAssertEqual(repository.heldSaveCount, 1)
+
+        repository.releaseHeldSaves()
+        try await recording.value
+        try await clearing.value
+
+        XCTAssertEqual(history.meetings, [recorded])
+        XCTAssertEqual(repository.meetings, [recorded])
+    }
+
+    func testCorruptHistoryLoadIsReportedWithoutOverwritingTheRepository() async {
         let repository = TestMeetingHistoryRepository()
         repository.shouldFailLoads = true
 
-        let history = MeetingHistoryStore(repository: repository, now: date(100))
+        let history = await makeHistory(repository, now: date(100))
 
         XCTAssertTrue(history.meetings.isEmpty)
         XCTAssertEqual(history.persistenceIssue, .loadFailed)
         XCTAssertEqual(repository.saveCount, 0)
     }
 
-    func testSuccessfulExpiryPassPreservesPendingSaveFailureStatus() {
+    func testSuccessfulExpiryPassPreservesPendingSaveFailureStatus() async {
         let repository = TestMeetingHistoryRepository(
             meetings: [meeting(id: UUID(), endedAt: 0)]
         )
-        let history = MeetingHistoryStore(repository: repository, now: date(0))
+        let history = await makeHistory(repository, now: date(0))
         repository.shouldFailSaves = true
 
-        XCTAssertThrowsError(
-            try history.record(meeting(id: UUID(), endedAt: 60), now: date(60))
-        )
+        await assertThrows {
+            try await history.record(meeting(id: UUID(), endedAt: 60), now: date(60))
+        }
         XCTAssertNotNil(history.pendingMeeting)
         repository.shouldFailSaves = false
 
-        history.load(now: date(MeetingHistoryStore.retention + 1))
+        await history.load(now: date(MeetingHistoryStore.retention + 1))
 
         XCTAssertEqual(history.persistenceIssue, .saveFailed)
         XCTAssertNotNil(history.pendingMeeting)
     }
 
-    func testDeletingAnotherMeetingPreservesPendingSaveRetryStatus() throws {
+    func testDeletingAnotherMeetingPreservesPendingSaveRetryStatus() async throws {
         let durableMeeting = meeting(id: UUID(), endedAt: 30)
         let repository = TestMeetingHistoryRepository(meetings: [durableMeeting])
-        let history = MeetingHistoryStore(repository: repository, now: date(30))
+        let history = await makeHistory(repository, now: date(30))
         repository.shouldFailSaves = true
 
-        XCTAssertThrowsError(
-            try history.record(meeting(id: UUID(), endedAt: 60), now: date(60))
-        )
+        await assertThrows {
+            try await history.record(meeting(id: UUID(), endedAt: 60), now: date(60))
+        }
         repository.shouldFailSaves = false
 
-        try history.clear(meetingID: durableMeeting.id)
+        try await history.clear(meetingID: durableMeeting.id)
 
         XCTAssertEqual(history.persistenceIssue, .saveFailed)
         XCTAssertNotNil(history.pendingMeeting)
@@ -326,16 +353,17 @@ final class MeetingHistoryStoreTests: XCTestCase {
         XCTAssertEqual(decoded.profile, .customerCritical)
     }
 
-    func testFileRepositoryRoundTripsMeetingHistory() throws {
+    func testFileRepositoryRoundTripsMeetingHistory() async throws {
         let fileURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("json")
         let repository = FileMeetingHistoryRepository(fileURL: fileURL)
         let expected = [meeting(id: UUID(), endedAt: 100)]
 
-        try repository.save(expected)
+        try await repository.save(expected)
 
-        XCTAssertEqual(try repository.load(), expected)
+        let loaded = try await repository.load()
+        XCTAssertEqual(loaded, expected)
         XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
     }
 
@@ -353,6 +381,26 @@ final class MeetingHistoryStoreTests: XCTestCase {
         try LegacyInsightHistoryFile.remove(at: fileURL)
 
         XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
+    }
+
+    private func makeHistory(
+        _ repository: TestMeetingHistoryRepository,
+        now: Date
+    ) async -> MeetingHistoryStore {
+        let history = MeetingHistoryStore(repository: repository, now: now)
+        await history.waitForPendingOperations()
+        return history
+    }
+
+    private func assertThrows(
+        _ operation: () async throws -> Void,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        do {
+            try await operation()
+            XCTFail("Expected an error", file: file, line: line)
+        } catch {}
     }
 
     private func meeting(
@@ -393,29 +441,52 @@ final class MeetingHistoryStoreTests: XCTestCase {
     }
 }
 
+@MainActor
 private final class TestMeetingHistoryRepository: MeetingHistoryPersisting {
     var meetings: [SavedMeeting]
     var shouldFailLoads = false
     var shouldFailSaves = false
+    var holdsSaves = false
     private(set) var saveCount = 0
+    private var heldSaves: [CheckedContinuation<Void, Never>] = []
 
     init(meetings: [SavedMeeting] = []) {
         self.meetings = meetings
     }
 
-    func load() throws -> [SavedMeeting] {
+    var heldSaveCount: Int {
+        heldSaves.count
+    }
+
+    func load() async throws -> [SavedMeeting] {
         if shouldFailLoads {
             throw TestError.loadFailed
         }
         return meetings
     }
 
-    func save(_ meetings: [SavedMeeting]) throws {
+    func save(_ meetings: [SavedMeeting]) async throws {
+        if holdsSaves {
+            await withCheckedContinuation { heldSaves.append($0) }
+        }
         saveCount += 1
         if shouldFailSaves {
             throw TestError.saveFailed
         }
         self.meetings = meetings
+    }
+
+    func waitForHeldSave() async {
+        while heldSaves.isEmpty {
+            await Task.yield()
+        }
+    }
+
+    func releaseHeldSaves() {
+        holdsSaves = false
+        let saves = heldSaves
+        heldSaves = []
+        saves.forEach { $0.resume() }
     }
 
     private enum TestError: Error {

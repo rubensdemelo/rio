@@ -290,7 +290,7 @@ private final class TestTerminationHistory: RioTerminationHistoryPreparing {
         self.retryFails = retryFails
     }
 
-    func retryPendingTerminationRecord() throws {
+    func retryPendingTerminationRecord() async throws {
         events.values.append("retry")
         retryCount += 1
         if retryFails {

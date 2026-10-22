@@ -1754,7 +1754,7 @@ final class TestMeetingHistoryRecorder: MeetingHistoryRecording {
         pendingMeeting != nil
     }
 
-    func record(_ meeting: MeetingHistoryRecord) throws {
+    func record(_ meeting: MeetingHistoryRecord) async throws {
         if shouldFail {
             pendingMeeting = meeting
             throw TestMeetingHistoryError.saveFailed
