@@ -108,10 +108,11 @@ enum RioDiagnosticsLogger {
 }
 
 @MainActor
-final class RioDiagnosticsViewModel: ObservableObject {
-    @Published private(set) var entries: [RioDiagnosticEntry] = []
-    @Published private(set) var isLoading = false
-    @Published private(set) var couldNotReadLog = false
+@Observable
+final class RioDiagnosticsViewModel {
+    private(set) var entries: [RioDiagnosticEntry] = []
+    private(set) var isLoading = false
+    private(set) var couldNotReadLog = false
 
     private let reader: any RioDiagnosticsReading
 
@@ -149,12 +150,10 @@ final class RioDiagnosticsViewModel: ObservableObject {
 }
 
 struct RioDiagnosticsView: View {
-    @StateObject private var model: RioDiagnosticsViewModel
+    @State private var model: RioDiagnosticsViewModel
 
     init(reader: any RioDiagnosticsReading = SystemRioDiagnosticsReader()) {
-        _model = StateObject(
-            wrappedValue: RioDiagnosticsViewModel(reader: reader)
-        )
+        _model = State(initialValue: RioDiagnosticsViewModel(reader: reader))
     }
 
     var body: some View {

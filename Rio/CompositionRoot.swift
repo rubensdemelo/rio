@@ -1,23 +1,23 @@
-import Combine
 import Foundation
 import Observation
 
 @MainActor
+@Observable
 final class LiveSessionController: SessionShellControlling, RioTerminationSessionPreparing {
-    @Published private(set) var status: SessionStatus = .stopped
-    @Published private(set) var cards: [InsightCard] = []
+    private(set) var status: SessionStatus = .stopped
+    private(set) var cards: [InsightCard] = []
     let feedback = SessionFeedbackModel()
-    @Published private(set) var readiness: SessionReadiness?
-    @Published private(set) var unavailableReason: UnavailableReason?
-    @Published private(set) var failure: PipelineFailure?
-    @Published private(set) var isPerformingPrimaryAction = false
-    @Published private(set) var isPerformingPauseAction = false
+    private(set) var readiness: SessionReadiness?
+    private(set) var unavailableReason: UnavailableReason?
+    private(set) var failure: PipelineFailure?
+    private(set) var isPerformingPrimaryAction = false
+    private(set) var isPerformingPauseAction = false
 
     let lifecycle: SessionLifecycleCoordinator
     let insightStore: InMemoryInsightStore
     private let meetingProfileSettings: MeetingProfileSettings?
 
-    private var monitoringTask: Task<Void, Never>?
+    @ObservationIgnored private var monitoringTask: Task<Void, Never>?
 
     init(
         lifecycle: SessionLifecycleCoordinator,

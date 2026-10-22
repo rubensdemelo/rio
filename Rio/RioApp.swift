@@ -59,11 +59,11 @@ enum RioMain {
 
 struct RioApp: App {
     @NSApplicationDelegateAdaptor(RioAppDelegate.self) private var appDelegate
-    @StateObject private var sessionController: LiveSessionController
-    @StateObject private var providerSettings: OpenAIProviderSettings
-    @StateObject private var meetingHistory: MeetingHistoryStore
-    @StateObject private var panelRouter: RioPanelRouter
-    @StateObject private var meetingProfileSettings: MeetingProfileSettings
+    @State private var sessionController: LiveSessionController
+    @State private var providerSettings: OpenAIProviderSettings
+    @State private var meetingHistory: MeetingHistoryStore
+    @State private var panelRouter: RioPanelRouter
+    @State private var meetingProfileSettings: MeetingProfileSettings
 
     init() {
         if CommandLine.arguments.contains(RioKeychainAccessVerifier.launchArgument) {
@@ -91,13 +91,13 @@ struct RioApp: App {
         RioAppDelegate.terminationPreparation = { [terminationPreparation] in
             await terminationPreparation.prepare()
         }
-        _sessionController = StateObject(wrappedValue: sessionController)
+        _sessionController = State(initialValue: sessionController)
         let providerSettings = OpenAIProviderSettings(keyStore: apiKeyStore)
-        _providerSettings = StateObject(wrappedValue: providerSettings)
-        _meetingHistory = StateObject(wrappedValue: meetingHistory)
+        _providerSettings = State(initialValue: providerSettings)
+        _meetingHistory = State(initialValue: meetingHistory)
         let panelRouter = RioPanelRouter()
-        _panelRouter = StateObject(wrappedValue: panelRouter)
-        _meetingProfileSettings = StateObject(wrappedValue: meetingProfileSettings)
+        _panelRouter = State(initialValue: panelRouter)
+        _meetingProfileSettings = State(initialValue: meetingProfileSettings)
 
         // Start independently of the menu's presentation lifecycle so an open,
         // idle menu-bar app continues enforcing the at-rest retention window.
@@ -140,9 +140,9 @@ struct RioApp: App {
 
         Window("Rio", id: "main") {
             RioView(controller: sessionController)
-                .environmentObject(providerSettings)
-                .environmentObject(panelRouter)
-                .environmentObject(meetingProfileSettings)
+                .environment(providerSettings)
+                .environment(panelRouter)
+                .environment(meetingProfileSettings)
         }
         .defaultSize(width: 640, height: 240)
         .defaultLaunchBehavior(.presented)
@@ -151,7 +151,7 @@ struct RioApp: App {
 
         Window("Recent Meetings", id: "recent-meetings") {
             RecentMeetingsView()
-                .environmentObject(meetingHistory)
+                .environment(meetingHistory)
         }
         .defaultSize(width: 760, height: 620)
         .defaultLaunchBehavior(.suppressed)
@@ -160,7 +160,7 @@ struct RioApp: App {
 
         Window("Meeting Profiles", id: "profiles") {
             MeetingProfileSettingsView()
-                .environmentObject(meetingProfileSettings)
+                .environment(meetingProfileSettings)
         }
         .defaultSize(width: 760, height: 560)
         .defaultLaunchBehavior(.suppressed)

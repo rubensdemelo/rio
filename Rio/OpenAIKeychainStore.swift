@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 import Security
 
@@ -123,10 +122,11 @@ enum RioKeychainAccessVerifier {
 }
 
 @MainActor
-final class OpenAIProviderSettings: ObservableObject {
-    @Published var apiKey = ""
-    @Published private(set) var isConfigured = false
-    @Published private(set) var errorMessage: String?
+@Observable
+final class OpenAIProviderSettings {
+    var apiKey = ""
+    private(set) var isConfigured = false
+    private(set) var errorMessage: String?
 
     private let keyStore: any OpenAIAPIKeyStore
 

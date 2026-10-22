@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 
 struct MeetingProfile: Codable, Hashable, Identifiable, Sendable {
@@ -187,18 +186,19 @@ struct MeetingProfile: Codable, Hashable, Identifiable, Sendable {
 }
 
 @MainActor
-final class MeetingProfileSettings: ObservableObject {
+@Observable
+final class MeetingProfileSettings {
     private static let storageKey = "meetingProfile"
     private static let profilesStorageKey = "meetingProfiles"
     private static let defaultProfileStorageKey = "defaultMeetingProfile"
     private static let legacyConfigurationMigrationKey = "meetingProfileConfigurationMigrationCompleted"
 
-    @Published var selection: MeetingProfile {
+    var selection: MeetingProfile {
         didSet { defaults.set(selection.id, forKey: Self.storageKey) }
     }
 
-    @Published private(set) var profiles: [MeetingProfile]
-    @Published private(set) var defaultProfile: MeetingProfile
+    private(set) var profiles: [MeetingProfile]
+    private(set) var defaultProfile: MeetingProfile
 
     private let defaults: UserDefaults
 
@@ -413,10 +413,11 @@ enum TranscriptionVocabularyConfiguration {
 }
 
 @MainActor
-final class TranscriptionVocabularySettings: ObservableObject {
+@Observable
+final class TranscriptionVocabularySettings {
     static let maximumPromptLength = TranscriptionVocabularyConfiguration.maximumPromptLength
 
-    @Published var prompt: String {
+    var prompt: String {
         didSet {
             if prompt.count > Self.maximumPromptLength {
                 prompt = String(prompt.prefix(Self.maximumPromptLength))
@@ -503,10 +504,11 @@ enum ListeningCadence: Int, CaseIterable, Codable, Hashable, Identifiable, Senda
 }
 
 @MainActor
-final class ListeningCadenceSettings: ObservableObject {
+@Observable
+final class ListeningCadenceSettings {
     static let storageKey = "listeningCadenceSeconds"
 
-    @Published var selection: ListeningCadence {
+    var selection: ListeningCadence {
         didSet {
             defaults.set(selection.rawValue, forKey: Self.storageKey)
         }

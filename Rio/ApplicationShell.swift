@@ -1,4 +1,3 @@
-import Combine
 import AppKit
 import SwiftUI
 
@@ -85,14 +84,15 @@ struct RioMenuWindowRouter {
 }
 
 @MainActor
-final class RioPanelRouter: ObservableObject {
+@Observable
+final class RioPanelRouter {
     enum Panel: String, Identifiable {
         case provider
 
         var id: String { rawValue }
     }
 
-    @Published var presentedPanel: Panel?
+    var presentedPanel: Panel?
 
     func showProvider() {
         presentedPanel = .provider
@@ -155,7 +155,7 @@ final class SessionFeedbackModel {
 }
 
 @MainActor
-protocol SessionShellControlling: ObservableObject {
+protocol SessionShellControlling: AnyObject, Observable {
     var status: SessionStatus { get }
     var cards: [InsightCard] { get }
     var feedback: SessionFeedbackModel { get }
@@ -201,9 +201,9 @@ extension SessionShellControlling {
 }
 
 struct RioMenuBarContent<Controller: SessionShellControlling>: View {
-    @ObservedObject private var controller: Controller
-    @ObservedObject private var providerSettings: OpenAIProviderSettings
-    @ObservedObject private var panelRouter: RioPanelRouter
+    private let controller: Controller
+    private let providerSettings: OpenAIProviderSettings
+    private let panelRouter: RioPanelRouter
     @Environment(\.openWindow) private var openWindow
 
     init(
@@ -282,15 +282,16 @@ struct RioMenuBarContent<Controller: SessionShellControlling>: View {
 }
 
 @MainActor
+@Observable
 final class FakeSessionController: SessionShellControlling {
-    @Published private(set) var status: SessionStatus
-    @Published private(set) var cards: [InsightCard]
+    private(set) var status: SessionStatus
+    private(set) var cards: [InsightCard]
     let feedback: SessionFeedbackModel
-    @Published private(set) var readiness: SessionReadiness?
-    @Published private(set) var unavailableReason: UnavailableReason?
-    @Published private(set) var failure: PipelineFailure?
-    @Published private(set) var isPerformingPrimaryAction = false
-    @Published private(set) var isPerformingPauseAction = false
+    private(set) var readiness: SessionReadiness?
+    private(set) var unavailableReason: UnavailableReason?
+    private(set) var failure: PipelineFailure?
+    private(set) var isPerformingPrimaryAction = false
+    private(set) var isPerformingPauseAction = false
 
     private let startOutcome: FakeSessionStartOutcome
     private let transitionDelay: Duration
@@ -453,11 +454,11 @@ enum RioMainWindowSizing {
 }
 
 struct RioView<Controller: SessionShellControlling>: View {
-    @ObservedObject private var controller: Controller
+    private let controller: Controller
     @Environment(\.openWindow) private var openWindow
-    @EnvironmentObject private var providerSettings: OpenAIProviderSettings
-    @EnvironmentObject private var panelRouter: RioPanelRouter
-    @EnvironmentObject private var meetingProfileSettings: MeetingProfileSettings
+    @Environment(OpenAIProviderSettings.self) private var providerSettings
+    @Environment(RioPanelRouter.self) private var panelRouter
+    @Environment(MeetingProfileSettings.self) private var meetingProfileSettings
 
     init(controller: Controller) {
         self.controller = controller
@@ -511,7 +512,7 @@ struct RioView<Controller: SessionShellControlling>: View {
         .onChange(of: controller.cards.count) { _, _ in
             resizeMainWindowIfNeeded()
         }
-        .sheet(item: $panelRouter.presentedPanel) { panel in
+        .sheet(item: Bindable(panelRouter).presentedPanel) { panel in
             switch panel {
             case .provider:
                 OpenAIProviderSetupView {
@@ -670,7 +671,7 @@ struct RioView<Controller: SessionShellControlling>: View {
                 Text(meetingProfileSettings.defaultProfile.title)
                     .lineLimit(1)
             } else {
-                Picker("Meeting profile", selection: $meetingProfileSettings.selection) {
+                Picker("Meeting profile", selection: Bindable(meetingProfileSettings).selection) {
                     Text(meetingProfileSettings.defaultProfile.title)
                         .tag(meetingProfileSettings.defaultProfile)
                     ForEach(meetingProfileSettings.profiles) { profile in
@@ -1115,7 +1116,7 @@ private struct ListeningSetupView: View {
 }
 
 struct MeetingProfileSettingsView: View {
-    @EnvironmentObject private var meetingProfileSettings: MeetingProfileSettings
+    @Environment(MeetingProfileSettings.self) private var meetingProfileSettings
     @State private var selectedProfileID: String?
     @State private var showingNewProfile = false
     @State private var newName = ""
@@ -1312,7 +1313,7 @@ struct MeetingProfileSettingsView: View {
 private struct MeetingProfileEditorRow: View {
     let profile: MeetingProfile
 
-    @EnvironmentObject private var meetingProfileSettings: MeetingProfileSettings
+    @Environment(MeetingProfileSettings.self) private var meetingProfileSettings
     @State private var name: String
     @State private var guidance: String
     @State private var insightPace: ListeningCadence
@@ -1489,7 +1490,7 @@ private struct ProfileTextEditor: View {
 
 private struct OpenAIProviderSetupView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var providerSettings: OpenAIProviderSettings
+    @Environment(OpenAIProviderSettings.self) private var providerSettings
     @State private var isShowingKeyDetails = false
     @State private var isConfirmingDeletion = false
 
@@ -1580,7 +1581,7 @@ private struct OpenAIProviderSetupView: View {
 }
 
 private struct OpenAIAPIKeyDetailsView: View {
-    @EnvironmentObject private var providerSettings: OpenAIProviderSettings
+    @Environment(OpenAIProviderSettings.self) private var providerSettings
     @State private var isConfirmingDeletion = false
 
     let didChangeConfiguration: () -> Void
@@ -1592,7 +1593,7 @@ private struct OpenAIAPIKeyDetailsView: View {
             Text("OpenAI API key")
                 .font(.title2.weight(.bold))
 
-            SecureField("Paste API key", text: $providerSettings.apiKey)
+            SecureField("Paste API key", text: Bindable(providerSettings).apiKey)
                 .textFieldStyle(.roundedBorder)
 
             if let errorMessage = providerSettings.errorMessage {
@@ -1738,7 +1739,7 @@ struct RecentMeetingDetailPresentation: Equatable {
 /// Transcript segments expose `sequenceNumber` and `text`.
 struct RecentMeetingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject private var meetingHistory: MeetingHistoryStore
+    @Environment(MeetingHistoryStore.self) private var meetingHistory
     @State private var selectedMeetingID: UUID?
     @State private var selectedSection: RecentMeetingDetailSection = .insights
     @State private var meetingPendingDeletion: SavedMeeting?
@@ -2538,8 +2539,8 @@ private extension View {
     /// Previews never touch the real Keychain and always supply every
     /// environment object the session window reads.
     func previewEnvironment(apiKey: String? = "sk-preview") -> some View {
-        environmentObject(OpenAIProviderSettings(keyStore: PreviewAPIKeyStore(key: apiKey)))
-            .environmentObject(RioPanelRouter())
-            .environmentObject(MeetingProfileSettings(defaults: UserDefaults(suiteName: "RioPreviews") ?? .standard))
+        environment(OpenAIProviderSettings(keyStore: PreviewAPIKeyStore(key: apiKey)))
+            .environment(RioPanelRouter())
+            .environment(MeetingProfileSettings(defaults: UserDefaults(suiteName: "RioPreviews") ?? .standard))
     }
 }

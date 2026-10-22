@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 import XCTest
 
@@ -107,17 +106,27 @@ final class VerticalSliceIntegrationTests: XCTestCase {
             controller.feedback.snapshot.audioInput.level == 0.2
         }
 
-        var controllerChangeCount = 0
-        let subscription = controller.objectWillChange.sink { controllerChangeCount += 1 }
+        let sessionViewChanged = expectation(description: "session view state changed")
+        sessionViewChanged.isInverted = true
+        withObservationTracking {
+            _ = controller.status
+            _ = controller.cards
+            _ = controller.readiness
+            _ = controller.unavailableReason
+            _ = controller.failure
+            _ = controller.isPerformingPrimaryAction
+            _ = controller.isPerformingPauseAction
+        } onChange: {
+            sessionViewChanged.fulfill()
+        }
         for level: Float in [0.3, 0.6, 0.4] {
             await capture.setInputSnapshot(liveInput(level: level))
             await waitUntil(description: "level \(level)") {
                 controller.feedback.snapshot.audioInput.level == level
             }
         }
-        subscription.cancel()
 
-        XCTAssertEqual(controllerChangeCount, 0, "level-only updates leave the session view alone")
+        await fulfillment(of: [sessionViewChanged], timeout: 0.1)
         await controller.performPrimaryAction()
     }
 

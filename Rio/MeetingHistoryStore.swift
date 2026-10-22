@@ -1,4 +1,3 @@
-import Combine
 import Foundation
 
 struct SavedTranscriptSegment: Codable, Equatable, Sendable {
@@ -216,21 +215,22 @@ struct FileMeetingHistoryRepository: MeetingHistoryPersisting {
 }
 
 @MainActor
-final class MeetingHistoryStore: ObservableObject, RioTerminationHistoryPreparing {
+@Observable
+final class MeetingHistoryStore: RioTerminationHistoryPreparing {
     nonisolated static let retention: TimeInterval = 48 * 60 * 60
     nonisolated static let maximumMeetingCount = 50
     nonisolated static let maximumEncodedByteCount = 8_000_000
 
-    @Published private(set) var meetings: [SavedMeeting]
-    @Published private(set) var persistenceIssue: MeetingHistoryPersistenceIssue?
-    @Published private(set) var pendingMeeting: SavedMeeting?
+    private(set) var meetings: [SavedMeeting]
+    private(set) var persistenceIssue: MeetingHistoryPersistenceIssue?
+    private(set) var pendingMeeting: SavedMeeting?
 
     private let repository: any MeetingHistoryPersisting
-    private var expiryPersistencePending = false
+    @ObservationIgnored private var expiryPersistencePending = false
     // Operations suspend while the repository works off the main actor, so
     // each one waits for the previous one; otherwise a slower save could
     // overwrite a newer history with a snapshot taken before it.
-    private var lastOperation: Task<Void, Never>?
+    @ObservationIgnored private var lastOperation: Task<Void, Never>?
 
     init(
         repository: any MeetingHistoryPersisting = FileMeetingHistoryRepository(),
